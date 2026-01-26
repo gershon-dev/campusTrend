@@ -1,492 +1,802 @@
-// supabase-config.js
+// Check if supabase client is already initialized to prevent re-declaration
+if (typeof window.supabaseClient === 'undefined') {
+    // IMPORTANT: Replace these with your actual Supabase credentials
+    // Your anon key should look like: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+    const SUPABASE_URL = 'https://kkvelbfcwaydxiwzsnpb.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrdmVsYmZjd2F5ZHhpd3pzbnBiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkzNzMxMjUsImV4cCI6MjA4NDk0OTEyNX0.bc7CweVNAWSsKevkCfL3d2aadEJ4Qay5kWMLhq8H3Nc'; // This needs to be a valid JWT token starting with eyJ
 
-// Replace these with your actual Supabase credentials
-const SUPABASE_URL = 'https://znzkjoeqvxwgzemlyhhc.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_R9XJYbEsfY4DjJ9I5ycIug_oOhMyM5p';
+    // Initialize Supabase client and store globally
+    window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: {
+            autoRefreshToken: true,
+            persistSession: true,
+            detectSessionInUrl: true
+        }
+    });
+    console.log('Supabase client initialized successfully!');
 
-// Initialize Supabase client
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    // Handle auth state changes and clear invalid sessions
+    window.supabaseClient.auth.onAuthStateChange((event, session) => {
+        console.log('Auth state changed:', event);
+        if (event === 'TOKEN_REFRESHED') {
+            console.log('Token refreshed successfully');
+        }
+        if (event === 'SIGNED_OUT') {
+            console.log('User signed out');
+        }
+        // Clear invalid sessions
+        if (event === 'SIGNED_OUT' || !session) {
+            window.clearInvalidSession();
+        }
+    });
+}
+
+// ============================================
+// SESSION MANAGEMENT
+// ============================================
+
+// Clear invalid session
+window.clearInvalidSession = async function() {
+    try {
+        // Clear local storage items related to Supabase
+        const keysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && (key.includes('supabase') || key.includes('sb-'))) {
+                keysToRemove.push(key);
+            }
+        }
+        keysToRemove.forEach(key => localStorage.removeItem(key));
+        
+        // Also clear session storage
+        const sessionKeysToRemove = [];
+        for (let i = 0; i < sessionStorage.length; i++) {
+            const key = sessionStorage.key(i);
+            if (key && (key.includes('supabase') || key.includes('sb-'))) {
+                sessionKeysToRemove.push(key);
+            }
+        }
+        sessionKeysToRemove.forEach(key => sessionStorage.removeItem(key));
+        
+        console.log('Cleared invalid session data');
+        return true;
+    } catch (error) {
+        console.error('Error clearing session:', error);
+        return false;
+    }
+};
 
 // ============================================
 // AUTHENTICATION FUNCTIONS
 // ============================================
 
-// Sign Up
-async function signUp(email, password, fullName, indexNumber, department) {
-    // 1. Create auth user
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: email,
-        password: password
-    });
+// Sign Up (with trigger approach - profile created automatically)
+window.signUp = async function(email, password, fullName, indexNumber, department) {
+    try {
+        // Validate inputs
+        if (!email || !password || !fullName || !indexNumber || !department) {
+            return { success: false, error: 'All fields are required' };
+        }
 
-    if (authError) {
-        return { success: false, error: authError.message };
-    }
+        // Validate email format
+        if (!email.includes('@')) {
+            return { success: false, error: 'Invalid email format' };
+        }
 
-    // 2. Create profile
-    const { error: profileError } = await supabase
-        .from('profiles')
-        .insert({
-            id: authData.user.id,
-            full_name: fullName,
-            index_number: indexNumber,
+        // Clear any existing invalid session first
+        await window.clearInvalidSession();
+        
+        // Create auth user with metadata (trigger will auto-create profile)
+        const { data: authData, error: authError } = await window.supabaseClient.auth.signUp({
             email: email,
-            department: department
+            password: password,
+            options: {
+                data: {
+                    full_name: fullName,
+                    index_number: indexNumber,
+                    email: email,
+                    department: department
+                },
+                emailRedirectTo: `${window.location.origin}/index.html`
+            }
         });
 
-    if (profileError) {
-        return { success: false, error: profileError.message };
-    }
+        if (authError) {
+            console.error('Signup error:', authError);
+            
+            // Handle rate limiting
+            if (authError.message.includes('429') || authError.message.includes('rate limit')) {
+                return { success: false, error: 'Too many signup attempts. Please wait a few minutes and try again.' };
+            }
+            
+            // Handle user already registered
+            if (authError.message.includes('already registered') || 
+                authError.message.includes('User already registered')) {
+                return { 
+                    success: false, 
+                    error: 'This index number/email is already registered. Please sign in instead or use a different index number.',
+                    alreadyExists: true 
+                };
+            }
+            
+            // Handle weak password
+            if (authError.message.includes('Password')) {
+                return { success: false, error: 'Password should be at least 6 characters long.' };
+            }
+            
+            return { success: false, error: authError.message };
+        }
 
-    return { success: true, user: authData.user };
-}
+        if (!authData.user) {
+            return { success: false, error: 'Failed to create user account' };
+        }
+
+        // Profile is automatically created by database trigger
+        return { success: true, user: authData.user };
+    } catch (error) {
+        console.error('Sign up error:', error);
+        return { success: false, error: error.message || 'An unexpected error occurred' };
+    }
+};
 
 // Sign In
-async function signIn(email, password) {
-    const { data, error } = await supabase.auth.signInWithPassword({
-        email: email,
-        password: password
-    });
+window.signIn = async function(email, password) {
+    try {
+        // Validate inputs
+        if (!email || !password) {
+            return { success: false, error: 'Email and password are required' };
+        }
 
-    if (error) {
-        return { success: false, error: error.message };
+        // Clear any existing invalid session first
+        await window.clearInvalidSession();
+        
+        const { data, error } = await window.supabaseClient.auth.signInWithPassword({
+            email: email,
+            password: password
+        });
+
+        if (error) {
+            console.error('Sign in error:', error);
+            // Handle specific error types
+            if (error.message.includes('Invalid Refresh Token') || 
+                error.message.includes('Refresh Token Not Found')) {
+                // Clear session and retry
+                await window.clearInvalidSession();
+                return { success: false, error: 'Session expired. Please try signing in again.' };
+            }
+            if (error.message.includes('Email not confirmed')) {
+                return { success: false, error: 'Please confirm your email before signing in. Check your inbox for the confirmation link.' };
+            }
+            if (error.message.includes('Invalid login credentials')) {
+                return { success: false, error: 'Invalid email or password. Please check your credentials and try again.' };
+            }
+            return { success: false, error: error.message };
+        }
+
+        if (!data.user) {
+            return { success: false, error: 'Sign in failed. Please try again.' };
+        }
+
+        return { success: true, user: data.user, session: data.session };
+    } catch (error) {
+        console.error('Sign in error:', error);
+        // If it's a refresh token error, clear and notify
+        if (error.message && error.message.includes('Refresh Token')) {
+            await window.clearInvalidSession();
+            return { success: false, error: 'Session expired. Please try signing in again.' };
+        }
+        return { success: false, error: error.message || 'An unexpected error occurred' };
     }
-
-    return { success: true, user: data.user, session: data.session };
-}
+};
 
 // Sign Out
-async function signOut() {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-        return { success: false, error: error.message };
+window.signOut = async function() {
+    try {
+        const { error } = await window.supabaseClient.auth.signOut();
+        
+        // Clear all session data regardless of error
+        await window.clearInvalidSession();
+        
+        if (error) {
+            console.warn('Sign out had an error, but session was cleared:', error.message);
+        }
+        
+        return { success: true };
+    } catch (error) {
+        console.error('Sign out error:', error);
+        // Still clear session even if signOut fails
+        await window.clearInvalidSession();
+        return { success: true }; // Return success since we cleared the session
     }
-    return { success: true };
-}
+};
 
 // Get Current User
-async function getCurrentUser() {
-    const { data: { user } } = await supabase.auth.getUser();
-    return user;
-}
+window.getCurrentUser = async function() {
+    try {
+        const { data: { user }, error } = await window.supabaseClient.auth.getUser();
+        
+        if (error) {
+            // Handle refresh token errors
+            if (error.message.includes('Refresh Token') || 
+                error.message.includes('Invalid') ||
+                error.message.includes('expired')) {
+                console.warn('Invalid session detected, clearing...');
+                await window.clearInvalidSession();
+                return null;
+            }
+            console.error('Get user error:', error);
+            return null;
+        }
+        
+        return user;
+    } catch (error) {
+        console.error('Get current user error:', error);
+        // Check if it's a token error
+        if (error.message && (error.message.includes('Refresh Token') || error.message.includes('Invalid'))) {
+            await window.clearInvalidSession();
+        }
+        return null;
+    }
+};
 
 // Get Current User Profile
-async function getCurrentProfile() {
-    const user = await getCurrentUser();
-    if (!user) return null;
+window.getCurrentProfile = async function() {
+    try {
+        const user = await window.getCurrentUser();
+        if (!user) return null;
 
-    const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
+        const { data, error } = await window.supabaseClient
+            .from('profiles')
+            .select('*')
+            .eq('id', user.id)
+            .single();
 
-    return data;
-}
+        if (error) {
+            console.error('Get profile error:', error);
+            return null;
+        }
+
+        return data;
+    } catch (error) {
+        console.error('Get current profile error:', error);
+        return null;
+    }
+};
 
 // Check if user is logged in
-async function isLoggedIn() {
-    const user = await getCurrentUser();
-    return user !== null;
-}
+window.isLoggedIn = async function() {
+    try {
+        const { data: { session }, error } = await window.supabaseClient.auth.getSession();
+        
+        if (error) {
+            // Handle refresh token errors silently
+            if (error.message.includes('Refresh Token') || error.message.includes('Invalid')) {
+                await window.clearInvalidSession();
+                return false;
+            }
+            console.error('Session check error:', error);
+            return false;
+        }
+        
+        return session !== null;
+    } catch (error) {
+        console.error('Check login status error:', error);
+        // If there's a token error, clear the session
+        if (error.message && error.message.includes('Refresh Token')) {
+            await window.clearInvalidSession();
+        }
+        return false;
+    }
+};
+
+// ============================================
+// DEPARTMENT LIST
+// ============================================
+
+window.DEPARTMENTS = [
+    'Computer Science',
+    'Mathematics',
+    'Basic Education',
+    'Business Administration',
+    'Graphic Design',
+    'Music Education',
+    'Health Education',
+    'Social Studies',
+    'English Education',
+    'Science Education',
+    'Physical Education',
+    'Special Education'
+];
 
 // ============================================
 // POST FUNCTIONS
 // ============================================
 
 // Create Post
-async function createPost(content, imageFile, department, visibility = 'public') {
-    const user = await getCurrentUser();
-    if (!user) return { success: false, error: 'Not logged in' };
+window.createPost = async function(content, imageFile, department, visibility = 'public') {
+    try {
+        const user = await window.getCurrentUser();
+        if (!user) return { success: false, error: 'Not logged in' };
 
-    let imageUrl = null;
+        let imageUrl = null;
 
-    // Upload image if provided
-    if (imageFile) {
-        const fileName = `${user.id}/${Date.now()}_${imageFile.name}`;
-        const { data: uploadData, error: uploadError } = await supabase.storage
-            .from('post-images')
-            .upload(fileName, imageFile);
+        // Upload image if provided
+        if (imageFile) {
+            const fileName = `${user.id}/${Date.now()}_${imageFile.name}`;
+            const { data: uploadData, error: uploadError } = await window.supabaseClient.storage
+                .from('post-images')
+                .upload(fileName, imageFile);
 
-        if (uploadError) {
-            return { success: false, error: uploadError.message };
+            if (uploadError) {
+                console.error('Image upload error:', uploadError);
+                return { success: false, error: uploadError.message };
+            }
+
+            // Get public URL
+            const { data: urlData } = window.supabaseClient.storage
+                .from('post-images')
+                .getPublicUrl(fileName);
+
+            imageUrl = urlData.publicUrl;
         }
 
-        // Get public URL
-        const { data: urlData } = supabase.storage
-            .from('post-images')
-            .getPublicUrl(fileName);
+        // Insert post
+        const { data, error } = await window.supabaseClient
+            .from('posts')
+            .insert({
+                user_id: user.id,
+                content: content || null,
+                image_url: imageUrl,
+                department: department,
+                visibility: visibility
+            })
+            .select(`
+                *,
+                profiles:user_id (
+                    id,
+                    full_name,
+                    avatar_url,
+                    department
+                )
+            `)
+            .single();
 
-        imageUrl = urlData.publicUrl;
-    }
+        if (error) {
+            console.error('Post creation error:', error);
+            return { success: false, error: error.message };
+        }
 
-    // Insert post
-    const { data, error } = await supabase
-        .from('posts')
-        .insert({
-            user_id: user.id,
-            content: content,
-            image_url: imageUrl,
-            department: department,
-            visibility: visibility
-        })
-        .select()
-        .single();
-
-    if (error) {
+        return { success: true, post: data };
+    } catch (error) {
+        console.error('Create post error:', error);
         return { success: false, error: error.message };
     }
-
-    return { success: true, post: data };
-}
+};
 
 // Get Posts (with user info)
-async function getPosts(filter = 'all', limit = 20) {
-    let query = supabase
-        .from('posts')
-        .select(`
-            *,
-            profiles:user_id (
-                id,
-                full_name,
-                avatar_url,
-                department
-            )
-        `)
-        .order('created_at', { ascending: false })
-        .limit(limit);
+window.getPosts = async function(filter = 'all', limit = 50) {
+    try {
+        let query = window.supabaseClient
+            .from('posts')
+            .select(`
+                *,
+                profiles:user_id (
+                    id,
+                    full_name,
+                    avatar_url,
+                    department
+                )
+            `)
+            .order('created_at', { ascending: false })
+            .limit(limit);
 
-    // Apply filters
-    if (filter === 'popular') {
-        query = query.gte('likes_count', 10);
-    } else if (filter === 'rising') {
-        query = query.gte('likes_count', 5);
+        // Apply filters
+        if (filter === 'popular') {
+            query = query.gte('likes_count', 5).order('likes_count', { ascending: false });
+        } else if (filter === 'recent') {
+            // Already ordered by created_at
+        }
+
+        const { data, error } = await query;
+
+        if (error) {
+            console.error('Get posts error:', error);
+            return { success: false, error: error.message, posts: [] };
+        }
+
+        return { success: true, posts: data || [] };
+    } catch (error) {
+        console.error('Get posts error:', error);
+        return { success: false, error: error.message, posts: [] };
     }
-
-    const { data, error } = await query;
-
-    if (error) {
-        return { success: false, error: error.message };
-    }
-
-    return { success: true, posts: data };
-}
+};
 
 // Get Posts by Department
-async function getPostsByDepartment(department) {
-    const { data, error } = await supabase
-        .from('posts')
-        .select(`
-            *,
-            profiles:user_id (
-                id,
-                full_name,
-                avatar_url,
-                department
-            )
-        `)
-        .eq('department', department)
-        .order('created_at', { ascending: false });
+window.getPostsByDepartment = async function(department) {
+    try {
+        const { data, error } = await window.supabaseClient
+            .from('posts')
+            .select(`
+                *,
+                profiles:user_id (
+                    id,
+                    full_name,
+                    avatar_url,
+                    department
+                )
+            `)
+            .eq('department', department)
+            .order('created_at', { ascending: false });
 
-    if (error) {
+        if (error) {
+            console.error('Get posts by department error:', error);
+            return { success: false, error: error.message };
+        }
+
+        return { success: true, posts: data };
+    } catch (error) {
+        console.error('Get posts by department error:', error);
         return { success: false, error: error.message };
     }
-
-    return { success: true, posts: data };
-}
+};
 
 // Delete Post
-async function deletePost(postId) {
-    const { error } = await supabase
-        .from('posts')
-        .delete()
-        .eq('id', postId);
+window.deletePost = async function(postId) {
+    try {
+        const { error } = await window.supabaseClient
+            .from('posts')
+            .delete()
+            .eq('id', postId);
 
-    if (error) {
+        if (error) {
+            return { success: false, error: error.message };
+        }
+
+        return { success: true };
+    } catch (error) {
+        console.error('Delete post error:', error);
         return { success: false, error: error.message };
     }
-
-    return { success: true };
-}
+};
 
 // ============================================
 // LIKE FUNCTIONS
 // ============================================
 
 // Toggle Like
-async function toggleLike(postId) {
-    const user = await getCurrentUser();
-    if (!user) return { success: false, error: 'Not logged in' };
+window.toggleLike = async function(postId) {
+    try {
+        const user = await window.getCurrentUser();
+        if (!user) return { success: false, error: 'Not logged in' };
 
-    // Check if already liked
-    const { data: existingLike } = await supabase
-        .from('likes')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('post_id', postId)
-        .single();
-
-    if (existingLike) {
-        // Unlike
-        const { error } = await supabase
+        // Check if already liked
+        const { data: existingLike } = await window.supabaseClient
             .from('likes')
-            .delete()
-            .eq('id', existingLike.id);
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('post_id', postId)
+            .maybeSingle();
 
-        if (error) return { success: false, error: error.message };
-        return { success: true, liked: false };
-    } else {
-        // Like
-        const { error } = await supabase
-            .from('likes')
-            .insert({ user_id: user.id, post_id: postId });
+        if (existingLike) {
+            // Unlike
+            const { error } = await window.supabaseClient
+                .from('likes')
+                .delete()
+                .eq('id', existingLike.id);
 
-        if (error) return { success: false, error: error.message };
-        return { success: true, liked: true };
+            if (error) return { success: false, error: error.message };
+            return { success: true, liked: false };
+        } else {
+            // Like
+            const { error } = await window.supabaseClient
+                .from('likes')
+                .insert({ user_id: user.id, post_id: postId });
+
+            if (error) return { success: false, error: error.message };
+            return { success: true, liked: true };
+        }
+    } catch (error) {
+        console.error('Toggle like error:', error);
+        return { success: false, error: error.message };
     }
-}
+};
 
 // Check if user liked a post
-async function hasUserLiked(postId) {
-    const user = await getCurrentUser();
-    if (!user) return false;
+window.hasUserLiked = async function(postId) {
+    try {
+        const user = await window.getCurrentUser();
+        if (!user) return false;
 
-    const { data } = await supabase
-        .from('likes')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('post_id', postId)
-        .single();
+        const { data } = await window.supabaseClient
+            .from('likes')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('post_id', postId)
+            .maybeSingle();
 
-    return data !== null;
-}
+        return data !== null;
+    } catch (error) {
+        console.error('Check user liked error:', error);
+        return false;
+    }
+};
 
 // ============================================
 // COMMENT FUNCTIONS
 // ============================================
 
 // Add Comment
-async function addComment(postId, content) {
-    const user = await getCurrentUser();
-    if (!user) return { success: false, error: 'Not logged in' };
+window.addComment = async function(postId, content) {
+    try {
+        const user = await window.getCurrentUser();
+        if (!user) return { success: false, error: 'Not logged in' };
 
-    const { data, error } = await supabase
-        .from('comments')
-        .insert({
-            user_id: user.id,
-            post_id: postId,
-            content: content
-        })
-        .select(`
-            *,
-            profiles:user_id (
-                full_name,
-                avatar_url
-            )
-        `)
-        .single();
+        const { data, error } = await window.supabaseClient
+            .from('comments')
+            .insert({
+                user_id: user.id,
+                post_id: postId,
+                content: content
+            })
+            .select(`
+                *,
+                profiles:user_id (
+                    full_name,
+                    avatar_url
+                )
+            `)
+            .single();
 
-    if (error) {
+        if (error) {
+            return { success: false, error: error.message };
+        }
+
+        return { success: true, comment: data };
+    } catch (error) {
+        console.error('Add comment error:', error);
         return { success: false, error: error.message };
     }
-
-    return { success: true, comment: data };
-}
+};
 
 // Get Comments for Post
-async function getComments(postId) {
-    const { data, error } = await supabase
-        .from('comments')
-        .select(`
-            *,
-            profiles:user_id (
-                full_name,
-                avatar_url
-            )
-        `)
-        .eq('post_id', postId)
-        .order('created_at', { ascending: true });
+window.getComments = async function(postId) {
+    try {
+        const { data, error } = await window.supabaseClient
+            .from('comments')
+            .select(`
+                *,
+                profiles:user_id (
+                    full_name,
+                    avatar_url
+                )
+            `)
+            .eq('post_id', postId)
+            .order('created_at', { ascending: true });
 
-    if (error) {
+        if (error) {
+            return { success: false, error: error.message };
+        }
+
+        return { success: true, comments: data };
+    } catch (error) {
+        console.error('Get comments error:', error);
         return { success: false, error: error.message };
     }
-
-    return { success: true, comments: data };
-}
+};
 
 // ============================================
 // FOLLOW FUNCTIONS
 // ============================================
 
 // Toggle Follow
-async function toggleFollow(targetUserId) {
-    const user = await getCurrentUser();
-    if (!user) return { success: false, error: 'Not logged in' };
+window.toggleFollow = async function(targetUserId) {
+    try {
+        const user = await window.getCurrentUser();
+        if (!user) return { success: false, error: 'Not logged in' };
 
-    // Check if already following
-    const { data: existingFollow } = await supabase
-        .from('followers')
-        .select('id')
-        .eq('follower_id', user.id)
-        .eq('following_id', targetUserId)
-        .single();
-
-    if (existingFollow) {
-        // Unfollow
-        const { error } = await supabase
+        // Check if already following
+        const { data: existingFollow } = await window.supabaseClient
             .from('followers')
-            .delete()
-            .eq('id', existingFollow.id);
+            .select('id')
+            .eq('follower_id', user.id)
+            .eq('following_id', targetUserId)
+            .maybeSingle();
 
-        if (error) return { success: false, error: error.message };
-        return { success: true, following: false };
-    } else {
-        // Follow
-        const { error } = await supabase
-            .from('followers')
-            .insert({ follower_id: user.id, following_id: targetUserId });
+        if (existingFollow) {
+            // Unfollow
+            const { error } = await window.supabaseClient
+                .from('followers')
+                .delete()
+                .eq('id', existingFollow.id);
 
-        if (error) return { success: false, error: error.message };
-        return { success: true, following: true };
+            if (error) return { success: false, error: error.message };
+            return { success: true, following: false };
+        } else {
+            // Follow
+            const { error } = await window.supabaseClient
+                .from('followers')
+                .insert({ follower_id: user.id, following_id: targetUserId });
+
+            if (error) return { success: false, error: error.message };
+            return { success: true, following: true };
+        }
+    } catch (error) {
+        console.error('Toggle follow error:', error);
+        return { success: false, error: error.message };
     }
-}
+};
 
 // Check if following
-async function isFollowing(targetUserId) {
-    const user = await getCurrentUser();
-    if (!user) return false;
+window.isFollowing = async function(targetUserId) {
+    try {
+        const user = await window.getCurrentUser();
+        if (!user) return false;
 
-    const { data } = await supabase
-        .from('followers')
-        .select('id')
-        .eq('follower_id', user.id)
-        .eq('following_id', targetUserId)
-        .single();
+        const { data } = await window.supabaseClient
+            .from('followers')
+            .select('id')
+            .eq('follower_id', user.id)
+            .eq('following_id', targetUserId)
+            .maybeSingle();
 
-    return data !== null;
-}
+        return data !== null;
+    } catch (error) {
+        console.error('Check following error:', error);
+        return false;
+    }
+};
 
 // ============================================
 // NOTIFICATION FUNCTIONS
 // ============================================
 
 // Get Notifications
-async function getNotifications() {
-    const user = await getCurrentUser();
-    if (!user) return { success: false, error: 'Not logged in' };
+window.getNotifications = async function() {
+    try {
+        const user = await window.getCurrentUser();
+        if (!user) return { success: false, error: 'Not logged in' };
 
-    const { data, error } = await supabase
-        .from('notifications')
-        .select(`
-            *,
-            from_user:from_user_id (
-                full_name,
-                avatar_url
-            )
-        `)
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(20);
+        const { data, error } = await window.supabaseClient
+            .from('notifications')
+            .select(`
+                *,
+                from_user:from_user_id (
+                    full_name,
+                    avatar_url
+                )
+            `)
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false })
+            .limit(20);
 
-    if (error) {
+        if (error) {
+            return { success: false, error: error.message };
+        }
+
+        return { success: true, notifications: data };
+    } catch (error) {
+        console.error('Get notifications error:', error);
         return { success: false, error: error.message };
     }
-
-    return { success: true, notifications: data };
-}
+};
 
 // Mark Notification as Read
-async function markNotificationRead(notificationId) {
-    const { error } = await supabase
-        .from('notifications')
-        .update({ is_read: true })
-        .eq('id', notificationId);
+window.markNotificationRead = async function(notificationId) {
+    try {
+        const { error } = await window.supabaseClient
+            .from('notifications')
+            .update({ is_read: true })
+            .eq('id', notificationId);
 
-    if (error) return { success: false, error: error.message };
-    return { success: true };
-}
+        if (error) return { success: false, error: error.message };
+        return { success: true };
+    } catch (error) {
+        console.error('Mark notification read error:', error);
+        return { success: false, error: error.message };
+    }
+};
 
 // Mark All Notifications as Read
-async function markAllNotificationsRead() {
-    const user = await getCurrentUser();
-    if (!user) return { success: false, error: 'Not logged in' };
+window.markAllNotificationsRead = async function() {
+    try {
+        const user = await window.getCurrentUser();
+        if (!user) return { success: false, error: 'Not logged in' };
 
-    const { error } = await supabase
-        .from('notifications')
-        .update({ is_read: true })
-        .eq('user_id', user.id);
+        const { error } = await window.supabaseClient
+            .from('notifications')
+            .update({ is_read: true })
+            .eq('user_id', user.id);
 
-    if (error) return { success: false, error: error.message };
-    return { success: true };
-}
+        if (error) return { success: false, error: error.message };
+        return { success: true };
+    } catch (error) {
+        console.error('Mark all notifications read error:', error);
+        return { success: false, error: error.message };
+    }
+};
 
 // Get Unread Notification Count
-async function getUnreadNotificationCount() {
-    const user = await getCurrentUser();
-    if (!user) return 0;
+window.getUnreadNotificationCount = async function() {
+    try {
+        const user = await window.getCurrentUser();
+        if (!user) return 0;
 
-    const { count } = await supabase
-        .from('notifications')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .eq('is_read', false);
+        const { count } = await window.supabaseClient
+            .from('notifications')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', user.id)
+            .eq('is_read', false);
 
-    return count || 0;
-}
+        return count || 0;
+    } catch (error) {
+        console.error('Get unread notification count error:', error);
+        return 0;
+    }
+};
 
 // ============================================
 // PROFILE FUNCTIONS
 // ============================================
 
 // Get Profile by ID
-async function getProfile(userId) {
-    const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
+window.getProfile = async function(userId) {
+    try {
+        const { data, error } = await window.supabaseClient
+            .from('profiles')
+            .select('*')
+            .eq('id', userId)
+            .single();
 
-    if (error) {
+        if (error) {
+            return { success: false, error: error.message };
+        }
+
+        return { success: true, profile: data };
+    } catch (error) {
+        console.error('Get profile error:', error);
         return { success: false, error: error.message };
     }
-
-    return { success: true, profile: data };
-}
+};
 
 // Update Profile
-async function updateProfile(updates) {
-    const user = await getCurrentUser();
-    if (!user) return { success: false, error: 'Not logged in' };
+window.updateProfile = async function(updates) {
+    try {
+        const user = await window.getCurrentUser();
+        if (!user) return { success: false, error: 'Not logged in' };
 
-    const { data, error } = await supabase
-        .from('profiles')
-        .update(updates)
-        .eq('id', user.id)
-        .select()
-        .single();
+        const { data, error } = await window.supabaseClient
+            .from('profiles')
+            .update(updates)
+            .eq('id', user.id)
+            .select()
+            .single();
 
-    if (error) {
+        if (error) {
+            return { success: false, error: error.message };
+        }
+
+        return { success: true, profile: data };
+    } catch (error) {
+        console.error('Update profile error:', error);
         return { success: false, error: error.message };
     }
-
-    return { success: true, profile: data };
-}
+};
 
 // ============================================
 // UTILITY FUNCTIONS
 // ============================================
 
 // Get Star Rating based on likes
-function getStarRating(likesCount) {
+window.getStarRating = function(likesCount) {
     if (likesCount >= 100) return { stars: 5, label: 'Legendary', color: '#FFD700' };
     if (likesCount >= 50) return { stars: 4, label: 'Viral', color: '#FF6B6B' };
     if (likesCount >= 10) return { stars: 3, label: 'Popular', color: '#4ECDC4' };
     if (likesCount >= 5) return { stars: 2, label: 'Rising', color: '#95E1D3' };
     return { stars: 0, label: '', color: '' };
-}
+};
 
 // Format time ago
-function timeAgo(dateString) {
+window.timeAgo = function(dateString) {
     const now = new Date();
     const date = new Date(dateString);
     const seconds = Math.floor((now - date) / 1000);
@@ -496,16 +806,38 @@ function timeAgo(dateString) {
     if (seconds < 86400) return Math.floor(seconds / 3600) + 'h ago';
     if (seconds < 604800) return Math.floor(seconds / 86400) + 'd ago';
     return date.toLocaleDateString();
-}
+};
 
 // Generate initials from name
-function getInitials(name) {
+window.getInitials = function(name) {
+    if (!name) return 'U';
     return name
         .split(' ')
         .map(word => word[0])
         .join('')
         .toUpperCase()
         .slice(0, 2);
-}
+};
+
+// Toast notification helper
+window.showToast = window.showToast || function(message, type = 'success') {
+    const toast = document.getElementById('toast');
+    const toastMessage = document.getElementById('toastMessage');
+    
+    if (toast && toastMessage) {
+        const icon = toast.querySelector('i');
+        toastMessage.textContent = message;
+        toast.className = `toast ${type}`;
+        if (icon) {
+            icon.className = type === 'success' ? 'fas fa-check-circle' : 'fas fa-exclamation-circle';
+        }
+        toast.classList.add('show');
+        setTimeout(() => {
+            toast.classList.remove('show');
+        }, 3000);
+    } else {
+        console.log(`Toast (${type}): ${message}`);
+    }
+};
 
 console.log('Supabase config loaded successfully!');

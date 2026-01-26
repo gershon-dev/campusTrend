@@ -2,9 +2,9 @@
 if (typeof window.supabaseClient === 'undefined') {
     // IMPORTANT: Replace these with your actual Supabase credentials
     // Your anon key should look like: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+  
      const SUPABASE_URL = 'https://kkvelbfcwaydxiwzsnpb.supabase.co';
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrdmVsYmZjd2F5ZHhpd3pzbnBiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkzNzMxMjUsImV4cCI6MjA4NDk0OTEyNX0.bc7CweVNAWSsKevkCfL3d2aadEJ4Qay5kWMLhq8H3Nc'; // This needs to be a valid JWT token starting with eyJ
-
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrdmVsYmZjd2F5ZHhpd3pzbnBiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkzNzMxMjUsImV4cCI6MjA4NDk0OTEyNX0.bc7CweVNAWSsKevkCfL3d2aadEJ4Qay5kWMLhq8H3Nc'; 
     // Initialize Supabase client and store globally
     window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
         auth: {
@@ -110,6 +110,16 @@ window.signUp = async function(email, password, fullName, indexNumber, departmen
 
         if (authError) {
             console.error('Signup error:', authError);
+            
+            // Handle network errors
+            if (authError.message.includes('Failed to fetch') || 
+                authError.message.includes('ERR_CONNECTION') ||
+                authError.name === 'AuthRetryableFetchError') {
+                return { 
+                    success: false, 
+                    error: 'Network connection error. Please check your internet connection and try again.' 
+                };
+            }
             
             // Handle rate limiting
             if (authError.message.includes('429') || authError.message.includes('rate limit')) {

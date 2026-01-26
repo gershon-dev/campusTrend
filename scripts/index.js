@@ -1,70 +1,173 @@
-// app.js - Main application logic for index.html
-// Include after supabase-config.js
-
-document.addEventListener('DOMContentLoaded', function() {
+// index.js - Main application logic
+document.addEventListener('DOMContentLoaded', async function() {
+    console.log('DOM loaded, initializing app...');
+    
     // State
     let currentUser = null;
     let currentProfile = null;
     let posts = [];
-    let currentFilter = 'all'; // 'all', 'popular', 'recent'
+    let currentFilter = 'all';
     let currentDepartmentFilter = null;
+    let selectedPostForShare = null;
 
     // DOM Elements
-    const feedContainer = document.getElementById('feedContainer');
-    const createPostBtn = document.getElementById('createPostBtn');
-    const postModal = document.getElementById('postModal');
+    const postsContainer = document.getElementById('postsContainer');
+    const uploadModal = document.getElementById('uploadModal');
     const shareModal = document.getElementById('shareModal');
     const profileModal = document.getElementById('profileModal');
-    const notificationBtn = document.getElementById('notificationBtn');
+    const notificationBell = document.getElementById('notificationBell');
     const notificationDropdown = document.getElementById('notificationDropdown');
-    const notificationCount = document.getElementById('notificationCount');
-    const userAvatar = document.getElementById('userAvatar');
-    const userName = document.getElementById('userName');
+    const notificationBadge = document.getElementById('notificationBadge');
+    const currentUserAvatar = document.getElementById('currentUserAvatar');
+    const currentUserName = document.getElementById('currentUserName');
+    const userProfile = document.getElementById('userProfile');
 
     // Initialize app
-    init();
+    await init();
 
     async function init() {
-        // Check authentication
-        const user = await getCurrentUser();
-        
-        if (!user) {
-            window.location.href = 'sign-in.html';
-            return;
+        try {
+            console.log('Checking authentication...');
+            
+            // Check if user is logged in
+            const isLoggedIn = await window.isLoggedIn();
+            
+            if (!isLoggedIn) {
+                console.log('Not logged in, redirecting to sign-in...');
+                window.location.href = 'sign-in.html';
+                return;
+            }
+
+            // Get current user and profile
+            currentUser = await window.getCurrentUser();
+            currentProfile = await window.getCurrentProfile();
+
+            console.log('Current user:', currentUser);
+            console.log('Current profile:', currentProfile);
+
+            if (!currentUser || !currentProfile) {
+                console.error('Failed to load user or profile');
+                window.location.href = 'sign-in.html';
+                return;
+            }
+
+            // Update UI with user info
+            updateUserUI();
+
+            // Load departments
+            loadDepartments();
+
+            // Load initial data
+            await loadPosts();
+            await loadNotifications();
+            await loadTrends();
+
+            // Set up event listeners
+            setupEventListeners();
+
+            console.log('App initialized successfully!');
+        } catch (error) {
+            console.error('Initialization error:', error);
+            alert('Failed to load app. Please try refreshing the page.');
         }
-
-        currentUser = user;
-        currentProfile = await getCurrentProfile();
-
-        // Update UI with user info
-        updateUserUI();
-
-        // Load initial data
-        await loadPosts();
-        await loadNotifications();
-
-        // Set up real-time subscriptions
-        setupRealtimeSubscriptions();
-
-        // Set up event listeners
-        setupEventListeners();
     }
 
     function updateUserUI() {
-        if (currentProfile) {
-            // Update avatar
-            if (userAvatar) {
-                if (currentProfile.avatar_url) {
-                    userAvatar.innerHTML = `<img src="${currentProfile.avatar_url}" alt="Avatar" class="w-full h-full object-cover rounded-full">`;
-                } else {
-                    userAvatar.textContent = currentProfile.full_name.charAt(0).toUpperCase();
-                }
-            }
+        if (!currentProfile) return;
+
+        console.log('Updating UI with profile:', currentProfile);
+
+        // Get initials
+        const initials = getInitials(currentProfile.full_name);
+
+        // Update header avatar
+        if (currentUserAvatar) {
+            currentUserAvatar.textContent = initials;
+            currentUserAvatar.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+            currentUserAvatar.style.color = 'white';
+        }
+
+        // Update header username
+        if (currentUserName) {
+            currentUserName.textContent = currentProfile.full_name;
+        }
+
+        // Update modal avatar and username
+        const modalUserAvatar = document.getElementById('modalUserAvatar');
+        const modalUserName = document.getElementById('modalUserName');
+        
+        if (modalUserAvatar) {
+            modalUserAvatar.textContent = initials;
+        }
+        
+        if (modalUserName) {
+            modalUserName.textContent = currentProfile.full_name;
+        }
+
+        console.log('UI updated with user info');
+    }
+
+    function getInitials(name) {
+        if (!name) return 'U';
+        const parts = name.trim().split(' ');
+        if (parts.length >= 2) {
+            return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+        }
+        return name.substring(0, 2).toUpperCase();
+    }
+
+    // ==================== DEPARTMENTS ====================
+
+    function loadDepartments() {
+        const departmentSelect = document.getElementById('departmentSelect');
+        const departmentTags = document.getElementById('departmentTags');
+
+        const departments = window.DEPARTMENTS || [
+            'Computer Science',
+            'Mathematics',
+            'Basic Education',
+            'Business Administration',
+            'Graphic Design',
+            'Music Education',
+            'Health Education',
+            'Social Studies',
+            'English Education',
+            'Science Education',
+            'Physical Education',
+            'Special Education'
+        ];
+
+        // Populate department select
+        if (departmentSelect) {
+            departmentSelect.innerHTML = '<option value="">Select your department</option>' +
+                departments.map(dept => `<option value="${dept}">${dept}</option>`).join('');
             
-            // Update username display
-            if (userName) {
-                userName.textContent = currentProfile.full_name;
+            // Pre-select current user's department
+            if (currentProfile?.department) {
+                departmentSelect.value = currentProfile.department;
             }
+        }
+
+        // Populate department tags in sidebar
+        if (departmentTags) {
+            departmentTags.innerHTML = `
+                <div class="department-tag active" data-department="">All</div>
+                ${departments.map(dept => 
+                    `<div class="department-tag" data-department="${dept}">${dept}</div>`
+                ).join('')}
+            `;
+
+            // Add click handlers
+            departmentTags.querySelectorAll('.department-tag').forEach(tag => {
+                tag.addEventListener('click', function() {
+                    departmentTags.querySelectorAll('.department-tag').forEach(t => 
+                        t.classList.remove('active')
+                    );
+                    this.classList.add('active');
+                    currentDepartmentFilter = this.dataset.department || null;
+                    loadPosts();
+                });
+            });
         }
     }
 
@@ -72,7 +175,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     async function loadPosts() {
         try {
-            let query = supabaseClient
+            console.log('Loading posts...');
+            showLoading();
+
+            let query = window.supabaseClient
                 .from('posts')
                 .select(`
                     *,
@@ -88,6 +194,8 @@ document.addEventListener('DOMContentLoaded', function() {
             // Apply filters
             if (currentFilter === 'popular') {
                 query = query.gte('likes_count', 5).order('likes_count', { ascending: false });
+            } else if (currentFilter === 'recent') {
+                query = query.order('created_at', { ascending: false });
             }
 
             if (currentDepartmentFilter) {
@@ -96,17 +204,23 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const { data, error } = await query.limit(50);
 
-            if (error) throw error;
+            if (error) {
+                console.error('Error loading posts:', error);
+                throw error;
+            }
 
             posts = data || [];
-            
+            console.log('Loaded posts:', posts.length);
+
             // Check which posts the current user has liked
-            if (currentUser) {
-                const { data: userLikes } = await supabaseClient
+            if (currentUser && posts.length > 0) {
+                const postIds = posts.map(p => p.id);
+                const { data: userLikes } = await window.supabaseClient
                     .from('likes')
                     .select('post_id')
-                    .eq('user_id', currentUser.id);
-                
+                    .eq('user_id', currentUser.id)
+                    .in('post_id', postIds);
+
                 const likedPostIds = new Set(userLikes?.map(l => l.post_id) || []);
                 posts = posts.map(post => ({
                     ...post,
@@ -117,105 +231,105 @@ document.addEventListener('DOMContentLoaded', function() {
             renderPosts();
         } catch (error) {
             console.error('Error loading posts:', error);
-            showToast('Failed to load posts', 'error');
+            showError('Failed to load posts');
+        }
+    }
+
+    function showLoading() {
+        if (postsContainer) {
+            postsContainer.innerHTML = `
+                <div style="text-align: center; padding: 40px;">
+                    <div style="border: 3px solid #f3f4f6; border-top: 3px solid #667eea; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto;"></div>
+                    <p style="color: #6b7280; margin-top: 10px;">Loading posts...</p>
+                </div>
+            `;
+        }
+    }
+
+    function showError(message) {
+        if (postsContainer) {
+            postsContainer.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: #ef4444;">
+                    <i class="fas fa-exclamation-circle" style="font-size: 48px; margin-bottom: 10px;"></i>
+                    <p>${message}</p>
+                </div>
+            `;
         }
     }
 
     function renderPosts() {
-        if (!feedContainer) return;
+        if (!postsContainer) return;
 
         if (posts.length === 0) {
-            feedContainer.innerHTML = `
-                <div class="text-center py-12 text-gray-500">
-                    <svg class="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
-                    </svg>
-                    <p class="text-lg font-medium">No posts yet</p>
-                    <p class="text-sm">Be the first to share something!</p>
+            postsContainer.innerHTML = `
+                <div class="post-card" style="text-align: center; padding: 60px 20px;">
+                    <i class="fas fa-image" style="font-size: 64px; color: #e5e7eb; margin-bottom: 20px;"></i>
+                    <h3 style="color: #374151; margin-bottom: 10px;">No posts yet</h3>
+                    <p style="color: #6b7280;">Be the first to share something with the campus!</p>
                 </div>
             `;
             return;
         }
 
-        feedContainer.innerHTML = posts.map(post => createPostHTML(post)).join('');
-
-        // Add event listeners to post actions
+        postsContainer.innerHTML = posts.map(post => createPostHTML(post)).join('');
         setupPostEventListeners();
     }
 
     function createPostHTML(post) {
         const profile = post.profiles;
-        const timeAgo = getTimeAgo(post.created_at);
+        const timeAgo = window.timeAgo(post.created_at);
         const starRating = getStarRating(post.likes_count);
-        const avatarInitial = profile?.full_name?.charAt(0).toUpperCase() || 'U';
+        const initials = getInitials(profile?.full_name || 'User');
         
         return `
-            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden post-card" data-post-id="${post.id}">
-                <!-- Post Header -->
-                <div class="p-4 flex items-center justify-between">
-                    <div class="flex items-center space-x-3">
-                        <div class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold">
-                            ${profile?.avatar_url ? 
-                                `<img src="${profile.avatar_url}" alt="Avatar" class="w-full h-full object-cover rounded-full">` : 
-                                avatarInitial
-                            }
-                        </div>
+            <div class="post-card" data-post-id="${post.id}">
+                <div class="post-header">
+                    <div class="post-user">
+                        <div class="user-avatar">${initials}</div>
                         <div>
-                            <h4 class="font-semibold text-gray-900">${profile?.full_name || 'Anonymous'}</h4>
-                            <div class="flex items-center space-x-2 text-sm text-gray-500">
-                                <span>${profile?.department || 'Unknown'}</span>
+                            <div class="post-username">${escapeHTML(profile?.full_name || 'Anonymous')}</div>
+                            <div class="post-meta">
+                                <i class="fas fa-graduation-cap"></i>
+                                <span>${escapeHTML(profile?.department || 'Unknown')}</span>
                                 <span>•</span>
+                                <i class="fas fa-clock"></i>
                                 <span>${timeAgo}</span>
-                                ${starRating ? `<span>•</span><span>${starRating}</span>` : ''}
+                                ${starRating ? `<span>•</span>${starRating}` : ''}
                             </div>
                         </div>
                     </div>
-                    <button class="text-gray-400 hover:text-gray-600 post-menu-btn">
-                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path>
-                        </svg>
-                    </button>
                 </div>
 
-                <!-- Post Content -->
-                ${post.content ? `<p class="px-4 pb-3 text-gray-800">${escapeHTML(post.content)}</p>` : ''}
+                ${post.content ? `<div class="post-content">${escapeHTML(post.content)}</div>` : ''}
                 
-                <!-- Post Image -->
                 ${post.image_url ? `
-                    <div class="relative">
-                        <img src="${post.image_url}" alt="Post image" class="w-full max-h-96 object-cover">
+                    <div class="post-image">
+                        <img src="${post.image_url}" alt="Post image">
                     </div>
                 ` : ''}
 
-                <!-- Post Actions -->
-                <div class="px-4 py-3 border-t border-gray-100 flex items-center justify-between">
-                    <div class="flex items-center space-x-6">
-                        <button class="flex items-center space-x-2 text-gray-500 hover:text-red-500 transition-colors like-btn ${post.isLiked ? 'text-red-500' : ''}" data-post-id="${post.id}">
-                            <svg class="w-5 h-5 ${post.isLiked ? 'fill-current' : ''}" fill="${post.isLiked ? 'currentColor' : 'none'}" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
-                            </svg>
-                            <span class="likes-count">${post.likes_count || 0}</span>
-                        </button>
-                        <button class="flex items-center space-x-2 text-gray-500 hover:text-blue-500 transition-colors comment-btn" data-post-id="${post.id}">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
-                            </svg>
-                            <span>${post.comments_count || 0}</span>
-                        </button>
-                    </div>
-                    <button class="text-gray-500 hover:text-green-500 transition-colors share-btn" data-post-id="${post.id}">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path>
-                        </svg>
+                <div class="post-actions">
+                    <button class="action-btn like-btn ${post.isLiked ? 'liked' : ''}" data-post-id="${post.id}">
+                        <i class="fas fa-heart"></i>
+                        <span class="likes-count">${post.likes_count || 0}</span>
+                    </button>
+                    <button class="action-btn comment-btn" data-post-id="${post.id}">
+                        <i class="fas fa-comment"></i>
+                        <span>${post.comments_count || 0}</span>
+                    </button>
+                    <button class="action-btn share-btn" data-post-id="${post.id}">
+                        <i class="fas fa-share"></i>
+                        <span>Share</span>
                     </button>
                 </div>
 
-                <!-- Comments Section (Hidden by default) -->
-                <div class="comments-section hidden border-t border-gray-100 p-4" data-post-id="${post.id}">
-                    <div class="comments-list space-y-3 mb-3"></div>
-                    <div class="flex items-center space-x-2">
-                        <input type="text" placeholder="Write a comment..." class="comment-input flex-1 px-3 py-2 border border-gray-200 rounded-full text-sm focus:outline-none focus:border-blue-500">
-                        <button class="send-comment-btn px-4 py-2 bg-blue-500 text-white text-sm rounded-full hover:bg-blue-600 transition-colors">Send</button>
+                <div class="comments-section" style="display: none;" data-post-id="${post.id}">
+                    <div class="comments-list"></div>
+                    <div class="comment-input-wrapper">
+                        <input type="text" class="comment-input" placeholder="Write a comment...">
+                        <button class="send-comment-btn">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -223,26 +337,15 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function getStarRating(likes) {
-        if (likes >= 100) return '⭐⭐⭐⭐⭐ Legendary';
-        if (likes >= 50) return '⭐⭐⭐⭐ Viral';
-        if (likes >= 10) return '⭐⭐⭐ Popular';
-        if (likes >= 5) return '⭐⭐ Rising';
+        if (likes >= 100) return '<span class="star-rating"><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i> Legendary</span>';
+        if (likes >= 50) return '<span class="star-rating"><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i> Viral</span>';
+        if (likes >= 10) return '<span class="star-rating"><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i> Popular</span>';
+        if (likes >= 5) return '<span class="star-rating"><i class="fas fa-star"></i><i class="fas fa-star"></i> Rising</span>';
         return '';
     }
 
-    function getTimeAgo(dateString) {
-        const now = new Date();
-        const date = new Date(dateString);
-        const seconds = Math.floor((now - date) / 1000);
-
-        if (seconds < 60) return 'Just now';
-        if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-        if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-        if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
-        return date.toLocaleDateString();
-    }
-
     function escapeHTML(str) {
+        if (!str) return '';
         const div = document.createElement('div');
         div.textContent = str;
         return div.innerHTML;
@@ -295,49 +398,24 @@ document.addEventListener('DOMContentLoaded', function() {
     // ==================== LIKE FUNCTIONALITY ====================
 
     async function handleLike(postId) {
-        if (!currentUser) {
-            showToast('Please sign in to like posts', 'error');
-            return;
-        }
-
-        const postCard = document.querySelector(`[data-post-id="${postId}"]`);
-        const likeBtn = postCard.querySelector('.like-btn');
-        const likesCountSpan = likeBtn.querySelector('.likes-count');
         const post = posts.find(p => p.id === postId);
+        if (!post) return;
+
+        const likeBtn = document.querySelector(`.like-btn[data-post-id="${postId}"]`);
+        const likesCountSpan = likeBtn.querySelector('.likes-count');
 
         try {
-            if (post.isLiked) {
-                // Unlike
-                const { error } = await supabaseClient
-                    .from('likes')
-                    .delete()
-                    .eq('user_id', currentUser.id)
-                    .eq('post_id', postId);
+            const result = await window.toggleLike(postId);
+            
+            if (result.success) {
+                post.isLiked = result.liked;
+                post.likes_count = result.liked 
+                    ? (post.likes_count || 0) + 1 
+                    : Math.max(0, (post.likes_count || 1) - 1);
 
-                if (error) throw error;
-
-                post.isLiked = false;
-                post.likes_count = Math.max(0, (post.likes_count || 1) - 1);
-                likeBtn.classList.remove('text-red-500');
-                likeBtn.querySelector('svg').setAttribute('fill', 'none');
-            } else {
-                // Like
-                const { error } = await supabaseClient
-                    .from('likes')
-                    .insert({
-                        user_id: currentUser.id,
-                        post_id: postId
-                    });
-
-                if (error) throw error;
-
-                post.isLiked = true;
-                post.likes_count = (post.likes_count || 0) + 1;
-                likeBtn.classList.add('text-red-500');
-                likeBtn.querySelector('svg').setAttribute('fill', 'currentColor');
+                likeBtn.classList.toggle('liked', post.isLiked);
+                likesCountSpan.textContent = post.likes_count;
             }
-
-            likesCountSpan.textContent = post.likes_count;
         } catch (error) {
             console.error('Like error:', error);
             showToast('Failed to update like', 'error');
@@ -349,11 +427,11 @@ document.addEventListener('DOMContentLoaded', function() {
     async function toggleComments(postId) {
         const commentsSection = document.querySelector(`.comments-section[data-post-id="${postId}"]`);
         
-        if (commentsSection.classList.contains('hidden')) {
-            commentsSection.classList.remove('hidden');
+        if (commentsSection.style.display === 'none') {
+            commentsSection.style.display = 'block';
             await loadComments(postId);
         } else {
-            commentsSection.classList.add('hidden');
+            commentsSection.style.display = 'none';
         }
     }
 
@@ -361,72 +439,51 @@ document.addEventListener('DOMContentLoaded', function() {
         const commentsList = document.querySelector(`.comments-section[data-post-id="${postId}"] .comments-list`);
         
         try {
-            const { data, error } = await supabaseClient
-                .from('comments')
-                .select(`
-                    *,
-                    profiles:user_id (
-                        full_name,
-                        avatar_url
-                    )
-                `)
-                .eq('post_id', postId)
-                .order('created_at', { ascending: true });
-
-            if (error) throw error;
-
-            if (data.length === 0) {
-                commentsList.innerHTML = '<p class="text-gray-500 text-sm text-center">No comments yet. Be the first!</p>';
-            } else {
-                commentsList.innerHTML = data.map(comment => `
-                    <div class="flex items-start space-x-2">
-                        <div class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
-                            ${comment.profiles?.full_name?.charAt(0).toUpperCase() || 'U'}
-                        </div>
-                        <div class="flex-1 bg-gray-100 rounded-2xl px-3 py-2">
-                            <p class="font-semibold text-sm text-gray-900">${comment.profiles?.full_name || 'Anonymous'}</p>
-                            <p class="text-sm text-gray-700">${escapeHTML(comment.content)}</p>
-                        </div>
-                    </div>
-                `).join('');
+            const result = await window.getComments(postId);
+            
+            if (result.success && result.comments) {
+                if (result.comments.length === 0) {
+                    commentsList.innerHTML = '<p style="text-align: center; color: #6b7280; padding: 20px;">No comments yet</p>';
+                } else {
+                    commentsList.innerHTML = result.comments.map(comment => {
+                        const initials = getInitials(comment.profiles?.full_name || 'User');
+                        return `
+                            <div class="comment">
+                                <div class="user-avatar small">${initials}</div>
+                                <div class="comment-content">
+                                    <div class="comment-username">${escapeHTML(comment.profiles?.full_name || 'Anonymous')}</div>
+                                    <div class="comment-text">${escapeHTML(comment.content)}</div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
             }
         } catch (error) {
             console.error('Error loading comments:', error);
-            commentsList.innerHTML = '<p class="text-red-500 text-sm">Failed to load comments</p>';
+            commentsList.innerHTML = '<p style="color: #ef4444;">Failed to load comments</p>';
         }
     }
 
     async function handleComment(postId, content) {
-        if (!currentUser) {
-            showToast('Please sign in to comment', 'error');
-            return;
-        }
-
         try {
-            const { error } = await supabaseClient
-                .from('comments')
-                .insert({
-                    user_id: currentUser.id,
-                    post_id: postId,
-                    content: content
-                });
-
-            if (error) throw error;
-
-            // Reload comments
-            await loadComments(postId);
+            const result = await window.addComment(postId, content);
             
-            // Update comment count in UI
-            const post = posts.find(p => p.id === postId);
-            if (post) {
-                post.comments_count = (post.comments_count || 0) + 1;
-                const commentBtn = document.querySelector(`.comment-btn[data-post-id="${postId}"] span`);
-                if (commentBtn) {
-                    commentBtn.textContent = post.comments_count;
+            if (result.success) {
+                await loadComments(postId);
+                
+                // Update comment count
+                const post = posts.find(p => p.id === postId);
+                if (post) {
+                    post.comments_count = (post.comments_count || 0) + 1;
+                    const commentBtn = document.querySelector(`.comment-btn[data-post-id="${postId}"] span`);
+                    if (commentBtn) {
+                        commentBtn.textContent = post.comments_count;
+                    }
                 }
+                
+                showToast('Comment added!', 'success');
             }
-
-            showToast('Comment added!', 'success');
         } catch (error) {
             console.error('Comment error:', error);
             showToast('Failed to add comment', 'error');
@@ -436,63 +493,53 @@ document.addEventListener('DOMContentLoaded', function() {
     // ==================== CREATE POST ====================
 
     function setupCreatePostModal() {
-        const postForm = document.getElementById('createPostForm');
-        const postContent = document.getElementById('postContent');
-        const postDepartment = document.getElementById('postDepartment');
-        const postImageInput = document.getElementById('postImage');
+        const openUploadModal = document.getElementById('openUploadModal');
+        const closeUploadModal = document.getElementById('closeUploadModal');
+        const imageUploadArea = document.getElementById('imageUploadArea');
+        const imageInput = document.getElementById('imageInput');
         const imagePreview = document.getElementById('imagePreview');
+        const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+        const uploadPlaceholder = document.getElementById('uploadPlaceholder');
+        const removeImageBtn = document.getElementById('removeImageBtn');
+        const postDescription = document.getElementById('postDescription');
         const charCount = document.getElementById('charCount');
-        const closeModalBtn = document.getElementById('closePostModal');
+        const submitPostBtn = document.getElementById('submitPostBtn');
 
         // Open modal
-        if (createPostBtn) {
-            createPostBtn.addEventListener('click', () => {
-                if (!currentUser) {
-                    showToast('Please sign in to create posts', 'error');
-                    return;
-                }
-                postModal.classList.remove('hidden');
-                // Pre-select user's department
-                if (currentProfile?.department) {
-                    postDepartment.value = currentProfile.department;
-                }
+        if (openUploadModal) {
+            openUploadModal.addEventListener('click', () => {
+                uploadModal.classList.add('show');
             });
         }
 
         // Close modal
-        if (closeModalBtn) {
-            closeModalBtn.addEventListener('click', () => {
-                postModal.classList.add('hidden');
-                resetPostForm();
+        if (closeUploadModal) {
+            closeUploadModal.addEventListener('click', () => {
+                uploadModal.classList.remove('show');
+                resetUploadForm();
             });
         }
 
-        // Close on backdrop click
-        if (postModal) {
-            postModal.addEventListener('click', (e) => {
-                if (e.target === postModal) {
-                    postModal.classList.add('hidden');
-                    resetPostForm();
+        // Click outside to close
+        if (uploadModal) {
+            uploadModal.addEventListener('click', (e) => {
+                if (e.target === uploadModal) {
+                    uploadModal.classList.remove('show');
+                    resetUploadForm();
                 }
             });
         }
 
-        // Character count
-        if (postContent) {
-            postContent.addEventListener('input', () => {
-                const count = postContent.value.length;
-                charCount.textContent = count;
-                if (count > 2000) {
-                    charCount.classList.add('text-red-500');
-                } else {
-                    charCount.classList.remove('text-red-500');
-                }
+        // Image upload area click
+        if (imageUploadArea) {
+            imageUploadArea.addEventListener('click', () => {
+                imageInput.click();
             });
         }
 
-        // Image preview
-        if (postImageInput) {
-            postImageInput.addEventListener('change', function() {
+        // Image selection
+        if (imageInput) {
+            imageInput.addEventListener('change', function() {
                 const file = this.files[0];
                 if (file) {
                     if (file.size > 10 * 1024 * 1024) {
@@ -500,169 +547,132 @@ document.addEventListener('DOMContentLoaded', function() {
                         this.value = '';
                         return;
                     }
-                    
+
                     const reader = new FileReader();
                     reader.onload = (e) => {
-                        imagePreview.innerHTML = `
-                            <div class="relative">
-                                <img src="${e.target.result}" alt="Preview" class="max-h-48 rounded-lg mx-auto">
-                                <button type="button" class="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 remove-image-btn">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                                    </svg>
-                                </button>
-                            </div>
-                        `;
-                        
-                        imagePreview.querySelector('.remove-image-btn').addEventListener('click', () => {
-                            postImageInput.value = '';
-                            imagePreview.innerHTML = `
-                                <p class="text-gray-500">Click to upload image</p>
-                                <p class="text-gray-400 text-xs">JPG, PNG or GIF (Max 10MB)</p>
-                            `;
-                        });
+                        imagePreview.src = e.target.result;
+                        uploadPlaceholder.style.display = 'none';
+                        imagePreviewContainer.style.display = 'block';
+                        validateForm();
                     };
                     reader.readAsDataURL(file);
                 }
             });
         }
 
-        // Submit form
-        if (postForm) {
-            postForm.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                await createPost();
+        // Remove image
+        if (removeImageBtn) {
+            removeImageBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                imageInput.value = '';
+                uploadPlaceholder.style.display = 'flex';
+                imagePreviewContainer.style.display = 'none';
+                validateForm();
             });
         }
 
-        function resetPostForm() {
-            if (postForm) postForm.reset();
-            if (charCount) charCount.textContent = '0';
-            if (imagePreview) {
-                imagePreview.innerHTML = `
-                    <p class="text-gray-500">Click to upload image</p>
-                    <p class="text-gray-400 text-xs">JPG, PNG or GIF (Max 10MB)</p>
-                `;
-            }
+        // Character count
+        if (postDescription) {
+            postDescription.addEventListener('input', () => {
+                charCount.textContent = postDescription.value.length;
+                validateForm();
+            });
+        }
+
+        // Form validation
+        function validateForm() {
+            const departmentSelect = document.getElementById('departmentSelect');
+            const hasImage = imageInput.files.length > 0;
+            const hasDescription = postDescription.value.trim().length > 0;
+            const hasDepartment = departmentSelect.value !== '';
+
+            submitPostBtn.disabled = !hasDepartment || (!hasImage && !hasDescription);
+        }
+
+        // Department select change
+        const departmentSelect = document.getElementById('departmentSelect');
+        if (departmentSelect) {
+            departmentSelect.addEventListener('change', validateForm);
+        }
+
+        // Submit post
+        if (submitPostBtn) {
+            submitPostBtn.addEventListener('click', createPost);
+        }
+
+        function resetUploadForm() {
+            imageInput.value = '';
+            postDescription.value = '';
+            charCount.textContent = '0';
+            uploadPlaceholder.style.display = 'flex';
+            imagePreviewContainer.style.display = 'none';
+            submitPostBtn.disabled = true;
         }
     }
 
     async function createPost() {
-        const postContent = document.getElementById('postContent');
-        const postDepartment = document.getElementById('postDepartment');
-        const postImageInput = document.getElementById('postImage');
-        const submitBtn = document.getElementById('submitPostBtn');
+        const departmentSelect = document.getElementById('departmentSelect');
+        const postDescription = document.getElementById('postDescription');
+        const imageInput = document.getElementById('imageInput');
+        const submitPostBtn = document.getElementById('submitPostBtn');
+        const submitBtnText = document.getElementById('submitBtnText');
 
-        const content = postContent.value.trim();
-        const department = postDepartment.value;
-        const imageFile = postImageInput.files[0];
+        const department = departmentSelect.value;
+        const content = postDescription.value.trim();
+        const imageFile = imageInput.files[0];
 
         if (!department) {
             showToast('Please select a department', 'error');
             return;
         }
 
-        if (!content && !imageFile) {
-            showToast('Please add some content or an image', 'error');
-            return;
-        }
-
-        // Disable button
-        submitBtn.disabled = true;
-        submitBtn.textContent = 'Posting...';
+        submitPostBtn.disabled = true;
+        submitBtnText.textContent = 'Posting...';
 
         try {
-            let imageUrl = null;
+            const result = await window.createPost(content, imageFile, department);
 
-            // Upload image if exists
-            if (imageFile) {
-                const fileExt = imageFile.name.split('.').pop();
-                const fileName = `${currentUser.id}/${Date.now()}.${fileExt}`;
+            if (result.success) {
+                showToast('Post created successfully!', 'success');
+                uploadModal.classList.remove('show');
+                
+                // Reset form
+                departmentSelect.value = currentProfile?.department || '';
+                postDescription.value = '';
+                imageInput.value = '';
+                document.getElementById('charCount').textContent = '0';
+                document.getElementById('uploadPlaceholder').style.display = 'flex';
+                document.getElementById('imagePreviewContainer').style.display = 'none';
 
-                const { data: uploadData, error: uploadError } = await supabaseClient.storage
-                    .from('post-images')
-                    .upload(fileName, imageFile);
-
-                if (uploadError) throw uploadError;
-
-                // Get public URL
-                const { data: { publicUrl } } = supabaseClient.storage
-                    .from('post-images')
-                    .getPublicUrl(fileName);
-
-                imageUrl = publicUrl;
+                // Reload posts
+                await loadPosts();
+            } else {
+                showToast(result.error || 'Failed to create post', 'error');
             }
-
-            // Create post
-            const { data: newPost, error } = await supabaseClient
-                .from('posts')
-                .insert({
-                    user_id: currentUser.id,
-                    content: content || null,
-                    department: department,
-                    image_url: imageUrl
-                })
-                .select(`
-                    *,
-                    profiles:user_id (
-                        id,
-                        full_name,
-                        avatar_url,
-                        department
-                    )
-                `)
-                .single();
-
-            if (error) throw error;
-
-            // Add to posts array and re-render
-            posts.unshift({ ...newPost, isLiked: false });
-            renderPosts();
-
-            // Close modal and reset
-            postModal.classList.add('hidden');
-            document.getElementById('createPostForm').reset();
-            document.getElementById('charCount').textContent = '0';
-
-            showToast('Post created successfully!', 'success');
-
         } catch (error) {
             console.error('Create post error:', error);
             showToast('Failed to create post', 'error');
         } finally {
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'Post';
+            submitPostBtn.disabled = false;
+            submitBtnText.textContent = 'Post';
         }
     }
 
     // ==================== NOTIFICATIONS ====================
 
     async function loadNotifications() {
-        if (!currentUser) return;
-
         try {
-            const { data, error } = await supabaseClient
-                .from('notifications')
-                .select(`
-                    *,
-                    from_user:from_user_id (
-                        full_name,
-                        avatar_url
-                    )
-                `)
-                .eq('user_id', currentUser.id)
-                .order('created_at', { ascending: false })
-                .limit(20);
-
-            if (error) throw error;
-
-            renderNotifications(data || []);
+            const result = await window.getNotifications();
             
-            // Update count
-            const unreadCount = data?.filter(n => !n.is_read).length || 0;
-            if (notificationCount) {
-                notificationCount.textContent = unreadCount;
-                notificationCount.classList.toggle('hidden', unreadCount === 0);
+            if (result.success && result.notifications) {
+                const unreadCount = result.notifications.filter(n => !n.is_read).length;
+                
+                if (notificationBadge) {
+                    notificationBadge.textContent = unreadCount;
+                    notificationBadge.style.display = unreadCount > 0 ? 'block' : 'none';
+                }
+
+                renderNotifications(result.notifications);
             }
         } catch (error) {
             console.error('Error loading notifications:', error);
@@ -670,282 +680,87 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function renderNotifications(notifications) {
-        const list = document.getElementById('notificationList');
-        if (!list) return;
+        const notificationList = document.getElementById('notificationList');
+        if (!notificationList) return;
 
         if (notifications.length === 0) {
-            list.innerHTML = '<p class="text-gray-500 text-center py-4">No notifications yet</p>';
+            notificationList.innerHTML = '<p style="text-align: center; color: #6b7280; padding: 20px;">No notifications yet</p>';
             return;
         }
 
-        list.innerHTML = notifications.map(notification => {
-            const icon = getNotificationIcon(notification.type);
-            const timeAgo = getTimeAgo(notification.created_at);
+        notificationList.innerHTML = notifications.map(notif => {
+            const timeAgo = window.timeAgo(notif.created_at);
+            const initials = getInitials(notif.from_user?.full_name || 'User');
             
             return `
-                <div class="p-3 hover:bg-gray-50 cursor-pointer ${notification.is_read ? '' : 'bg-blue-50'}" data-notification-id="${notification.id}">
-                    <div class="flex items-start space-x-3">
-                        <div class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs">
-                            ${notification.from_user?.full_name?.charAt(0) || icon}
-                        </div>
-                        <div class="flex-1">
-                            <p class="text-sm">
-                                <span class="font-semibold">${notification.from_user?.full_name || 'Someone'}</span>
-                                ${notification.message || getNotificationMessage(notification.type)}
-                            </p>
-                            <p class="text-xs text-gray-500">${timeAgo}</p>
-                        </div>
+                <div class="notification-item ${notif.is_read ? '' : 'unread'}">
+                    <div class="user-avatar small">${initials}</div>
+                    <div class="notification-content">
+                        <p><strong>${escapeHTML(notif.from_user?.full_name || 'Someone')}</strong> ${escapeHTML(notif.message || 'interacted with your post')}</p>
+                        <span class="notification-time">${timeAgo}</span>
                     </div>
                 </div>
             `;
         }).join('');
     }
 
-    function getNotificationIcon(type) {
-        switch (type) {
-            case 'like': return '❤️';
-            case 'comment': return '💬';
-            case 'follow': return '👤';
-            default: return '🔔';
-        }
-    }
+    // ==================== TRENDS ====================
 
-    function getNotificationMessage(type) {
-        switch (type) {
-            case 'like': return 'liked your post';
-            case 'comment': return 'commented on your post';
-            case 'follow': return 'started following you';
-            default: return 'sent you a notification';
-        }
-    }
+    async function loadTrends() {
+        const trendsList = document.getElementById('trendsList');
+        if (!trendsList) return;
 
-    async function markAllNotificationsRead() {
-        if (!currentUser) return;
+        // For now, show static trends - you can make this dynamic later
+        const trends = [
+            { tag: 'CampusLife', posts: 245 },
+            { tag: 'UEWEvents', posts: 189 },
+            { tag: 'StudyTips', posts: 156 },
+            { tag: 'SportsDay', posts: 134 }
+        ];
 
-        try {
-            const { error } = await supabaseClient
-                .from('notifications')
-                .update({ is_read: true })
-                .eq('user_id', currentUser.id)
-                .eq('is_read', false);
-
-            if (error) throw error;
-
-            if (notificationCount) {
-                notificationCount.classList.add('hidden');
-            }
-            
-            // Update UI
-            document.querySelectorAll('#notificationList > div').forEach(el => {
-                el.classList.remove('bg-blue-50');
-            });
-        } catch (error) {
-            console.error('Error marking notifications as read:', error);
-        }
+        trendsList.innerHTML = trends.map(trend => `
+            <div class="trend-item">
+                <div class="trend-tag">#${trend.tag}</div>
+                <div class="trend-count">${trend.posts} posts</div>
+            </div>
+        `).join('');
     }
 
     // ==================== SHARE MODAL ====================
 
     function openShareModal(postId) {
+        selectedPostForShare = postId;
         if (shareModal) {
-            shareModal.classList.remove('hidden');
-            shareModal.dataset.postId = postId;
+            shareModal.classList.add('show');
         }
     }
 
     function setupShareModal() {
-        const closeBtn = document.getElementById('closeShareModal');
-        const copyLinkBtn = document.getElementById('copyLinkBtn');
+        const closeShareModal = document.getElementById('closeShareModal');
+        const copyLink = document.getElementById('copyLink');
 
-        if (closeBtn) {
-            closeBtn.addEventListener('click', () => {
-                shareModal.classList.add('hidden');
+        if (closeShareModal) {
+            closeShareModal.addEventListener('click', () => {
+                shareModal.classList.remove('show');
             });
         }
 
         if (shareModal) {
             shareModal.addEventListener('click', (e) => {
                 if (e.target === shareModal) {
-                    shareModal.classList.add('hidden');
+                    shareModal.classList.remove('show');
                 }
             });
         }
 
-        if (copyLinkBtn) {
-            copyLinkBtn.addEventListener('click', () => {
-                const postId = shareModal.dataset.postId;
-                const url = `${window.location.origin}/post/${postId}`;
+        if (copyLink) {
+            copyLink.addEventListener('click', () => {
+                const url = `${window.location.origin}/index.html?post=${selectedPostForShare}`;
                 navigator.clipboard.writeText(url).then(() => {
                     showToast('Link copied to clipboard!', 'success');
-                    shareModal.classList.add('hidden');
+                    shareModal.classList.remove('show');
                 });
             });
-        }
-    }
-
-    // ==================== PROFILE MODAL ====================
-
-    function setupProfileModal() {
-        const profileBtn = document.getElementById('profileBtn');
-        const closeBtn = document.getElementById('closeProfileModal');
-
-        if (profileBtn) {
-            profileBtn.addEventListener('click', async () => {
-                if (!currentUser) return;
-                await showProfile(currentUser.id);
-            });
-        }
-
-        if (closeBtn) {
-            closeBtn.addEventListener('click', () => {
-                profileModal.classList.add('hidden');
-            });
-        }
-
-        if (profileModal) {
-            profileModal.addEventListener('click', (e) => {
-                if (e.target === profileModal) {
-                    profileModal.classList.add('hidden');
-                }
-            });
-        }
-    }
-
-    async function showProfile(userId) {
-        try {
-            const { data: profile, error } = await supabaseClient
-                .from('profiles')
-                .select('*')
-                .eq('id', userId)
-                .single();
-
-            if (error) throw error;
-
-            // Update profile modal content
-            const profileContent = document.getElementById('profileContent');
-            if (profileContent) {
-                const isOwnProfile = currentUser && currentUser.id === userId;
-                
-                profileContent.innerHTML = `
-                    <div class="text-center">
-                        <div class="w-24 h-24 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-3xl font-bold mx-auto mb-4">
-                            ${profile.avatar_url ? 
-                                `<img src="${profile.avatar_url}" alt="Avatar" class="w-full h-full object-cover rounded-full">` : 
-                                profile.full_name.charAt(0).toUpperCase()
-                            }
-                        </div>
-                        <h2 class="text-xl font-bold text-gray-900">${profile.full_name}</h2>
-                        <p class="text-gray-500">${profile.department}</p>
-                        ${profile.bio ? `<p class="text-gray-600 mt-2">${profile.bio}</p>` : ''}
-                        
-                        <div class="flex justify-center space-x-8 mt-6">
-                            <div class="text-center">
-                                <p class="text-2xl font-bold text-gray-900">${profile.posts_count || 0}</p>
-                                <p class="text-sm text-gray-500">Posts</p>
-                            </div>
-                            <div class="text-center">
-                                <p class="text-2xl font-bold text-gray-900">${profile.followers_count || 0}</p>
-                                <p class="text-sm text-gray-500">Followers</p>
-                            </div>
-                            <div class="text-center">
-                                <p class="text-2xl font-bold text-gray-900">${profile.following_count || 0}</p>
-                                <p class="text-sm text-gray-500">Following</p>
-                            </div>
-                        </div>
-
-                        ${!isOwnProfile ? `
-                            <button class="mt-6 px-6 py-2 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-colors follow-profile-btn" data-user-id="${userId}">
-                                Follow
-                            </button>
-                        ` : `
-                            <button class="mt-6 px-6 py-2 bg-gray-200 text-gray-700 rounded-full hover:bg-gray-300 transition-colors" onclick="signOut()">
-                                Sign Out
-                            </button>
-                        `}
-                    </div>
-                `;
-            }
-
-            profileModal.classList.remove('hidden');
-        } catch (error) {
-            console.error('Error loading profile:', error);
-            showToast('Failed to load profile', 'error');
-        }
-    }
-
-    // ==================== FILTERS ====================
-
-    function setupFilters() {
-        // Tab filters
-        document.querySelectorAll('.filter-tab').forEach(tab => {
-            tab.addEventListener('click', function() {
-                document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
-                this.classList.add('active');
-                currentFilter = this.dataset.filter;
-                loadPosts();
-            });
-        });
-
-        // Department filters
-        document.querySelectorAll('.department-filter').forEach(btn => {
-            btn.addEventListener('click', function() {
-                document.querySelectorAll('.department-filter').forEach(b => b.classList.remove('active'));
-                this.classList.add('active');
-                currentDepartmentFilter = this.dataset.department || null;
-                loadPosts();
-            });
-        });
-    }
-
-    // ==================== REAL-TIME SUBSCRIPTIONS ====================
-
-    function setupRealtimeSubscriptions() {
-        // Subscribe to new posts
-        supabaseClient
-            .channel('public:posts')
-            .on('postgres_changes', { 
-                event: 'INSERT', 
-                schema: 'public', 
-                table: 'posts' 
-            }, async (payload) => {
-                // Fetch the complete post with profile
-                const { data, error } = await supabaseClient
-                    .from('posts')
-                    .select(`
-                        *,
-                        profiles:user_id (
-                            id,
-                            full_name,
-                            avatar_url,
-                            department
-                        )
-                    `)
-                    .eq('id', payload.new.id)
-                    .single();
-
-                if (!error && data) {
-                    // Only add if not already in the list
-                    if (!posts.find(p => p.id === data.id)) {
-                        posts.unshift({ ...data, isLiked: false });
-                        renderPosts();
-                    }
-                }
-            })
-            .subscribe();
-
-        // Subscribe to notifications for current user
-        if (currentUser) {
-            supabaseClient
-                .channel(`notifications:${currentUser.id}`)
-                .on('postgres_changes', {
-                    event: 'INSERT',
-                    schema: 'public',
-                    table: 'notifications',
-                    filter: `user_id=eq.${currentUser.id}`
-                }, () => {
-                    loadNotifications();
-                })
-                .subscribe();
         }
     }
 
@@ -954,39 +769,69 @@ document.addEventListener('DOMContentLoaded', function() {
     function setupEventListeners() {
         setupCreatePostModal();
         setupShareModal();
-        setupProfileModal();
-        setupFilters();
 
-        // Notification dropdown toggle
-        if (notificationBtn) {
-            notificationBtn.addEventListener('click', () => {
-                notificationDropdown.classList.toggle('hidden');
+        // Filter buttons
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                currentFilter = this.dataset.filter;
+                loadPosts();
+            });
+        });
+
+        // Notification bell
+        if (notificationBell) {
+            notificationBell.addEventListener('click', (e) => {
+                e.stopPropagation();
+                notificationDropdown.classList.toggle('show');
             });
         }
 
-        // Mark all read button
-        const markAllReadBtn = document.getElementById('markAllReadBtn');
-        if (markAllReadBtn) {
-            markAllReadBtn.addEventListener('click', markAllNotificationsRead);
+        // Mark all read
+        const markAllRead = document.getElementById('markAllRead');
+        if (markAllRead) {
+            markAllRead.addEventListener('click', async () => {
+                await window.markAllNotificationsRead();
+                await loadNotifications();
+            });
         }
 
         // Close dropdowns on outside click
         document.addEventListener('click', (e) => {
-            if (notificationDropdown && !notificationBtn?.contains(e.target) && !notificationDropdown.contains(e.target)) {
-                notificationDropdown.classList.add('hidden');
+            if (notificationDropdown && !notificationBell.contains(e.target) && !notificationDropdown.contains(e.target)) {
+                notificationDropdown.classList.remove('show');
             }
         });
 
-        // Sign out handler
-        window.signOut = async function() {
-            try {
-                const { error } = await supabaseClient.auth.signOut();
-                if (error) throw error;
-                window.location.href = 'sign-in.html';
-            } catch (error) {
-                console.error('Sign out error:', error);
-                showToast('Failed to sign out', 'error');
-            }
-        };
+        // User profile click
+        if (userProfile) {
+            userProfile.addEventListener('click', () => {
+                window.location.href = 'user-profile.html';
+            });
+        }
     }
+
+    // ==================== TOAST ====================
+
+    function showToast(message, type = 'success') {
+        const toast = document.getElementById('toast');
+        const toastMessage = document.getElementById('toastMessage');
+        
+        if (toast && toastMessage) {
+            const icon = toast.querySelector('i');
+            toastMessage.textContent = message;
+            toast.className = `toast ${type}`;
+            if (icon) {
+                icon.className = type === 'success' ? 'fas fa-check-circle' : 'fas fa-exclamation-circle';
+            }
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+    }
+
+    // Make showToast available globally
+    window.showToast = showToast;
 });

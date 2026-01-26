@@ -126,9 +126,12 @@ window.signUp = async function(email, password, fullName, indexNumber, departmen
                 return { success: false, error: 'Too many signup attempts. Please wait a few minutes and try again.' };
             }
             
-            // Handle user already registered
+            // Handle user already registered - UPDATED TO CATCH MORE CASES
             if (authError.message.includes('already registered') || 
-                authError.message.includes('User already registered')) {
+                authError.message.includes('User already registered') ||
+                authError.message.includes('already been registered') ||
+                authError.status === 422 ||
+                authError.code === 'user_already_exists') {
                 return { 
                     success: false, 
                     error: 'This index number/email is already registered. Please sign in instead or use a different index number.',
@@ -141,6 +144,7 @@ window.signUp = async function(email, password, fullName, indexNumber, departmen
                 return { success: false, error: 'Password should be at least 6 characters long.' };
             }
             
+            // For any other error, return the actual error message
             return { success: false, error: authError.message };
         }
 
@@ -152,6 +156,20 @@ window.signUp = async function(email, password, fullName, indexNumber, departmen
         return { success: true, user: authData.user };
     } catch (error) {
         console.error('Sign up error:', error);
+        
+        // Check if it's a user already exists error
+        if (error.message && (
+            error.message.includes('already registered') || 
+            error.message.includes('User already registered') ||
+            error.message.includes('already been registered')
+        )) {
+            return { 
+                success: false, 
+                error: 'This index number/email is already registered. Please sign in instead or use a different index number.',
+                alreadyExists: true 
+            };
+        }
+        
         return { success: false, error: error.message || 'An unexpected error occurred' };
     }
 };

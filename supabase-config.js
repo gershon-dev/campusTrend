@@ -2,7 +2,7 @@
 if (typeof window.supabaseClient === 'undefined') {
     // IMPORTANT: Replace these with your actual Supabase credentials
     // Your anon key should look like: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-    const SUPABASE_URL = 'https://kkvelbfcwaydxiwzsnpb.supabase.co';
+     const SUPABASE_URL = 'https://kkvelbfcwaydxiwzsnpb.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrdmVsYmZjd2F5ZHhpd3pzbnBiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkzNzMxMjUsImV4cCI6MjA4NDk0OTEyNX0.bc7CweVNAWSsKevkCfL3d2aadEJ4Qay5kWMLhq8H3Nc'; // This needs to be a valid JWT token starting with eyJ
 
     // Initialize Supabase client and store globally
@@ -10,7 +10,14 @@ if (typeof window.supabaseClient === 'undefined') {
         auth: {
             autoRefreshToken: true,
             persistSession: true,
-            detectSessionInUrl: true
+            detectSessionInUrl: true,
+            storageKey: 'campustrend-auth',
+            storage: window.localStorage
+        },
+        global: {
+            headers: {
+                'X-Client-Info': 'campustrend-web'
+            }
         }
     });
     console.log('Supabase client initialized successfully!');
@@ -216,6 +223,18 @@ window.getCurrentUser = async function() {
         const { data: { user }, error } = await window.supabaseClient.auth.getUser();
         
         if (error) {
+            // Handle CORS errors
+            if (error.message.includes('Failed to fetch') || 
+                error.message.includes('CORS') ||
+                error.name === 'AuthRetryableFetchError') {
+                console.warn('CORS error detected. Please configure your Supabase URL settings.');
+                console.warn('Add http://127.0.0.1:5500 to your allowed redirect URLs in Supabase Dashboard.');
+                
+                // Try to get user from session instead
+                const { data: { session } } = await window.supabaseClient.auth.getSession();
+                return session?.user || null;
+            }
+            
             // Handle refresh token errors
             if (error.message.includes('Refresh Token') || 
                 error.message.includes('Invalid') ||
@@ -231,6 +250,17 @@ window.getCurrentUser = async function() {
         return user;
     } catch (error) {
         console.error('Get current user error:', error);
+        
+        // Try fallback method for CORS issues
+        if (error.message && error.message.includes('fetch')) {
+            try {
+                const { data: { session } } = await window.supabaseClient.auth.getSession();
+                return session?.user || null;
+            } catch (fallbackError) {
+                console.error('Fallback also failed:', fallbackError);
+            }
+        }
+        
         // Check if it's a token error
         if (error.message && (error.message.includes('Refresh Token') || error.message.includes('Invalid'))) {
             await window.clearInvalidSession();
@@ -243,22 +273,109 @@ window.getCurrentUser = async function() {
 window.getCurrentProfile = async function() {
     try {
         const user = await window.getCurrentUser();
-        if (!user) return null;
+        if (!user) {
+            console.log('No user logged in, cannot fetch profile');
+            return null;
+        }
 
         const { data, error } = await window.supabaseClient
             .from('profiles')
             .select('*')
             .eq('id', user.id)
-            .single();
+            .maybeSingle();
 
         if (error) {
             console.error('Get profile error:', error);
+            
+            // If profile doesn't exist, try to create it
+            if (error.code === 'PGRST116' || error.message.includes('no rows')) {
+                console.log('Profile not found, attempting to create...');
+                
+                // Get user metadata
+                const metadata = user.user_metadata || {};
+                
+                // Create profile
+                const { data: newProfile, error: createError } = await window.supabaseClient
+                    .from('profiles')
+                    .insert({
+                        id: user.id,
+                        full_name: metadata.full_name || 'User',
+                        email: user.email,
+                        index_number: metadata.index_number || null,
+                        department: metadata.department || 'Unknown',
+                        avatar_url: null,
+                        bio: null,
+                        location: null
+                    })
+                    .select()
+                    .single();
+                
+                if (createError) {
+                    console.error('Error creating profile:', createError);
+                    // Return a basic profile object even if creation fails
+                    return {
+                        id: user.id,
+                        full_name: metadata.full_name || user.email?.split('@')[0] || 'User',
+                        email: user.email,
+                        department: metadata.department || 'Unknown',
+                        index_number: metadata.index_number || null
+                    };
+                }
+                
+                return newProfile;
+            }
+            
+            // Return null for other errors
             return null;
+        }
+
+        // If no profile found, create one
+        if (!data) {
+            console.log('No profile data, creating new profile...');
+            const metadata = user.user_metadata || {};
+            
+            const { data: newProfile, error: createError } = await window.supabaseClient
+                .from('profiles')
+                .insert({
+                    id: user.id,
+                    full_name: metadata.full_name || 'User',
+                    email: user.email,
+                    index_number: metadata.index_number || null,
+                    department: metadata.department || 'Unknown'
+                })
+                .select()
+                .single();
+            
+            if (createError) {
+                console.error('Error creating profile:', createError);
+                return {
+                    id: user.id,
+                    full_name: metadata.full_name || user.email?.split('@')[0] || 'User',
+                    email: user.email,
+                    department: metadata.department || 'Unknown',
+                    index_number: metadata.index_number || null
+                };
+            }
+            
+            return newProfile;
         }
 
         return data;
     } catch (error) {
         console.error('Get current profile error:', error);
+        
+        // Return a fallback profile
+        const user = await window.getCurrentUser();
+        if (user) {
+            return {
+                id: user.id,
+                full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
+                email: user.email,
+                department: user.user_metadata?.department || 'Unknown',
+                index_number: user.user_metadata?.index_number || null
+            };
+        }
+        
         return null;
     }
 };

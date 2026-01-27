@@ -212,9 +212,12 @@ document.addEventListener('DOMContentLoaded', async function() {
             posts = data || [];
             console.log('Loaded posts:', posts.length);
 
-            // Check which posts the current user has liked
+            // Check which posts the current user has liked and who they're following
             if (currentUser && posts.length > 0) {
                 const postIds = posts.map(p => p.id);
+                const userIds = [...new Set(posts.map(p => p.user_id))].filter(id => id !== currentUser.id);
+                
+                // Get liked posts
                 const { data: userLikes } = await window.supabaseClient
                     .from('likes')
                     .select('post_id')
@@ -222,9 +225,20 @@ document.addEventListener('DOMContentLoaded', async function() {
                     .in('post_id', postIds);
 
                 const likedPostIds = new Set(userLikes?.map(l => l.post_id) || []);
+                
+                // Get followed users
+                const { data: followedUsers } = await window.supabaseClient
+                    .from('followers')
+                    .select('following_id')
+                    .eq('follower_id', currentUser.id)
+                    .in('following_id', userIds);
+                
+                const followedUserIds = new Set(followedUsers?.map(f => f.following_id) || []);
+                
                 posts = posts.map(post => ({
                     ...post,
-                    isLiked: likedPostIds.has(post.id)
+                    isLiked: likedPostIds.has(post.id),
+                    isFollowing: followedUserIds.has(post.user_id)
                 }));
             }
 
@@ -281,6 +295,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         const starRating = window.getStarRating(post.likes_count);
         const initials = getInitials(profile?.full_name || 'User');
         const isOwnPost = currentUser && post.user_id === currentUser.id;
+        const isFollowing = post.isFollowing || false;
         
         // Generate star rating HTML
         let starHTML = '';
@@ -296,7 +311,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                     <div class="post-user-info">
                         <div class="post-username-container">
                             <div class="post-username">${escapeHTML(profile?.full_name || 'Anonymous')}</div>
-                            ${!isOwnPost ? `<button class="follow-btn" data-user-id="${post.user_id}">Follow</button>` : ''}
+                            ${!isOwnPost ? `<button class="follow-btn ${isFollowing ? 'following' : ''}" data-user-id="${post.user_id}">${isFollowing ? 'Following' : 'Follow'}</button>` : ''}
                         </div>
                         <div class="post-meta">
                             ${timeAgo}
@@ -417,6 +432,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             const result = await window.toggleFollow(userId);
             
             if (result.success) {
+                // Update button state
                 if (result.following) {
                     buttonElement.textContent = 'Following';
                     buttonElement.classList.add('following');
@@ -426,6 +442,13 @@ document.addEventListener('DOMContentLoaded', async function() {
                     buttonElement.classList.remove('following');
                     showToast('Unfollowed', 'success');
                 }
+                
+                // Update all posts from this user in memory
+                posts.forEach(post => {
+                    if (post.user_id === userId) {
+                        post.isFollowing = result.following;
+                    }
+                });
             }
         } catch (error) {
             console.error('Follow error:', error);
@@ -440,19 +463,36 @@ document.addEventListener('DOMContentLoaded', async function() {
         if (!post) return;
 
         const likeBtn = document.querySelector(`.like-btn[data-post-id="${postId}"]`);
-        const likesCountSpan = likeBtn.querySelector('.likes-count');
+        if (!likeBtn) return;
 
         try {
             const result = await window.toggleLike(postId);
             
             if (result.success) {
+                // Update post data
                 post.isLiked = result.liked;
                 post.likes_count = result.liked 
                     ? (post.likes_count || 0) + 1 
                     : Math.max(0, (post.likes_count || 1) - 1);
 
+                // Update like button
                 likeBtn.classList.toggle('liked', post.isLiked);
-                likesCountSpan.textContent = post.likes_count;
+                const likeIcon = likeBtn.querySelector('i');
+                if (likeIcon) {
+                    likeIcon.className = post.isLiked ? 'fas fa-heart' : 'far fa-heart';
+                }
+
+                // Update the entire post to reflect new star rating and stats
+                const postCard = document.querySelector(`.post-card[data-post-id="${postId}"]`);
+                if (postCard) {
+                    const newPostHTML = createPostHTML(post);
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = newPostHTML;
+                    const newPostCard = tempDiv.firstElementChild;
+                    
+                    postCard.replaceWith(newPostCard);
+                    setupPostEventListeners();
+                }
             }
         } catch (error) {
             console.error('Like error:', error);

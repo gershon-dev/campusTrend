@@ -310,7 +310,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         return `
             <div class="post-card" data-post-id="${post.id}">
                 <div class="post-header">
-                    <div class="post-user" onclick="window.openUserProfile('${post.user_id}')">
+                    <div class="post-user-info" onclick="window.openUserProfile('${post.user_id}')">
                         <div class="user-avatar" style="background: linear-gradient(135deg, #${Math.random().toString(16).substr(-6)}, #${Math.random().toString(16).substr(-6)})">
                             ${initials}
                         </div>
@@ -544,11 +544,6 @@ document.addEventListener('DOMContentLoaded', async function() {
                 .eq('follower_id', userId);
 
             // Calculate total likes and stars from user's posts
-            const { data: userPosts } = await window.supabaseClient
-                .from('posts')
-                .select('likes_count')
-                .eq('user_id', userId);
-
             let totalLikes = 0;
             let totalStars = 0;
 
@@ -573,13 +568,20 @@ document.addEventListener('DOMContentLoaded', async function() {
                 isFollowing = !!followData;
             }
 
-            // Fetch user's uploaded images
-            const { data: userImages } = await window.supabaseClient
+            // Fetch user's full posts with profile data
+            const { data: userPosts } = await window.supabaseClient
                 .from('posts')
-                .select('image_url, created_at, likes_count, comments_count')
+                .select(`
+                    *,
+                    profiles:user_id (
+                        id,
+                        full_name,
+                        avatar_url,
+                        department
+                    )
+                `)
                 .eq('user_id', userId)
-                .order('created_at', { ascending: false })
-                .limit(9);
+                .order('created_at', { ascending: false });
 
             // Update modal content
             const initials = getInitials(profile.full_name);
@@ -671,35 +673,44 @@ document.addEventListener('DOMContentLoaded', async function() {
                 }
             }
 
-            // Add user's images section before the follow button
+            // Add user's posts section
             const modalBody = profileModal.querySelector('.modal-body');
-            let imagesSection = modalBody.querySelector('.profile-images-section');
+            let postsSection = modalBody.querySelector('.profile-posts-section');
             
-            if (!imagesSection) {
-                imagesSection = document.createElement('div');
-                imagesSection.className = 'profile-images-section';
-                modalBody.querySelector('.profile-modal-content').appendChild(imagesSection);
+            if (!postsSection) {
+                postsSection = document.createElement('div');
+                postsSection.className = 'profile-posts-section';
+                modalBody.querySelector('.profile-modal-content').appendChild(postsSection);
             }
 
-            if (userImages && userImages.length > 0) {
-                imagesSection.innerHTML = `
-                    <h3 style="font-size: 16px; margin: 20px 0 10px 0; text-align: left; color: #050505;">
-                        <i class="fas fa-images"></i> Uploaded Images (${postsCount})
+            if (userPosts && userPosts.length > 0) {
+                // Get liked posts for this user
+                let likedPostIds = [];
+                if (currentUser) {
+                    const { data: likedData } = await window.supabaseClient
+                        .from('likes')
+                        .select('post_id')
+                        .eq('user_id', currentUser.id)
+                        .in('post_id', userPosts.map(p => p.id));
+                    
+                    if (likedData) {
+                        likedPostIds = likedData.map(l => l.post_id);
+                    }
+                }
+
+                postsSection.innerHTML = `
+                    <h3 style="font-size: 16px; margin: 20px 0 15px 0; text-align: left; color: #050505;">
+                        <i class="fas fa-images"></i> Posts (${postsCount})
                     </h3>
-                    <div class="profile-images-grid">
-                        ${userImages.map(img => `
-                            <div class="profile-image-item">
-                                <img src="${img.image_url}" alt="User post">
-                                <div class="profile-image-overlay">
-                                    <span><i class="fas fa-heart"></i> ${img.likes_count || 0}</span>
-                                    <span><i class="fas fa-comment"></i> ${img.comments_count || 0}</span>
-                                </div>
-                            </div>
-                        `).join('')}
+                    <div class="profile-posts-container">
+                        ${userPosts.map(post => createProfilePostHTML(post, likedPostIds.includes(post.id))).join('')}
                     </div>
                 `;
+
+                // Add event listeners to the profile posts
+                setupProfilePostListeners(postsSection);
             } else {
-                imagesSection.innerHTML = `
+                postsSection.innerHTML = `
                     <p style="text-align: center; color: #65676b; margin-top: 20px;">
                         <i class="fas fa-image"></i><br>No posts yet
                     </p>
@@ -716,6 +727,190 @@ document.addEventListener('DOMContentLoaded', async function() {
             showToast('Failed to load profile', 'error');
         }
     };
+
+    // Helper function to create HTML for posts in profile modal
+    function createProfilePostHTML(post, isLiked) {
+        const profile = post.profiles || {};
+        const initials = getInitials(profile.full_name || 'User');
+        const timeAgo = window.timeAgo(post.created_at);
+        const starRating = window.getStarRating(post.likes_count || 0);
+        const avatarColor = stringToColor(profile.full_name || 'User');
+        
+        // Truncate description if too long
+        const maxLength = 200;
+        const description = post.description || '';
+        const truncated = description.length > maxLength;
+        const displayDescription = truncated ? description.substring(0, maxLength) + '...' : description;
+
+        return `
+            <div class="post-card" data-post-id="${post.id}">
+                <div class="post-header">
+                    <div class="post-user" onclick="window.openUserProfile('${post.user_id}')">
+                        <div class="user-avatar" style="background: ${avatarColor}">
+                            ${initials}
+                        </div>
+                        <div>
+                            <div class="post-username">${escapeHTML(profile.full_name || 'Unknown User')}</div>
+                            <div class="post-meta">
+                                <i class="fas fa-graduation-cap"></i>
+                                ${escapeHTML(post.department || 'Unknown')}
+                                <span class="post-time">• ${timeAgo}</span>
+                            </div>
+                        </div>
+                    </div>
+                    ${starRating.stars > 0 ? `
+                        <div class="star-rating-badge stars-${starRating.stars}">
+                            ${Array(starRating.stars).fill('<i class="fas fa-star"></i>').join('')}
+                            <span class="star-rating-label">${starRating.label}</span>
+                        </div>
+                    ` : ''}
+                </div>
+
+                ${description ? `
+                    <p class="post-description">
+                        <span class="description-text ${truncated ? 'truncated' : ''}" data-full-text="${escapeHTML(description)}">
+                            ${escapeHTML(displayDescription)}
+                        </span>
+                        ${truncated ? `<button class="see-more-btn" data-action="expand">See more</button>` : ''}
+                    </p>
+                ` : ''}
+
+                <div class="post-image-container">
+                    <img src="${post.image_url}" alt="Post image" class="post-image" loading="lazy">
+                </div>
+
+                <div class="post-stats">
+                    <span><i class="fas fa-heart"></i> <span class="likes-count">${post.likes_count || 0}</span></span>
+                    <span><i class="fas fa-comment"></i> <span class="comments-count">${post.comments_count || 0}</span></span>
+                    <span><i class="fas fa-share"></i> ${post.shares_count || 0}</span>
+                </div>
+
+                <div class="post-actions">
+                    <button class="action-btn like-btn ${isLiked ? 'liked' : ''}" data-action="like">
+                        <i class="${isLiked ? 'fas' : 'far'} fa-heart"></i>
+                        <span>Like</span>
+                    </button>
+                    <button class="action-btn comment-btn" data-action="comment">
+                        <i class="far fa-comment"></i>
+                        <span>Comment</span>
+                    </button>
+                    <button class="action-btn share-btn" data-action="share">
+                        <i class="far fa-share-square"></i>
+                        <span>Share</span>
+                    </button>
+                </div>
+
+                <div class="comments-section">
+                    <div class="comment-input-wrapper">
+                        <div class="user-avatar small" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%)">
+                            ${currentProfile ? getInitials(currentProfile.full_name) : 'U'}
+                        </div>
+                        <input type="text" class="comment-input" placeholder="Write a comment..." data-post-id="${post.id}">
+                        <button class="send-comment-btn" disabled>
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                    <div class="comments-list" data-post-id="${post.id}">
+                        <!-- Comments will be loaded here -->
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Setup event listeners for profile posts
+    function setupProfilePostListeners(container) {
+        // Like buttons
+        container.querySelectorAll('.like-btn').forEach(btn => {
+            btn.addEventListener('click', async function(e) {
+                const postCard = this.closest('.post-card');
+                const postId = postCard.dataset.postId;
+                await handleLike(postId, this);
+            });
+        });
+
+        // Comment buttons
+        container.querySelectorAll('.comment-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const postCard = this.closest('.post-card');
+                const commentsSection = postCard.querySelector('.comments-section');
+                const postId = postCard.dataset.postId;
+                
+                commentsSection.classList.toggle('active');
+                
+                if (commentsSection.classList.contains('active')) {
+                    const commentInput = commentsSection.querySelector('.comment-input');
+                    commentInput.focus();
+                    
+                    // Load comments if not already loaded
+                    const commentsList = commentsSection.querySelector('.comments-list');
+                    if (!commentsList.hasChildNodes()) {
+                        loadComments(postId);
+                    }
+                }
+            });
+        });
+
+        // Share buttons
+        container.querySelectorAll('.share-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const postCard = this.closest('.post-card');
+                const postId = postCard.dataset.postId;
+                openShareModal(postId);
+            });
+        });
+
+        // See more/less buttons
+        container.querySelectorAll('.see-more-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const descriptionText = this.previousElementSibling;
+                const fullText = descriptionText.dataset.fullText;
+                const isExpanded = this.dataset.action === 'collapse';
+
+                if (isExpanded) {
+                    const maxLength = 200;
+                    descriptionText.textContent = fullText.substring(0, maxLength) + '...';
+                    this.textContent = 'See more';
+                    this.dataset.action = 'expand';
+                    descriptionText.classList.add('truncated');
+                } else {
+                    descriptionText.textContent = fullText;
+                    this.textContent = 'See less';
+                    this.dataset.action = 'collapse';
+                    descriptionText.classList.remove('truncated');
+                }
+            });
+        });
+
+        // Comment inputs
+        container.querySelectorAll('.comment-input').forEach(input => {
+            const sendBtn = input.nextElementSibling;
+            
+            input.addEventListener('input', function() {
+                if (sendBtn) {
+                    sendBtn.disabled = !this.value.trim();
+                }
+            });
+
+            input.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter' && this.value.trim()) {
+                    const postId = this.dataset.postId;
+                    handleComment(postId, this.value.trim());
+                }
+            });
+        });
+
+        // Send comment buttons
+        container.querySelectorAll('.send-comment-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const input = this.previousElementSibling;
+                const postId = input.dataset.postId;
+                if (input.value.trim()) {
+                    handleComment(postId, input.value.trim());
+                }
+            });
+        });
+    }
 
     // ==================== INTERACTIONS ====================
 
@@ -937,6 +1132,13 @@ function renderComments(container, comments, postId) {
     console.log('Top level comments:', topLevelComments.length);
     console.log('Replies map:', repliesMap);
 
+    // Sort top-level comments by created_at in descending order (newest first)
+    topLevelComments.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+    // Sort replies within each comment by created_at in descending order (newest first)
+    Object.keys(repliesMap).forEach(commentId => {
+        repliesMap[commentId].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    });
     // Render top-level comments with their replies
     container.innerHTML = topLevelComments.map(comment => {
         const replies = repliesMap[comment.id] || [];

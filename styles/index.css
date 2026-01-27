@@ -455,9 +455,9 @@
         /* Post Card */
         .post-card {
             background: white;
-            border-radius: 12px;
-            margin-bottom: 20px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            margin-bottom: 16px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
             overflow: hidden;
             transition: box-shadow 0.3s;
         }
@@ -465,20 +465,20 @@
         .post-header {
             display: flex;
             align-items: center;
-            padding: 15px;
-            gap: 10px;
+            padding: 12px 16px;
+            gap: 8px;
         }
 
         .post-avatar {
-            width: 45px;
-            height: 45px;
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
             font-weight: bold;
-            font-size: 16px;
+            font-size: 14px;
             cursor: pointer;
             flex-shrink: 0;
         }
@@ -609,9 +609,9 @@
 
         /* Post Content with See More */
         .post-content {
-            padding: 0 15px 15px;
+            padding: 0 16px 12px;
             font-size: 15px;
-            line-height: 1.5;
+            line-height: 1.3333;
             color: #050505;
         }
 
@@ -646,15 +646,15 @@
 
         .post-image-container {
             width: 100%;
-            background: #f0f2f5;
+            background: #000;
             position: relative;
             overflow: hidden;
         }
 
         .post-image {
             width: 100%;
-            max-height: 500px;
-            object-fit: cover;
+            max-height: 600px;
+            object-fit: contain;
             display: block;
         }
 
@@ -697,6 +697,10 @@
             color: white;
             font-size: 12px;
             text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        }
+
+        .star-rating-badge.stars-1 {
+            background: linear-gradient(135deg, #A8E6CF, #7EC8A3);
         }
 
         .star-rating-badge.stars-2 {
@@ -774,26 +778,28 @@
         .post-stats {
             display: flex;
             justify-content: space-between;
-            padding: 10px 15px;
+            padding: 8px 16px;
             color: #65676b;
-            font-size: 14px;
+            font-size: 15px;
+            align-items: center;
         }
 
         .like-icons {
             display: flex;
             align-items: center;
-            gap: 5px;
+            gap: 4px;
         }
 
         .like-icon {
-            width: 20px;
-            height: 20px;
+            width: 18px;
+            height: 18px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 12px;
+            font-size: 10px;
             color: white;
+            border: 2px solid white;
         }
 
         .like-icon.like { background: #1877f2; }
@@ -801,8 +807,9 @@
 
         .post-actions {
             display: flex;
-            border-top: 1px solid #e4e6e9;
-            padding: 5px;
+            border-top: 1px solid #e4e6eb;
+            padding: 4px 16px 8px;
+            gap: 4px;
         }
 
         .action-btn {
@@ -810,16 +817,17 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 8px;
-            padding: 12px;
+            gap: 6px;
+            padding: 6px 12px;
             border: none;
             background: none;
             cursor: pointer;
-            border-radius: 8px;
+            border-radius: 4px;
             font-size: 15px;
             color: #65676b;
             font-weight: 600;
-            transition: background 0.3s;
+            transition: background 0.2s;
+            min-height: 36px;
         }
 
         .action-btn:hover {
@@ -827,15 +835,16 @@
         }
 
         .action-btn.liked {
-            color: #1877f2;
+            color: #e74c3c;
         }
 
         .action-btn.liked i {
             font-weight: 900;
+            color: #e74c3c;
         }
 
         .action-btn i {
-            font-size: 20px;
+            font-size: 18px;
         }
 
         /* Comments Section */

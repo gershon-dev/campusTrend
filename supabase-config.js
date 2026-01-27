@@ -935,8 +935,9 @@ window.updateProfile = async function(updates) {
 window.getStarRating = function(likesCount) {
     if (likesCount >= 100) return { stars: 5, label: 'Legendary', color: '#FFD700' };
     if (likesCount >= 50) return { stars: 4, label: 'Viral', color: '#FF6B6B' };
-    if (likesCount >= 10) return { stars: 3, label: 'Popular', color: '#4ECDC4' };
-    if (likesCount >= 5) return { stars: 2, label: 'Rising', color: '#95E1D3' };
+    if (likesCount >= 15) return { stars: 3, label: 'Popular', color: '#4ECDC4' };
+    if (likesCount >= 10) return { stars: 2, label: 'Rising', color: '#95E1D3' };
+    if (likesCount >= 5) return { stars: 1, label: 'Trending', color: '#A8E6CF' };
     return { stars: 0, label: '', color: '' };
 };
 

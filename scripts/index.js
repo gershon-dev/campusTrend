@@ -278,70 +278,75 @@ document.addEventListener('DOMContentLoaded', async function() {
     function createPostHTML(post) {
         const profile = post.profiles;
         const timeAgo = window.timeAgo(post.created_at);
-        const starRating = getStarRating(post.likes_count);
+        const starRating = window.getStarRating(post.likes_count);
         const initials = getInitials(profile?.full_name || 'User');
+        const isOwnPost = currentUser && post.user_id === currentUser.id;
+        
+        // Generate star rating HTML
+        let starHTML = '';
+        if (starRating.stars > 0) {
+            const stars = Array(starRating.stars).fill('<i class="fas fa-star"></i>').join('');
+            starHTML = `<span class="star-rating-badge stars-${starRating.stars}">${stars}<span class="star-rating-label">${starRating.label}</span></span>`;
+        }
         
         return `
             <div class="post-card" data-post-id="${post.id}">
                 <div class="post-header">
-                    <div class="post-user">
-                        <div class="user-avatar">${initials}</div>
-                        <div>
+                    <div class="post-avatar" style="background: linear-gradient(135deg, #667eea, #764ba2);">${initials}</div>
+                    <div class="post-user-info">
+                        <div class="post-username-container">
                             <div class="post-username">${escapeHTML(profile?.full_name || 'Anonymous')}</div>
-                            <div class="post-meta">
-                                <i class="fas fa-graduation-cap"></i>
-                                <span>${escapeHTML(profile?.department || 'Unknown')}</span>
-                                <span>•</span>
-                                <i class="fas fa-clock"></i>
-                                <span>${timeAgo}</span>
-                                ${starRating ? `<span>•</span>${starRating}` : ''}
-                            </div>
+                            ${!isOwnPost ? `<button class="follow-btn" data-user-id="${post.user_id}">Follow</button>` : ''}
+                        </div>
+                        <div class="post-meta">
+                            ${timeAgo}
+                            <span>•</span>
+                            <span class="post-department">${escapeHTML(post.department || profile?.department || 'Unknown')}</span>
+                            ${starHTML}
                         </div>
                     </div>
                 </div>
 
-                ${post.content ? `<div class="post-content">${escapeHTML(post.content)}</div>` : ''}
+                ${post.content ? `<div class="post-content"><div class="post-content-text">${escapeHTML(post.content)}</div></div>` : ''}
                 
                 ${post.image_url ? `
-                    <div class="post-image">
-                        <img src="${post.image_url}" alt="Post image">
+                    <div class="post-image-container">
+                        <img src="${post.image_url}" alt="Post image" class="post-image">
                     </div>
                 ` : ''}
 
+                <div class="post-stats">
+                    <div class="post-stats-left">
+                        ${post.likes_count > 0 ? `
+                            <i class="fas fa-heart" style="color: #e74c3c;"></i>
+                            <span>${post.likes_count}</span>
+                        ` : ''}
+                    </div>
+                    <div class="post-stats-right">
+                        ${post.comments_count > 0 ? `<span>${post.comments_count} comment${post.comments_count !== 1 ? 's' : ''}</span>` : ''}
+                    </div>
+                </div>
+
                 <div class="post-actions">
                     <button class="action-btn like-btn ${post.isLiked ? 'liked' : ''}" data-post-id="${post.id}">
-                        <i class="fas fa-heart"></i>
-                        <span class="likes-count">${post.likes_count || 0}</span>
+                        <i class="${post.isLiked ? 'fas' : 'far'} fa-heart"></i>
+                        <span>Like</span>
                     </button>
                     <button class="action-btn comment-btn" data-post-id="${post.id}">
-                        <i class="fas fa-comment"></i>
-                        <span>${post.comments_count || 0}</span>
+                        <i class="far fa-comment"></i>
+                        <span>Comment</span>
                     </button>
                     <button class="action-btn share-btn" data-post-id="${post.id}">
-                        <i class="fas fa-share"></i>
+                        <i class="far fa-share-square"></i>
                         <span>Share</span>
                     </button>
                 </div>
 
-                <div class="comments-section" style="display: none;" data-post-id="${post.id}">
+                <div class="comments-section" data-post-id="${post.id}">
                     <div class="comments-list"></div>
-                    <div class="comment-input-wrapper">
-                        <input type="text" class="comment-input" placeholder="Write a comment...">
-                        <button class="send-comment-btn">
-                            <i class="fas fa-paper-plane"></i>
-                        </button>
-                    </div>
                 </div>
             </div>
         `;
-    }
-
-    function getStarRating(likes) {
-        if (likes >= 100) return '<span class="star-rating"><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i> Legendary</span>';
-        if (likes >= 50) return '<span class="star-rating"><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i> Viral</span>';
-        if (likes >= 10) return '<span class="star-rating"><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i> Popular</span>';
-        if (likes >= 5) return '<span class="star-rating"><i class="fas fa-star"></i><i class="fas fa-star"></i> Rising</span>';
-        return '';
     }
 
     function escapeHTML(str) {
@@ -365,6 +370,14 @@ document.addEventListener('DOMContentLoaded', async function() {
         // Share buttons
         document.querySelectorAll('.share-btn').forEach(btn => {
             btn.addEventListener('click', () => openShareModal(btn.dataset.postId));
+        });
+
+        // Follow buttons
+        document.querySelectorAll('.follow-btn').forEach(btn => {
+            btn.addEventListener('click', async function() {
+                const userId = this.dataset.userId;
+                await handleFollow(userId, this);
+            });
         });
 
         // Send comment buttons
@@ -393,6 +406,31 @@ document.addEventListener('DOMContentLoaded', async function() {
                 }
             });
         });
+    }
+
+    // ==================== FOLLOW FUNCTIONALITY ====================
+
+    async function handleFollow(userId, buttonElement) {
+        if (!userId) return;
+
+        try {
+            const result = await window.toggleFollow(userId);
+            
+            if (result.success) {
+                if (result.following) {
+                    buttonElement.textContent = 'Following';
+                    buttonElement.classList.add('following');
+                    showToast('Now following!', 'success');
+                } else {
+                    buttonElement.textContent = 'Follow';
+                    buttonElement.classList.remove('following');
+                    showToast('Unfollowed', 'success');
+                }
+            }
+        } catch (error) {
+            console.error('Follow error:', error);
+            showToast('Failed to update follow status', 'error');
+        }
     }
 
     // ==================== LIKE FUNCTIONALITY ====================

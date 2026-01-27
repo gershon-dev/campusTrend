@@ -216,45 +216,46 @@ document.addEventListener('DOMContentLoaded', async function() {
             if (currentUser && posts.length > 0) {
                 const postIds = posts.map(p => p.id);
                 const userIds = [...new Set(posts.map(p => p.user_id))].filter(id => id !== currentUser.id);
-                
+
                 // Get liked posts
-                const { data: userLikes } = await window.supabaseClient
+                const { data: likes } = await window.supabaseClient
                     .from('likes')
                     .select('post_id')
                     .eq('user_id', currentUser.id)
                     .in('post_id', postIds);
 
-                const likedPostIds = new Set(userLikes?.map(l => l.post_id) || []);
-                
-                // Get followed users
-                const { data: followedUsers } = await window.supabaseClient
+                const likedPostIds = new Set(likes?.map(l => l.post_id) || []);
+
+                // Get following status
+                const { data: following } = await window.supabaseClient
                     .from('followers')
                     .select('following_id')
                     .eq('follower_id', currentUser.id)
                     .in('following_id', userIds);
-                
-                const followedUserIds = new Set(followedUsers?.map(f => f.following_id) || []);
-                
+
+                const followingIds = new Set(following?.map(f => f.following_id) || []);
+
+                // Update posts with like and follow status
                 posts = posts.map(post => ({
                     ...post,
                     isLiked: likedPostIds.has(post.id),
-                    isFollowing: followedUserIds.has(post.user_id)
+                    isFollowing: followingIds.has(post.user_id)
                 }));
             }
 
             renderPosts();
         } catch (error) {
             console.error('Error loading posts:', error);
-            showError('Failed to load posts');
+            showError('Failed to load posts. Please try refreshing the page.');
         }
     }
 
     function showLoading() {
         if (postsContainer) {
             postsContainer.innerHTML = `
-                <div style="text-align: center; padding: 40px;">
-                    <div style="border: 3px solid #f3f4f6; border-top: 3px solid #667eea; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto;"></div>
-                    <p style="color: #6b7280; margin-top: 10px;">Loading posts...</p>
+                <div class="loading-spinner">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Loading posts...</p>
                 </div>
             `;
         }
@@ -263,8 +264,8 @@ document.addEventListener('DOMContentLoaded', async function() {
     function showError(message) {
         if (postsContainer) {
             postsContainer.innerHTML = `
-                <div style="text-align: center; padding: 40px; color: #ef4444;">
-                    <i class="fas fa-exclamation-circle" style="font-size: 48px; margin-bottom: 10px;"></i>
+                <div class="error-message">
+                    <i class="fas fa-exclamation-triangle"></i>
                     <p>${message}</p>
                 </div>
             `;
@@ -276,295 +277,750 @@ document.addEventListener('DOMContentLoaded', async function() {
 
         if (posts.length === 0) {
             postsContainer.innerHTML = `
-                <div class="post-card" style="text-align: center; padding: 60px 20px;">
-                    <i class="fas fa-image" style="font-size: 64px; color: #e5e7eb; margin-bottom: 20px;"></i>
-                    <h3 style="color: #374151; margin-bottom: 10px;">No posts yet</h3>
-                    <p style="color: #6b7280;">Be the first to share something with the campus!</p>
+                <div class="no-posts">
+                    <i class="fas fa-image"></i>
+                    <h3>No posts yet</h3>
+                    <p>Be the first to share something!</p>
                 </div>
             `;
             return;
         }
 
         postsContainer.innerHTML = posts.map(post => createPostHTML(post)).join('');
-        setupPostEventListeners();
+
+        // Add event listeners to all posts
+        posts.forEach(post => {
+            setupPostEventListeners(post.id);
+        });
     }
 
     function createPostHTML(post) {
-        const profile = post.profiles;
+        const profile = post.profiles || {};
+        const initials = getInitials(profile.full_name || 'User');
         const timeAgo = window.timeAgo(post.created_at);
-        const starRating = window.getStarRating(post.likes_count);
-        const initials = getInitials(profile?.full_name || 'User');
         const isOwnPost = currentUser && post.user_id === currentUser.id;
-        const isFollowing = post.isFollowing || false;
-        
-        // Generate star rating HTML
-        let starHTML = '';
-        if (starRating.stars > 0) {
-            const stars = Array(starRating.stars).fill('<i class="fas fa-star"></i>').join('');
-            starHTML = `<span class="star-rating-badge stars-${starRating.stars}">${stars}<span class="star-rating-label">${starRating.label}</span></span>`;
-        }
-        
+        const starRating = window.getStarRating(post.likes_count);
+
+        // Truncate description for "see more" functionality
+        const maxLength = 200;
+        const description = post.content || '';
+        const needsTruncation = description.length > maxLength;
+        const truncatedDescription = needsTruncation ? description.substring(0, maxLength) + '...' : description;
+
         return `
             <div class="post-card" data-post-id="${post.id}">
                 <div class="post-header">
-                    <div class="post-avatar" style="background: linear-gradient(135deg, #667eea, #764ba2);">${initials}</div>
-                    <div class="post-user-info">
-                        <div class="post-username-container">
-                            <div class="post-username">${escapeHTML(profile?.full_name || 'Anonymous')}</div>
-                            ${!isOwnPost ? `<button class="follow-btn ${isFollowing ? 'following' : ''}" data-user-id="${post.user_id}">${isFollowing ? 'Following' : 'Follow'}</button>` : ''}
+                    <div class="post-user" onclick="window.openUserProfile('${post.user_id}')">
+                        <div class="user-avatar" style="background: linear-gradient(135deg, #${Math.random().toString(16).substr(-6)}, #${Math.random().toString(16).substr(-6)})">
+                            ${initials}
                         </div>
-                        <div class="post-meta">
-                            ${timeAgo}
-                            <span>•</span>
-                            <span class="post-department">${escapeHTML(post.department || profile?.department || 'Unknown')}</span>
-                            ${starHTML}
+                        <div>
+                            <div class="post-username">
+                                ${escapeHTML(profile.full_name || 'Unknown User')}
+                                ${isOwnPost ? '<span class="own-post-badge">You</span>' : ''}
+                            </div>
+                            <div class="post-meta">
+                                <i class="fas fa-graduation-cap"></i>
+                                ${escapeHTML(profile.department || 'Unknown')}
+                                <span class="post-time">${timeAgo}</span>
+                            </div>
                         </div>
                     </div>
+                    ${!isOwnPost ? `
+                        <button class="follow-btn ${post.isFollowing ? 'following' : ''}" data-user-id="${post.user_id}">
+                            <i class="fas ${post.isFollowing ? 'fa-user-check' : 'fa-user-plus'}"></i>
+                            <span>${post.isFollowing ? 'Following' : 'Follow'}</span>
+                        </button>
+                    ` : ''}
                 </div>
 
-                ${post.content ? `<div class="post-content"><div class="post-content-text">${escapeHTML(post.content)}</div></div>` : ''}
-                
-                ${post.image_url ? `
-                    <div class="post-image-container">
-                        <img src="${post.image_url}" alt="Post image" class="post-image">
+                ${description ? `
+                    <div class="post-description">
+                        <p class="description-text ${needsTruncation ? 'truncated' : ''}" data-full-text="${escapeHTML(description)}">
+                            ${escapeHTML(truncatedDescription)}
+                        </p>
+                        ${needsTruncation ? `
+                            <button class="see-more-btn" data-action="expand">
+                                See more
+                            </button>
+                        ` : ''}
                     </div>
                 ` : ''}
 
+                <div class="post-image-container">
+                    <img src="${post.image_url}" alt="Post image" class="post-image">
+                    ${starRating.stars > 0 ? `
+                        <div class="star-rating-badge stars-${starRating.stars}">
+                            ${Array(starRating.stars).fill('<i class="fas fa-star"></i>').join('')}
+                            <span class="star-rating-label">${starRating.label}</span>
+                        </div>
+                    ` : ''}
+                </div>
+
                 <div class="post-stats">
-                    <div class="post-stats-left">
-                        ${post.likes_count > 0 ? `
-                            <i class="fas fa-heart" style="color: #e74c3c;"></i>
-                            <span>${post.likes_count}</span>
-                        ` : ''}
-                    </div>
-                    <div class="post-stats-right">
-                        ${post.comments_count > 0 ? `<span>${post.comments_count} comment${post.comments_count !== 1 ? 's' : ''}</span>` : ''}
-                    </div>
+                    <span class="stat-item">
+                        <i class="fas fa-heart"></i>
+                        <span class="likes-count">${post.likes_count || 0}</span> likes
+                    </span>
+                    <span class="stat-item">
+                        <i class="fas fa-comment"></i>
+                        <span class="comments-count">${post.comments_count || 0}</span> comments
+                    </span>
+                    <span class="stat-item">
+                        <i class="fas fa-share"></i>
+                        ${post.shares_count || 0} shares
+                    </span>
                 </div>
 
                 <div class="post-actions">
-                    <button class="action-btn like-btn ${post.isLiked ? 'liked' : ''}" data-post-id="${post.id}">
-                        <i class="${post.isLiked ? 'fas' : 'far'} fa-heart"></i>
+                    <button class="action-btn like-btn ${post.isLiked ? 'liked' : ''}" data-action="like">
+                        <i class="fas fa-heart"></i>
                         <span>Like</span>
                     </button>
-                    <button class="action-btn comment-btn" data-post-id="${post.id}">
-                        <i class="far fa-comment"></i>
+                    <button class="action-btn comment-btn" data-action="comment">
+                        <i class="fas fa-comment"></i>
                         <span>Comment</span>
                     </button>
-                    <button class="action-btn share-btn" data-post-id="${post.id}">
-                        <i class="far fa-share-square"></i>
+                    <button class="action-btn share-btn" data-action="share">
+                        <i class="fas fa-share"></i>
                         <span>Share</span>
                     </button>
                 </div>
 
                 <div class="comments-section" data-post-id="${post.id}">
-                    <div class="comments-list"></div>
+                    <div class="comment-input-wrapper">
+                        <div class="user-avatar small">${getInitials(currentProfile?.full_name || 'U')}</div>
+                        <input 
+                            type="text" 
+                            class="comment-input" 
+                            placeholder="Write a comment..."
+                            data-post-id="${post.id}"
+                        >
+                        <button class="send-comment-btn" data-post-id="${post.id}" disabled>
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                    <div class="comments-list" data-post-id="${post.id}">
+                        <!-- Comments will be loaded here -->
+                    </div>
                 </div>
             </div>
         `;
     }
 
-    function escapeHTML(str) {
-        if (!str) return '';
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
-    }
+    function setupPostEventListeners(postId) {
+        const postCard = document.querySelector(`[data-post-id="${postId}"]`);
+        if (!postCard) return;
 
-    function setupPostEventListeners() {
-        // Like buttons
-        document.querySelectorAll('.like-btn').forEach(btn => {
-            btn.addEventListener('click', () => handleLike(btn.dataset.postId));
-        });
+        // Like button
+        const likeBtn = postCard.querySelector('.like-btn');
+        if (likeBtn) {
+            likeBtn.addEventListener('click', () => handleLike(postId));
+        }
 
-        // Comment buttons
-        document.querySelectorAll('.comment-btn').forEach(btn => {
-            btn.addEventListener('click', () => toggleComments(btn.dataset.postId));
-        });
-
-        // Share buttons
-        document.querySelectorAll('.share-btn').forEach(btn => {
-            btn.addEventListener('click', () => openShareModal(btn.dataset.postId));
-        });
-
-        // Follow buttons
-        document.querySelectorAll('.follow-btn').forEach(btn => {
-            btn.addEventListener('click', async function() {
-                const userId = this.dataset.userId;
-                await handleFollow(userId, this);
-            });
-        });
-
-        // Send comment buttons
-        document.querySelectorAll('.send-comment-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const section = this.closest('.comments-section');
-                const postId = section.dataset.postId;
-                const input = section.querySelector('.comment-input');
-                if (input.value.trim()) {
-                    handleComment(postId, input.value.trim());
-                    input.value = '';
+        // Comment button - scroll to comment input
+        const commentBtn = postCard.querySelector('.comment-btn');
+        if (commentBtn) {
+            commentBtn.addEventListener('click', () => {
+                const commentInput = postCard.querySelector('.comment-input');
+                if (commentInput) {
+                    commentInput.focus();
+                    commentInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }
             });
-        });
+        }
 
-        // Comment input enter key
-        document.querySelectorAll('.comment-input').forEach(input => {
-            input.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    const section = this.closest('.comments-section');
-                    const postId = section.dataset.postId;
-                    if (this.value.trim()) {
-                        handleComment(postId, this.value.trim());
-                        this.value = '';
-                    }
-                }
-            });
-        });
-    }
+        // Share button
+        const shareBtn = postCard.querySelector('.share-btn');
+        if (shareBtn) {
+            shareBtn.addEventListener('click', () => openShareModal(postId));
+        }
 
-    // ==================== FOLLOW FUNCTIONALITY ====================
+        // Follow button
+        const followBtn = postCard.querySelector('.follow-btn');
+        if (followBtn) {
+            const userId = followBtn.dataset.userId;
+            followBtn.addEventListener('click', () => handleFollow(userId, followBtn));
+        }
 
-    async function handleFollow(userId, buttonElement) {
-        if (!userId) return;
+        // See more/less button
+        const seeMoreBtn = postCard.querySelector('.see-more-btn');
+        if (seeMoreBtn) {
+            seeMoreBtn.addEventListener('click', function() {
+                const descriptionText = postCard.querySelector('.description-text');
+                const fullText = descriptionText.dataset.fullText;
+                const isExpanded = this.dataset.action === 'collapse';
 
-        try {
-            const result = await window.toggleFollow(userId);
-            
-            if (result.success) {
-                // Update button state
-                if (result.following) {
-                    buttonElement.textContent = 'Following';
-                    buttonElement.classList.add('following');
-                    showToast('Now following!', 'success');
+                if (isExpanded) {
+                    // Collapse
+                    const maxLength = 200;
+                    descriptionText.textContent = fullText.substring(0, maxLength) + '...';
+                    this.textContent = 'See more';
+                    this.dataset.action = 'expand';
+                    descriptionText.classList.add('truncated');
                 } else {
-                    buttonElement.textContent = 'Follow';
-                    buttonElement.classList.remove('following');
-                    showToast('Unfollowed', 'success');
+                    // Expand
+                    descriptionText.textContent = fullText;
+                    this.textContent = 'See less';
+                    this.dataset.action = 'collapse';
+                    descriptionText.classList.remove('truncated');
                 }
-                
-                // Update all posts from this user in memory
-                posts.forEach(post => {
-                    if (post.user_id === userId) {
-                        post.isFollowing = result.following;
-                    }
+            });
+        }
+
+        // Comment input
+        const commentInput = postCard.querySelector('.comment-input');
+        const sendCommentBtn = postCard.querySelector('.send-comment-btn');
+        
+        if (commentInput && sendCommentBtn) {
+            commentInput.addEventListener('input', () => {
+                sendCommentBtn.disabled = !commentInput.value.trim();
+            });
+
+            commentInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' && commentInput.value.trim()) {
+                    handleComment(postId, commentInput.value.trim());
+                }
+            });
+
+            sendCommentBtn.addEventListener('click', () => {
+                if (commentInput.value.trim()) {
+                    handleComment(postId, commentInput.value.trim());
+                }
+            });
+        }
+
+        // Load comments for this post
+        loadComments(postId);
+    }
+
+    // ==================== PROFILE MODAL ====================
+
+    window.openUserProfile = async function(userId) {
+        try {
+            if (!userId) return;
+
+            console.log('Opening profile for user:', userId);
+
+            // Fetch user profile data
+            const { data: profile, error: profileError } = await window.supabaseClient
+                .from('profiles')
+                .select('*')
+                .eq('id', userId)
+                .single();
+
+            if (profileError) {
+                console.error('Error fetching profile:', profileError);
+                showToast('Failed to load profile', 'error');
+                return;
+            }
+
+            // Fetch user's posts count
+            const { count: postsCount } = await window.supabaseClient
+                .from('posts')
+                .select('*', { count: 'exact', head: true })
+                .eq('user_id', userId);
+
+            // Fetch followers count
+            const { count: followersCount } = await window.supabaseClient
+                .from('followers')
+                .select('*', { count: 'exact', head: true })
+                .eq('following_id', userId);
+
+            // Fetch following count
+            const { count: followingCount } = await window.supabaseClient
+                .from('followers')
+                .select('*', { count: 'exact', head: true })
+                .eq('follower_id', userId);
+
+            // Calculate total likes and stars from user's posts
+            const { data: userPosts } = await window.supabaseClient
+                .from('posts')
+                .select('likes_count')
+                .eq('user_id', userId);
+
+            let totalLikes = 0;
+            let totalStars = 0;
+
+            if (userPosts) {
+                userPosts.forEach(post => {
+                    totalLikes += post.likes_count || 0;
+                    const rating = window.getStarRating(post.likes_count || 0);
+                    totalStars += rating.stars;
                 });
             }
-        } catch (error) {
-            console.error('Follow error:', error);
-            showToast('Failed to update follow status', 'error');
-        }
-    }
 
-    // ==================== LIKE FUNCTIONALITY ====================
+            // Check if current user is following this user
+            let isFollowing = false;
+            if (currentUser && userId !== currentUser.id) {
+                const { data: followData } = await window.supabaseClient
+                    .from('followers')
+                    .select('id')
+                    .eq('follower_id', currentUser.id)
+                    .eq('following_id', userId)
+                    .maybeSingle();
+                
+                isFollowing = !!followData;
+            }
+
+            // Fetch user's uploaded images
+            const { data: userImages } = await window.supabaseClient
+                .from('posts')
+                .select('image_url, created_at, likes_count, comments_count')
+                .eq('user_id', userId)
+                .order('created_at', { ascending: false })
+                .limit(9);
+
+            // Update modal content
+            const initials = getInitials(profile.full_name);
+            const profileModalAvatar = document.getElementById('profileModalAvatar');
+            const profileModalName = document.getElementById('profileModalName');
+            const profileModalDepartment = document.getElementById('profileModalDepartment');
+            const profilePostsCount = document.getElementById('profilePostsCount');
+            const profileFollowersCount = document.getElementById('profileFollowersCount');
+            const profileFollowingCount = document.getElementById('profileFollowingCount');
+            const profileFollowBtn = document.getElementById('profileFollowBtn');
+
+            if (profileModalAvatar) {
+                profileModalAvatar.textContent = initials;
+                profileModalAvatar.style.background = `linear-gradient(135deg, #${Math.random().toString(16).substr(-6)}, #${Math.random().toString(16).substr(-6)})`;
+            }
+
+            if (profileModalName) {
+                profileModalName.textContent = profile.full_name || 'Unknown User';
+            }
+
+            if (profileModalDepartment) {
+                profileModalDepartment.textContent = profile.department || 'No department specified';
+            }
+
+            if (profilePostsCount) {
+                profilePostsCount.textContent = postsCount || 0;
+            }
+
+            if (profileFollowersCount) {
+                profileFollowersCount.textContent = followersCount || 0;
+            }
+
+            if (profileFollowingCount) {
+                profileFollowingCount.textContent = followingCount || 0;
+            }
+
+            // Add total likes and stars stats
+            const statsContainer = document.querySelector('.profile-modal-stats');
+            if (statsContainer) {
+                // Check if we already added the extra stats
+                if (!document.getElementById('profileTotalLikes')) {
+                    statsContainer.innerHTML += `
+                        <div class="profile-stat">
+                            <div class="profile-stat-value" id="profileTotalLikes">${totalLikes}</div>
+                            <div class="profile-stat-label">Total Likes</div>
+                        </div>
+                        <div class="profile-stat">
+                            <div class="profile-stat-value" id="profileTotalStars">${totalStars}</div>
+                            <div class="profile-stat-label">Total Stars</div>
+                        </div>
+                    `;
+                } else {
+                    document.getElementById('profileTotalLikes').textContent = totalLikes;
+                    document.getElementById('profileTotalStars').textContent = totalStars;
+                }
+            }
+
+            // Update follow button
+            if (profileFollowBtn) {
+                if (userId === currentUser.id) {
+                    // It's the current user's profile
+                    profileFollowBtn.style.display = 'none';
+                } else {
+                    profileFollowBtn.style.display = 'block';
+                    profileFollowBtn.textContent = isFollowing ? 'Following' : 'Follow';
+                    profileFollowBtn.className = isFollowing ? 'profile-follow-btn following' : 'profile-follow-btn';
+                    profileFollowBtn.dataset.userId = userId;
+                    profileFollowBtn.dataset.following = isFollowing;
+
+                    // Remove old event listeners and add new one
+                    const newBtn = profileFollowBtn.cloneNode(true);
+                    profileFollowBtn.parentNode.replaceChild(newBtn, profileFollowBtn);
+                    
+                    newBtn.addEventListener('click', async function() {
+                        const success = await handleFollow(userId, newBtn);
+                        if (success) {
+                            const nowFollowing = newBtn.dataset.following === 'false';
+                            newBtn.dataset.following = nowFollowing;
+                            newBtn.textContent = nowFollowing ? 'Following' : 'Follow';
+                            newBtn.className = nowFollowing ? 'profile-follow-btn following' : 'profile-follow-btn';
+                            
+                            // Update follower count
+                            if (profileFollowersCount) {
+                                const currentCount = parseInt(profileFollowersCount.textContent);
+                                profileFollowersCount.textContent = nowFollowing ? currentCount + 1 : currentCount - 1;
+                            }
+                        }
+                    });
+                }
+            }
+
+            // Add user's images section before the follow button
+            const modalBody = profileModal.querySelector('.modal-body');
+            let imagesSection = modalBody.querySelector('.profile-images-section');
+            
+            if (!imagesSection) {
+                imagesSection = document.createElement('div');
+                imagesSection.className = 'profile-images-section';
+                modalBody.querySelector('.profile-modal-content').appendChild(imagesSection);
+            }
+
+            if (userImages && userImages.length > 0) {
+                imagesSection.innerHTML = `
+                    <h3 style="font-size: 16px; margin: 20px 0 10px 0; text-align: left; color: #050505;">
+                        <i class="fas fa-images"></i> Uploaded Images (${postsCount})
+                    </h3>
+                    <div class="profile-images-grid">
+                        ${userImages.map(img => `
+                            <div class="profile-image-item">
+                                <img src="${img.image_url}" alt="User post">
+                                <div class="profile-image-overlay">
+                                    <span><i class="fas fa-heart"></i> ${img.likes_count || 0}</span>
+                                    <span><i class="fas fa-comment"></i> ${img.comments_count || 0}</span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            } else {
+                imagesSection.innerHTML = `
+                    <p style="text-align: center; color: #65676b; margin-top: 20px;">
+                        <i class="fas fa-image"></i><br>No posts yet
+                    </p>
+                `;
+            }
+
+            // Show modal
+            if (profileModal) {
+                profileModal.classList.add('show');
+            }
+
+        } catch (error) {
+            console.error('Error opening profile:', error);
+            showToast('Failed to load profile', 'error');
+        }
+    };
+
+    // ==================== INTERACTIONS ====================
 
     async function handleLike(postId) {
-        const post = posts.find(p => p.id === postId);
-        if (!post) return;
-
-        const likeBtn = document.querySelector(`.like-btn[data-post-id="${postId}"]`);
-        if (!likeBtn) return;
-
         try {
-            const result = await window.toggleLike(postId);
-            
-            if (result.success) {
-                // Update post data
-                post.isLiked = result.liked;
-                post.likes_count = result.liked 
-                    ? (post.likes_count || 0) + 1 
-                    : Math.max(0, (post.likes_count || 1) - 1);
+            const post = posts.find(p => p.id === postId);
+            if (!post) return;
 
-                // Update like button
-                likeBtn.classList.toggle('liked', post.isLiked);
-                const likeIcon = likeBtn.querySelector('i');
-                if (likeIcon) {
-                    likeIcon.className = post.isLiked ? 'fas fa-heart' : 'far fa-heart';
+            const isCurrentlyLiked = post.isLiked;
+            const result = isCurrentlyLiked 
+                ? await window.unlikePost(postId)
+                : await window.likePost(postId);
+
+            if (result.success) {
+                // Update local state
+                post.isLiked = !isCurrentlyLiked;
+                post.likes_count = result.likesCount;
+
+                // Update UI
+                const postCard = document.querySelector(`[data-post-id="${postId}"]`);
+                if (postCard) {
+                    const likeBtn = postCard.querySelector('.like-btn');
+                    const likesCount = postCard.querySelector('.likes-count');
+                    
+                    if (likeBtn) {
+                        likeBtn.classList.toggle('liked', post.isLiked);
+                    }
+                    
+                    if (likesCount) {
+                        likesCount.textContent = post.likes_count;
+                    }
+
+                    // Update star rating
+                    const starRating = window.getStarRating(post.likes_count);
+                    const imageContainer = postCard.querySelector('.post-image-container');
+                    let starBadge = imageContainer.querySelector('.star-rating-badge');
+                    
+                    if (starRating.stars > 0) {
+                        if (!starBadge) {
+                            starBadge = document.createElement('div');
+                            imageContainer.appendChild(starBadge);
+                        }
+                        starBadge.className = `star-rating-badge stars-${starRating.stars}`;
+                        starBadge.innerHTML = `
+                            ${Array(starRating.stars).fill('<i class="fas fa-star"></i>').join('')}
+                            <span class="star-rating-label">${starRating.label}</span>
+                        `;
+                    } else if (starBadge) {
+                        starBadge.remove();
+                    }
                 }
 
-                // Update the entire post to reflect new star rating and stats
-                const postCard = document.querySelector(`.post-card[data-post-id="${postId}"]`);
-                if (postCard) {
-                    const newPostHTML = createPostHTML(post);
-                    const tempDiv = document.createElement('div');
-                    tempDiv.innerHTML = newPostHTML;
-                    const newPostCard = tempDiv.firstElementChild;
-                    
-                    postCard.replaceWith(newPostCard);
-                    setupPostEventListeners();
+                // Show milestone notification if applicable
+                if (!isCurrentlyLiked && result.milestone) {
+                    showStarMilestone(result.milestone);
                 }
             }
         } catch (error) {
-            console.error('Like error:', error);
+            console.error('Error handling like:', error);
             showToast('Failed to update like', 'error');
         }
     }
 
-    // ==================== COMMENT FUNCTIONALITY ====================
+    async function handleFollow(userId, button) {
+        try {
+            if (!userId || !button) return false;
 
-    async function toggleComments(postId) {
-        const commentsSection = document.querySelector(`.comments-section[data-post-id="${postId}"]`);
-        
-        if (commentsSection.style.display === 'none') {
-            commentsSection.style.display = 'block';
-            await loadComments(postId);
-        } else {
-            commentsSection.style.display = 'none';
+            const isCurrentlyFollowing = button.classList.contains('following') || button.dataset.following === 'true';
+            
+            const result = isCurrentlyFollowing
+                ? await window.unfollowUser(userId)
+                : await window.followUser(userId);
+
+            if (result.success) {
+                // Update button state
+                if (button.classList.contains('follow-btn')) {
+                    button.classList.toggle('following', !isCurrentlyFollowing);
+                    const icon = button.querySelector('i');
+                    const span = button.querySelector('span');
+                    if (icon) icon.className = !isCurrentlyFollowing ? 'fas fa-user-check' : 'fas fa-user-plus';
+                    if (span) span.textContent = !isCurrentlyFollowing ? 'Following' : 'Follow';
+                }
+
+                // Update post state
+                const post = posts.find(p => p.user_id === userId);
+                if (post) {
+                    post.isFollowing = !isCurrentlyFollowing;
+                }
+
+                showToast(isCurrentlyFollowing ? 'Unfollowed successfully' : 'Following!', 'success');
+                return true;
+            } else {
+                showToast('Failed to update follow status', 'error');
+                return false;
+            }
+        } catch (error) {
+            console.error('Error handling follow:', error);
+            showToast('Failed to update follow status', 'error');
+            return false;
         }
     }
 
+    async function handleComment(postId, content, parentCommentId = null) {
+        try {
+            const result = await window.createComment(postId, content, parentCommentId);
+
+            if (result.success) {
+                // Clear input
+                const postCard = document.querySelector(`[data-post-id="${postId}"]`);
+                if (postCard) {
+                    const commentInput = postCard.querySelector('.comment-input');
+                    const sendBtn = postCard.querySelector('.send-comment-btn');
+                    if (commentInput) commentInput.value = '';
+                    if (sendBtn) sendBtn.disabled = true;
+
+                    // Update comment count
+                    const post = posts.find(p => p.id === postId);
+                    if (post) {
+                        post.comments_count = (post.comments_count || 0) + 1;
+                        const commentsCount = postCard.querySelector('.comments-count');
+                        if (commentsCount) {
+                            commentsCount.textContent = post.comments_count;
+                        }
+                    }
+                }
+
+                // Reload comments
+                await loadComments(postId);
+                
+                showToast('Comment added!', 'success');
+            } else {
+                showToast('Failed to add comment', 'error');
+            }
+        } catch (error) {
+            console.error('Error adding comment:', error);
+            showToast('Failed to add comment', 'error');
+        }
+    }
+
+    async function handleReply(postId, commentId, content) {
+        try {
+            const result = await window.createComment(postId, content, commentId);
+
+            if (result.success) {
+                // Clear reply input
+                const replyInput = document.querySelector(`[data-reply-to="${commentId}"]`);
+                if (replyInput) {
+                    replyInput.value = '';
+                    replyInput.style.display = 'none';
+                }
+
+                // Reload comments to show the new reply
+                await loadComments(postId);
+                
+                showToast('Reply added!', 'success');
+            } else {
+                showToast('Failed to add reply', 'error');
+            }
+        } catch (error) {
+            console.error('Error adding reply:', error);
+            showToast('Failed to add reply', 'error');
+        }
+    }
+
+    // ==================== COMMENTS ====================
+
     async function loadComments(postId) {
-        const commentsList = document.querySelector(`.comments-section[data-post-id="${postId}"] .comments-list`);
-        
         try {
             const result = await window.getComments(postId);
             
-            if (result.success && result.comments) {
-                if (result.comments.length === 0) {
-                    commentsList.innerHTML = '<p style="text-align: center; color: #6b7280; padding: 20px;">No comments yet</p>';
-                } else {
-                    commentsList.innerHTML = result.comments.map(comment => {
-                        const initials = getInitials(comment.profiles?.full_name || 'User');
-                        return `
-                            <div class="comment">
-                                <div class="user-avatar small">${initials}</div>
-                                <div class="comment-content">
-                                    <div class="comment-username">${escapeHTML(comment.profiles?.full_name || 'Anonymous')}</div>
-                                    <div class="comment-text">${escapeHTML(comment.content)}</div>
-                                </div>
-                            </div>
-                        `;
-                    }).join('');
+            if (result.success) {
+                const commentsList = document.querySelector(`.comments-list[data-post-id="${postId}"]`);
+                if (commentsList) {
+                    renderComments(commentsList, result.comments, postId);
                 }
             }
         } catch (error) {
             console.error('Error loading comments:', error);
-            commentsList.innerHTML = '<p style="color: #ef4444;">Failed to load comments</p>';
         }
     }
 
-    async function handleComment(postId, content) {
-        try {
-            const result = await window.addComment(postId, content);
-            
-            if (result.success) {
-                await loadComments(postId);
-                
-                // Update comment count
-                const post = posts.find(p => p.id === postId);
-                if (post) {
-                    post.comments_count = (post.comments_count || 0) + 1;
-                    const commentBtn = document.querySelector(`.comment-btn[data-post-id="${postId}"] span`);
-                    if (commentBtn) {
-                        commentBtn.textContent = post.comments_count;
-                    }
+    function renderComments(container, comments, postId) {
+        if (!container || !comments) return;
+
+        if (comments.length === 0) {
+            container.innerHTML = '';
+            return;
+        }
+
+        // Organize comments by parent/child relationship
+        const topLevelComments = comments.filter(c => !c.parent_comment_id);
+        
+        container.innerHTML = topLevelComments.map(comment => {
+            const replies = comments.filter(c => c.parent_comment_id === comment.id);
+            return createCommentHTML(comment, postId, replies);
+        }).join('');
+
+        // Add event listeners for reply buttons
+        container.querySelectorAll('.reply-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const commentId = this.dataset.commentId;
+                toggleReplyInput(postId, commentId);
+            });
+        });
+
+        // Add event listeners for reply inputs
+        container.querySelectorAll('.reply-input').forEach(input => {
+            input.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter' && this.value.trim()) {
+                    const commentId = this.dataset.replyTo;
+                    handleReply(postId, commentId, this.value.trim());
                 }
-                
-                showToast('Comment added!', 'success');
+            });
+        });
+
+        // Add event listeners for send reply buttons
+        container.querySelectorAll('.send-reply-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const commentId = this.dataset.commentId;
+                const replyInput = document.querySelector(`[data-reply-to="${commentId}"]`);
+                if (replyInput && replyInput.value.trim()) {
+                    handleReply(postId, commentId, replyInput.value.trim());
+                }
+            });
+        });
+
+        // Add event listeners for comment user avatars
+        container.querySelectorAll('.comment-user').forEach(userDiv => {
+            userDiv.addEventListener('click', function() {
+                const userId = this.dataset.userId;
+                if (userId) {
+                    window.openUserProfile(userId);
+                }
+            });
+        });
+    }
+
+    function createCommentHTML(comment, postId, replies = []) {
+        const profile = comment.profiles || {};
+        const initials = getInitials(profile.full_name || 'User');
+        const timeAgo = window.timeAgo(comment.created_at);
+
+        return `
+            <div class="comment-item">
+                <div class="comment-user" data-user-id="${comment.user_id}">
+                    <div class="user-avatar small" style="background: linear-gradient(135deg, #${Math.random().toString(16).substr(-6)}, #${Math.random().toString(16).substr(-6)})">
+                        ${initials}
+                    </div>
+                </div>
+                <div class="comment-content">
+                    <div class="comment-bubble">
+                        <div class="comment-author" onclick="window.openUserProfile('${comment.user_id}')">${escapeHTML(profile.full_name || 'Unknown')}</div>
+                        <div class="comment-text">${escapeHTML(comment.content)}</div>
+                    </div>
+                    <div class="comment-actions">
+                        <span class="comment-time">${timeAgo}</span>
+                        <button class="reply-btn" data-comment-id="${comment.id}">Reply</button>
+                    </div>
+                    <input 
+                        type="text" 
+                        class="reply-input" 
+                        placeholder="Write a reply..."
+                        data-reply-to="${comment.id}"
+                        style="display: none;"
+                    >
+                    <button class="send-reply-btn" data-comment-id="${comment.id}" style="display: none;">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                    ${replies.length > 0 ? `
+                        <div class="replies">
+                            ${replies.map(reply => createReplyHTML(reply)).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    }
+
+    function createReplyHTML(reply) {
+        const profile = reply.profiles || {};
+        const initials = getInitials(profile.full_name || 'User');
+        const timeAgo = window.timeAgo(reply.created_at);
+
+        return `
+            <div class="comment-item reply">
+                <div class="comment-user" data-user-id="${reply.user_id}">
+                    <div class="user-avatar small" style="background: linear-gradient(135deg, #${Math.random().toString(16).substr(-6)}, #${Math.random().toString(16).substr(-6)})">
+                        ${initials}
+                    </div>
+                </div>
+                <div class="comment-content">
+                    <div class="comment-bubble">
+                        <div class="comment-author" onclick="window.openUserProfile('${reply.user_id}')">${escapeHTML(profile.full_name || 'Unknown')}</div>
+                        <div class="comment-text">${escapeHTML(reply.content)}</div>
+                    </div>
+                    <div class="comment-actions">
+                        <span class="comment-time">${timeAgo}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function toggleReplyInput(postId, commentId) {
+        const replyInput = document.querySelector(`[data-reply-to="${commentId}"]`);
+        const sendBtn = document.querySelector(`.send-reply-btn[data-comment-id="${commentId}"]`);
+        
+        if (replyInput && sendBtn) {
+            const isVisible = replyInput.style.display !== 'none';
+            replyInput.style.display = isVisible ? 'none' : 'block';
+            sendBtn.style.display = isVisible ? 'none' : 'inline-block';
+            
+            if (!isVisible) {
+                replyInput.focus();
             }
-        } catch (error) {
-            console.error('Comment error:', error);
-            showToast('Failed to add comment', 'error');
         }
     }
 
@@ -582,118 +1038,98 @@ document.addEventListener('DOMContentLoaded', async function() {
         const postDescription = document.getElementById('postDescription');
         const charCount = document.getElementById('charCount');
         const submitPostBtn = document.getElementById('submitPostBtn');
+        const departmentSelect = document.getElementById('departmentSelect');
 
-        // Open modal
         if (openUploadModal) {
             openUploadModal.addEventListener('click', () => {
                 uploadModal.classList.add('show');
+                // Pre-select user's department
+                if (currentProfile?.department && departmentSelect) {
+                    departmentSelect.value = currentProfile.department;
+                }
+                checkFormValidity();
             });
         }
 
-        // Close modal
         if (closeUploadModal) {
             closeUploadModal.addEventListener('click', () => {
                 uploadModal.classList.remove('show');
-                resetUploadForm();
             });
         }
 
-        // Click outside to close
         if (uploadModal) {
             uploadModal.addEventListener('click', (e) => {
                 if (e.target === uploadModal) {
                     uploadModal.classList.remove('show');
-                    resetUploadForm();
                 }
             });
         }
 
-        // Image upload area click
         if (imageUploadArea) {
             imageUploadArea.addEventListener('click', () => {
-                imageInput.click();
+                if (imageInput) imageInput.click();
             });
         }
 
-        // Image selection
         if (imageInput) {
-            imageInput.addEventListener('change', function() {
-                const file = this.files[0];
+            imageInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
                 if (file) {
-                    if (file.size > 10 * 1024 * 1024) {
-                        showToast('Image must be less than 10MB', 'error');
-                        this.value = '';
-                        return;
-                    }
-
                     const reader = new FileReader();
                     reader.onload = (e) => {
-                        imagePreview.src = e.target.result;
-                        uploadPlaceholder.style.display = 'none';
-                        imagePreviewContainer.style.display = 'block';
-                        validateForm();
+                        if (imagePreview) imagePreview.src = e.target.result;
+                        if (uploadPlaceholder) uploadPlaceholder.style.display = 'none';
+                        if (imagePreviewContainer) imagePreviewContainer.style.display = 'block';
+                        checkFormValidity();
                     };
                     reader.readAsDataURL(file);
                 }
             });
         }
 
-        // Remove image
         if (removeImageBtn) {
             removeImageBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                imageInput.value = '';
-                uploadPlaceholder.style.display = 'flex';
-                imagePreviewContainer.style.display = 'none';
-                validateForm();
+                if (imageInput) imageInput.value = '';
+                if (uploadPlaceholder) uploadPlaceholder.style.display = 'flex';
+                if (imagePreviewContainer) imagePreviewContainer.style.display = 'none';
+                checkFormValidity();
             });
         }
 
-        // Character count
         if (postDescription) {
             postDescription.addEventListener('input', () => {
-                charCount.textContent = postDescription.value.length;
-                validateForm();
+                if (charCount) {
+                    charCount.textContent = postDescription.value.length;
+                }
+                checkFormValidity();
             });
         }
 
-        // Form validation
-        function validateForm() {
-            const departmentSelect = document.getElementById('departmentSelect');
-            const hasImage = imageInput.files.length > 0;
-            const hasDescription = postDescription.value.trim().length > 0;
-            const hasDepartment = departmentSelect.value !== '';
-
-            submitPostBtn.disabled = !hasDepartment || (!hasImage && !hasDescription);
-        }
-
-        // Department select change
-        const departmentSelect = document.getElementById('departmentSelect');
         if (departmentSelect) {
-            departmentSelect.addEventListener('change', validateForm);
+            departmentSelect.addEventListener('change', checkFormValidity);
         }
 
-        // Submit post
         if (submitPostBtn) {
-            submitPostBtn.addEventListener('click', createPost);
+            submitPostBtn.addEventListener('click', handleCreatePost);
         }
 
-        function resetUploadForm() {
-            imageInput.value = '';
-            postDescription.value = '';
-            charCount.textContent = '0';
-            uploadPlaceholder.style.display = 'flex';
-            imagePreviewContainer.style.display = 'none';
-            submitPostBtn.disabled = true;
+        function checkFormValidity() {
+            const hasImage = imageInput?.files?.length > 0;
+            const hasDepartment = departmentSelect?.value !== '';
+            
+            if (submitPostBtn) {
+                submitPostBtn.disabled = !(hasImage && hasDepartment);
+            }
         }
     }
 
-    async function createPost() {
+    async function handleCreatePost() {
+        const submitBtnText = document.getElementById('submitBtnText');
         const departmentSelect = document.getElementById('departmentSelect');
         const postDescription = document.getElementById('postDescription');
         const imageInput = document.getElementById('imageInput');
         const submitPostBtn = document.getElementById('submitPostBtn');
-        const submitBtnText = document.getElementById('submitBtnText');
 
         const department = departmentSelect.value;
         const content = postDescription.value.trim();
@@ -842,11 +1278,30 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     }
 
+    function setupProfileModal() {
+        const closeProfileModal = document.getElementById('closeProfileModal');
+
+        if (closeProfileModal) {
+            closeProfileModal.addEventListener('click', () => {
+                profileModal.classList.remove('show');
+            });
+        }
+
+        if (profileModal) {
+            profileModal.addEventListener('click', (e) => {
+                if (e.target === profileModal) {
+                    profileModal.classList.remove('show');
+                }
+            });
+        }
+    }
+
     // ==================== EVENT LISTENERS ====================
 
     function setupEventListeners() {
         setupCreatePostModal();
         setupShareModal();
+        setupProfileModal();
 
         // Filter buttons
         document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -882,11 +1337,39 @@ document.addEventListener('DOMContentLoaded', async function() {
             }
         });
 
-        // User profile click
+        // User profile click - now opens own profile modal
         if (userProfile) {
             userProfile.addEventListener('click', () => {
-                window.location.href = 'user-profile.html';
+                if (currentUser) {
+                    window.openUserProfile(currentUser.id);
+                }
             });
+        }
+    }
+
+    // ==================== UTILITY FUNCTIONS ====================
+
+    function escapeHTML(str) {
+        if (!str) return '';
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    function showStarMilestone(milestone) {
+        const starMilestone = document.getElementById('starMilestone');
+        const milestoneStars = document.getElementById('milestoneStars');
+        const milestoneText = document.getElementById('milestoneText');
+
+        if (starMilestone && milestoneStars && milestoneText) {
+            milestoneStars.innerHTML = Array(milestone.stars).fill('<i class="fas fa-star"></i>').join('');
+            milestoneText.textContent = `${milestone.label}! Your post reached ${milestone.likes} likes!`;
+            
+            starMilestone.classList.add('show');
+            
+            setTimeout(() => {
+                starMilestone.classList.remove('show');
+            }, 5000);
         }
     }
 

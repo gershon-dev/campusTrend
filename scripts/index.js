@@ -715,14 +715,14 @@ document.addEventListener('DOMContentLoaded', async function() {
             if (!post) return;
 
             const isCurrentlyLiked = post.isLiked;
-            const result = isCurrentlyLiked 
-                ? await window.unlikePost(postId)
-                : await window.likePost(postId);
+            
+            // Use toggleLike function
+            const result = await window.toggleLike(postId);
 
             if (result.success) {
                 // Update local state
-                post.isLiked = !isCurrentlyLiked;
-                post.likes_count = result.likesCount;
+                post.isLiked = result.liked;
+                post.likes_count = result.liked ? (post.likes_count || 0) + 1 : Math.max(0, (post.likes_count || 0) - 1);
 
                 // Update UI
                 const postCard = document.querySelector(`[data-post-id="${postId}"]`);
@@ -753,14 +753,19 @@ document.addEventListener('DOMContentLoaded', async function() {
                             ${Array(starRating.stars).fill('<i class="fas fa-star"></i>').join('')}
                             <span class="star-rating-label">${starRating.label}</span>
                         `;
+                        
+                        // Show milestone notification if just reached a new star level
+                        const previousRating = window.getStarRating(post.likes_count - 1);
+                        if (result.liked && starRating.stars > previousRating.stars) {
+                            showStarMilestone({
+                                stars: starRating.stars,
+                                label: starRating.label,
+                                likes: post.likes_count
+                            });
+                        }
                     } else if (starBadge) {
                         starBadge.remove();
                     }
-                }
-
-                // Show milestone notification if applicable
-                if (!isCurrentlyLiked && result.milestone) {
-                    showStarMilestone(result.milestone);
                 }
             }
         } catch (error) {
@@ -775,27 +780,26 @@ document.addEventListener('DOMContentLoaded', async function() {
 
             const isCurrentlyFollowing = button.classList.contains('following') || button.dataset.following === 'true';
             
-            const result = isCurrentlyFollowing
-                ? await window.unfollowUser(userId)
-                : await window.followUser(userId);
+            // Use toggleFollow function
+            const result = await window.toggleFollow(userId);
 
             if (result.success) {
                 // Update button state
                 if (button.classList.contains('follow-btn')) {
-                    button.classList.toggle('following', !isCurrentlyFollowing);
+                    button.classList.toggle('following', result.following);
                     const icon = button.querySelector('i');
                     const span = button.querySelector('span');
-                    if (icon) icon.className = !isCurrentlyFollowing ? 'fas fa-user-check' : 'fas fa-user-plus';
-                    if (span) span.textContent = !isCurrentlyFollowing ? 'Following' : 'Follow';
+                    if (icon) icon.className = result.following ? 'fas fa-user-check' : 'fas fa-user-plus';
+                    if (span) span.textContent = result.following ? 'Following' : 'Follow';
                 }
 
                 // Update post state
                 const post = posts.find(p => p.user_id === userId);
                 if (post) {
-                    post.isFollowing = !isCurrentlyFollowing;
+                    post.isFollowing = result.following;
                 }
 
-                showToast(isCurrentlyFollowing ? 'Unfollowed successfully' : 'Following!', 'success');
+                showToast(result.following ? 'Following!' : 'Unfollowed successfully', 'success');
                 return true;
             } else {
                 showToast('Failed to update follow status', 'error');
@@ -810,7 +814,8 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     async function handleComment(postId, content, parentCommentId = null) {
         try {
-            const result = await window.createComment(postId, content, parentCommentId);
+            // Use addComment function
+            const result = await window.addComment(postId, content);
 
             if (result.success) {
                 // Clear input
@@ -847,7 +852,8 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     async function handleReply(postId, commentId, content) {
         try {
-            const result = await window.createComment(postId, content, commentId);
+            // Use addComment function
+            const result = await window.addComment(postId, content);
 
             if (result.success) {
                 // Clear reply input
@@ -1107,68 +1113,71 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
 
         if (departmentSelect) {
-            departmentSelect.addEventListener('change', checkFormValidity);
+            departmentSelect.addEventListener('change', () => {
+                checkFormValidity();
+            });
         }
 
         if (submitPostBtn) {
-            submitPostBtn.addEventListener('click', handleCreatePost);
+            submitPostBtn.addEventListener('click', async () => {
+                await handleCreatePost();
+            });
         }
 
         function checkFormValidity() {
-            const hasImage = imageInput?.files?.length > 0;
-            const hasDepartment = departmentSelect?.value !== '';
+            const hasImage = imageInput && imageInput.files.length > 0;
+            const hasDepartment = departmentSelect && departmentSelect.value;
             
             if (submitPostBtn) {
                 submitPostBtn.disabled = !(hasImage && hasDepartment);
             }
         }
-    }
 
-    async function handleCreatePost() {
-        const submitBtnText = document.getElementById('submitBtnText');
-        const departmentSelect = document.getElementById('departmentSelect');
-        const postDescription = document.getElementById('postDescription');
-        const imageInput = document.getElementById('imageInput');
-        const submitPostBtn = document.getElementById('submitPostBtn');
+        async function handleCreatePost() {
+            try {
+                const description = postDescription?.value.trim() || '';
+                const department = departmentSelect?.value;
+                const imageFile = imageInput?.files[0];
 
-        const department = departmentSelect.value;
-        const content = postDescription.value.trim();
-        const imageFile = imageInput.files[0];
+                if (!imageFile || !department) {
+                    showToast('Please select an image and department', 'error');
+                    return;
+                }
 
-        if (!department) {
-            showToast('Please select a department', 'error');
-            return;
-        }
+                // Disable button and show loading
+                const submitBtnText = document.getElementById('submitBtnText');
+                if (submitPostBtn) submitPostBtn.disabled = true;
+                if (submitBtnText) submitBtnText.textContent = 'Posting...';
 
-        submitPostBtn.disabled = true;
-        submitBtnText.textContent = 'Posting...';
+                const result = await window.createPost(description, imageFile, department);
 
-        try {
-            const result = await window.createPost(content, imageFile, department);
-
-            if (result.success) {
-                showToast('Post created successfully!', 'success');
-                uploadModal.classList.remove('show');
-                
-                // Reset form
-                departmentSelect.value = currentProfile?.department || '';
-                postDescription.value = '';
-                imageInput.value = '';
-                document.getElementById('charCount').textContent = '0';
-                document.getElementById('uploadPlaceholder').style.display = 'flex';
-                document.getElementById('imagePreviewContainer').style.display = 'none';
-
-                // Reload posts
-                await loadPosts();
-            } else {
-                showToast(result.error || 'Failed to create post', 'error');
+                if (result.success) {
+                    showToast('Post created successfully!', 'success');
+                    
+                    // Reset form
+                    if (postDescription) postDescription.value = '';
+                    if (charCount) charCount.textContent = '0';
+                    if (imageInput) imageInput.value = '';
+                    if (uploadPlaceholder) uploadPlaceholder.style.display = 'flex';
+                    if (imagePreviewContainer) imagePreviewContainer.style.display = 'none';
+                    
+                    // Close modal
+                    uploadModal.classList.remove('show');
+                    
+                    // Reload posts
+                    await loadPosts();
+                } else {
+                    showToast(result.error || 'Failed to create post', 'error');
+                }
+            } catch (error) {
+                console.error('Error creating post:', error);
+                showToast('Failed to create post', 'error');
+            } finally {
+                // Re-enable button
+                const submitBtnText = document.getElementById('submitBtnText');
+                if (submitPostBtn) submitPostBtn.disabled = false;
+                if (submitBtnText) submitBtnText.textContent = 'Post';
             }
-        } catch (error) {
-            console.error('Create post error:', error);
-            showToast('Failed to create post', 'error');
-        } finally {
-            submitPostBtn.disabled = false;
-            submitBtnText.textContent = 'Post';
         }
     }
 

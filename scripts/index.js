@@ -418,14 +418,24 @@ document.addEventListener('DOMContentLoaded', async function() {
             likeBtn.addEventListener('click', () => handleLike(postId));
         }
 
-        // Comment button - scroll to comment input
+        // Comment button - toggle comments section and scroll to comment input
         const commentBtn = postCard.querySelector('.comment-btn');
         if (commentBtn) {
             commentBtn.addEventListener('click', () => {
+                const commentsSection = postCard.querySelector('.comments-section');
                 const commentInput = postCard.querySelector('.comment-input');
-                if (commentInput) {
-                    commentInput.focus();
-                    commentInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                
+                if (commentsSection) {
+                    // Toggle the show class to make comments visible
+                    commentsSection.classList.toggle('show');
+                    
+                    // If showing comments, focus on input
+                    if (commentsSection.classList.contains('show') && commentInput) {
+                        setTimeout(() => {
+                            commentInput.focus();
+                            commentInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }, 100);
+                    }
                 }
             });
         }
@@ -852,8 +862,12 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     async function handleReply(postId, commentId, content) {
         try {
-            // Use addComment function
-            const result = await window.addComment(postId, content);
+            console.log('handleReply called with:', { postId, commentId, content });
+            
+            // Use addComment function with parent comment ID for replies
+            const result = await window.addComment(postId, content, commentId);
+            
+            console.log('addComment result:', result);
 
             if (result.success) {
                 // Clear reply input
@@ -861,6 +875,12 @@ document.addEventListener('DOMContentLoaded', async function() {
                 if (replyInput) {
                     replyInput.value = '';
                     replyInput.style.display = 'none';
+                }
+
+                // Hide the send reply button
+                const sendReplyBtn = document.querySelector(`.send-reply-btn[data-comment-id="${commentId}"]`);
+                if (sendReplyBtn) {
+                    sendReplyBtn.style.display = 'none';
                 }
 
                 // Reload comments to show the new reply
@@ -896,6 +916,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     function renderComments(container, comments, postId) {
         if (!container || !comments) return;
 
+        console.log('renderComments called with', comments.length, 'comments');
+        console.log('All comments:', comments);
+
         if (comments.length === 0) {
             container.innerHTML = '';
             return;
@@ -903,6 +926,13 @@ document.addEventListener('DOMContentLoaded', async function() {
 
         // Organize comments by parent/child relationship
         const topLevelComments = comments.filter(c => !c.parent_comment_id);
+        console.log('Top level comments:', topLevelComments.length);
+        
+        // Log replies for each top-level comment
+        topLevelComments.forEach(comment => {
+            const replies = comments.filter(c => c.parent_comment_id === comment.id);
+            console.log(`Comment ${comment.id} has ${replies.length} replies:`, replies);
+        });
         
         container.innerHTML = topLevelComments.map(comment => {
             const replies = comments.filter(c => c.parent_comment_id === comment.id);

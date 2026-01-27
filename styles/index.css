@@ -1925,3 +1925,31 @@
             width: calc(100% - 30px);
         }
     }
+
+
+
+    /* Additional CSS for send-comment-btn - Add this to your index.css file */
+
+.send-comment-btn {
+    border: none;
+    background: none;
+    color: #1877f2;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 5px;
+    transition: all 0.3s;
+}
+
+.send-comment-btn:hover:not(:disabled) {
+    color: #166fe5;
+    transform: scale(1.1);
+}
+
+.send-comment-btn:disabled {
+    color: #bcc0c4;
+    cursor: not-allowed;
+}
+
+.send-comment-btn i {
+    font-size: 18px;
+}

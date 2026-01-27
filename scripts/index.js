@@ -862,12 +862,8 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     async function handleReply(postId, commentId, content) {
         try {
-            console.log('handleReply called with:', { postId, commentId, content });
-            
             // Use addComment function with parent comment ID for replies
             const result = await window.addComment(postId, content, commentId);
-            
-            console.log('addComment result:', result);
 
             if (result.success) {
                 // Clear reply input
@@ -895,170 +891,246 @@ document.addEventListener('DOMContentLoaded', async function() {
             showToast('Failed to add reply', 'error');
         }
     }
-
     // ==================== COMMENTS ====================
 
-    async function loadComments(postId) {
-        try {
-            const result = await window.getComments(postId);
-            
-            if (result.success) {
-                const commentsList = document.querySelector(`.comments-list[data-post-id="${postId}"]`);
-                if (commentsList) {
-                    renderComments(commentsList, result.comments, postId);
-                }
+async function loadComments(postId) {
+    try {
+        const result = await window.getComments(postId);
+        
+        if (result.success) {
+            console.log('All comments for post', postId, ':', result.comments);
+            const commentsList = document.querySelector(`.comments-list[data-post-id="${postId}"]`);
+            if (commentsList) {
+                renderComments(commentsList, result.comments, postId);
             }
-        } catch (error) {
-            console.error('Error loading comments:', error);
         }
+    } catch (error) {
+        console.error('Error loading comments:', error);
+    }
+}
+
+function renderComments(container, comments, postId) {
+    if (!container || !comments) return;
+
+    console.log('renderComments called with', comments.length, 'comments');
+    console.log('All comments:', comments);
+
+    if (comments.length === 0) {
+        container.innerHTML = '<p class="no-comments-text" style="text-align: center; color: #65676b; padding: 10px;">No comments yet. Be the first to comment!</p>';
+        return;
     }
 
-    function renderComments(container, comments, postId) {
-        if (!container || !comments) return;
+    // Separate top-level comments and replies
+    const topLevelComments = comments.filter(c => !c.parent_comment_id);
+    const repliesMap = {};
 
-        console.log('renderComments called with', comments.length, 'comments');
-        console.log('All comments:', comments);
-
-        if (comments.length === 0) {
-            container.innerHTML = '';
-            return;
+    // Group replies by parent comment ID
+    comments.forEach(comment => {
+        if (comment.parent_comment_id) {
+            if (!repliesMap[comment.parent_comment_id]) {
+                repliesMap[comment.parent_comment_id] = [];
+            }
+            repliesMap[comment.parent_comment_id].push(comment);
         }
+    });
 
-        // Organize comments by parent/child relationship
-        const topLevelComments = comments.filter(c => !c.parent_comment_id);
-        console.log('Top level comments:', topLevelComments.length);
+    console.log('Top level comments:', topLevelComments.length);
+    console.log('Replies map:', repliesMap);
+
+    // Render top-level comments with their replies
+    container.innerHTML = topLevelComments.map(comment => {
+        const replies = repliesMap[comment.id] || [];
+        console.log(`Comment ${comment.id} has ${replies.length} replies:`, replies);
+        return createCommentHTML(comment, postId, replies);
+    }).join('');
+
+    // Add event listeners for reply buttons
+    container.querySelectorAll('.reply-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const commentId = this.dataset.commentId;
+            toggleReplyInput(postId, commentId);
+        });
+    });
+
+    // Add event listeners for reply inputs
+    container.querySelectorAll('.reply-input').forEach(input => {
+        const sendBtn = input.nextElementSibling;
         
-        // Log replies for each top-level comment
-        topLevelComments.forEach(comment => {
-            const replies = comments.filter(c => c.parent_comment_id === comment.id);
-            console.log(`Comment ${comment.id} has ${replies.length} replies:`, replies);
-        });
-        
-        container.innerHTML = topLevelComments.map(comment => {
-            const replies = comments.filter(c => c.parent_comment_id === comment.id);
-            return createCommentHTML(comment, postId, replies);
-        }).join('');
-
-        // Add event listeners for reply buttons
-        container.querySelectorAll('.reply-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const commentId = this.dataset.commentId;
-                toggleReplyInput(postId, commentId);
-            });
+        // Enable/disable send button based on input
+        input.addEventListener('input', function() {
+            if (sendBtn) {
+                sendBtn.disabled = !this.value.trim();
+            }
         });
 
-        // Add event listeners for reply inputs
-        container.querySelectorAll('.reply-input').forEach(input => {
-            input.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter' && this.value.trim()) {
-                    const commentId = this.dataset.replyTo;
-                    handleReply(postId, commentId, this.value.trim());
-                }
-            });
+        input.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && this.value.trim()) {
+                const commentId = this.dataset.replyTo;
+                handleReply(postId, commentId, this.value.trim());
+            }
         });
+    });
 
-        // Add event listeners for send reply buttons
-        container.querySelectorAll('.send-reply-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const commentId = this.dataset.commentId;
-                const replyInput = document.querySelector(`[data-reply-to="${commentId}"]`);
-                if (replyInput && replyInput.value.trim()) {
-                    handleReply(postId, commentId, replyInput.value.trim());
-                }
-            });
+    // Add event listeners for send reply buttons
+    container.querySelectorAll('.send-reply-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const commentId = this.dataset.commentId;
+            const replyInput = document.querySelector(`[data-reply-to="${commentId}"]`);
+            if (replyInput && replyInput.value.trim()) {
+                handleReply(postId, commentId, replyInput.value.trim());
+            }
         });
+    });
 
-        // Add event listeners for comment user avatars
-        container.querySelectorAll('.comment-user').forEach(userDiv => {
-            userDiv.addEventListener('click', function() {
-                const userId = this.dataset.userId;
-                if (userId) {
-                    window.openUserProfile(userId);
-                }
-            });
+    // Add event listeners for comment user avatars
+    container.querySelectorAll('.comment-user').forEach(userDiv => {
+        userDiv.addEventListener('click', function() {
+            const userId = this.dataset.userId;
+            if (userId) {
+                window.openUserProfile(userId);
+            }
         });
-    }
+    });
+}
 
-    function createCommentHTML(comment, postId, replies = []) {
-        const profile = comment.profiles || {};
-        const initials = getInitials(profile.full_name || 'User');
-        const timeAgo = window.timeAgo(comment.created_at);
+function createCommentHTML(comment, postId, replies = []) {
+    const profile = comment.profiles || {};
+    const initials = getInitials(profile.full_name || 'User');
+    const timeAgo = window.timeAgo(comment.created_at);
+    const avatarColor = stringToColor(profile.full_name || 'User');
 
-        return `
-            <div class="comment-item">
-                <div class="comment-user" data-user-id="${comment.user_id}">
-                    <div class="user-avatar small" style="background: linear-gradient(135deg, #${Math.random().toString(16).substr(-6)}, #${Math.random().toString(16).substr(-6)})">
-                        ${initials}
-                    </div>
+    return `
+        <div class="comment-item" data-comment-id="${comment.id}">
+            <div class="comment-user" data-user-id="${comment.user_id}">
+                <div class="user-avatar small" style="background: ${avatarColor}">
+                    ${initials}
                 </div>
-                <div class="comment-content">
-                    <div class="comment-bubble">
-                        <div class="comment-author" onclick="window.openUserProfile('${comment.user_id}')">${escapeHTML(profile.full_name || 'Unknown')}</div>
-                        <div class="comment-text">${escapeHTML(comment.content)}</div>
-                    </div>
-                    <div class="comment-actions">
-                        <span class="comment-time">${timeAgo}</span>
-                        <button class="reply-btn" data-comment-id="${comment.id}">Reply</button>
+            </div>
+            <div class="comment-content">
+                <div class="comment-bubble">
+                    <div class="comment-author" onclick="window.openUserProfile('${comment.user_id}')">${escapeHTML(profile.full_name || 'Unknown')}</div>
+                    <div class="comment-text">${escapeHTML(comment.content)}</div>
+                </div>
+                <div class="comment-actions">
+                    <span class="comment-time">${timeAgo}</span>
+                    <button class="reply-btn" data-comment-id="${comment.id}">Reply</button>
+                </div>
+                
+                <!-- Reply input (hidden by default) -->
+                <div class="reply-input-container" data-comment-id="${comment.id}">
+                    <div class="user-avatar small" style="background: linear-gradient(135deg, #667eea, #764ba2)">
+                        ${getInitials(currentProfile?.full_name || 'U')}
                     </div>
                     <input 
                         type="text" 
                         class="reply-input" 
                         placeholder="Write a reply..."
                         data-reply-to="${comment.id}"
-                        style="display: none;"
                     >
-                    <button class="send-reply-btn" data-comment-id="${comment.id}" style="display: none;">
+                    <button class="send-reply-btn" data-comment-id="${comment.id}" disabled>
                         <i class="fas fa-paper-plane"></i>
                     </button>
-                    ${replies.length > 0 ? `
-                        <div class="replies">
-                            ${replies.map(reply => createReplyHTML(reply)).join('')}
-                        </div>
-                    ` : ''}
+                </div>
+                
+                <!-- Nested Replies -->
+                ${replies.length > 0 ? `
+                    <div class="replies-container">
+                        ${replies.map(reply => createReplyHTML(reply, postId)).join('')}
+                    </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
+}
+
+function createReplyHTML(reply, postId) {
+    const profile = reply.profiles || {};
+    const initials = getInitials(profile.full_name || 'User');
+    const timeAgo = window.timeAgo(reply.created_at);
+    const avatarColor = stringToColor(profile.full_name || 'User');
+
+    return `
+        <div class="comment-item reply" data-comment-id="${reply.id}">
+            <div class="comment-user" data-user-id="${reply.user_id}">
+                <div class="user-avatar small" style="background: ${avatarColor}">
+                    ${initials}
                 </div>
             </div>
-        `;
-    }
-
-    function createReplyHTML(reply) {
-        const profile = reply.profiles || {};
-        const initials = getInitials(profile.full_name || 'User');
-        const timeAgo = window.timeAgo(reply.created_at);
-
-        return `
-            <div class="comment-item reply">
-                <div class="comment-user" data-user-id="${reply.user_id}">
-                    <div class="user-avatar small" style="background: linear-gradient(135deg, #${Math.random().toString(16).substr(-6)}, #${Math.random().toString(16).substr(-6)})">
-                        ${initials}
-                    </div>
+            <div class="comment-content">
+                <div class="comment-bubble">
+                    <div class="comment-author" onclick="window.openUserProfile('${reply.user_id}')">${escapeHTML(profile.full_name || 'Unknown')}</div>
+                    <div class="comment-text">${escapeHTML(reply.content)}</div>
                 </div>
-                <div class="comment-content">
-                    <div class="comment-bubble">
-                        <div class="comment-author" onclick="window.openUserProfile('${reply.user_id}')">${escapeHTML(profile.full_name || 'Unknown')}</div>
-                        <div class="comment-text">${escapeHTML(reply.content)}</div>
-                    </div>
-                    <div class="comment-actions">
-                        <span class="comment-time">${timeAgo}</span>
-                    </div>
+                <div class="comment-actions">
+                    <span class="comment-time">${timeAgo}</span>
                 </div>
             </div>
-        `;
-    }
+        </div>
+    `;
+}
 
-    function toggleReplyInput(postId, commentId) {
-        const replyInput = document.querySelector(`[data-reply-to="${commentId}"]`);
-        const sendBtn = document.querySelector(`.send-reply-btn[data-comment-id="${commentId}"]`);
+function toggleReplyInput(postId, commentId) {
+    const replyContainer = document.querySelector(`.reply-input-container[data-comment-id="${commentId}"]`);
+    
+    if (replyContainer) {
+        const isVisible = replyContainer.classList.contains('show');
         
-        if (replyInput && sendBtn) {
-            const isVisible = replyInput.style.display !== 'none';
-            replyInput.style.display = isVisible ? 'none' : 'block';
-            sendBtn.style.display = isVisible ? 'none' : 'inline-block';
-            
-            if (!isVisible) {
-                replyInput.focus();
+        // Hide all other reply inputs first
+        document.querySelectorAll('.reply-input-container.show').forEach(container => {
+            container.classList.remove('show');
+        });
+        
+        // Toggle current one
+        if (!isVisible) {
+            replyContainer.classList.add('show');
+            const input = replyContainer.querySelector('.reply-input');
+            if (input) {
+                setTimeout(() => input.focus(), 100);
             }
         }
     }
+}
+
+// Helper function to generate consistent colors from strings
+function stringToColor(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const hue = hash % 360;
+    return `linear-gradient(135deg, hsl(${hue}, 70%, 50%), hsl(${(hue + 40) % 360}, 70%, 40%))`;
+}
+
+async function handleReply(postId, commentId, content) {
+    try {
+        console.log('Sending reply:', { postId, commentId, content });
+        
+        // Use addComment function with parent comment ID for replies
+        const result = await window.addComment(postId, content, commentId);
+
+        console.log('Reply result:', result);
+
+        if (result.success) {
+            // Hide the reply input
+            const replyContainer = document.querySelector(`.reply-input-container[data-comment-id="${commentId}"]`);
+            if (replyContainer) {
+                replyContainer.classList.remove('show');
+                const input = replyContainer.querySelector('.reply-input');
+                if (input) input.value = '';
+            }
+
+            // Reload comments to show the new reply
+            await loadComments(postId);
+            
+            showToast('Reply added!', 'success');
+        } else {
+            showToast(result.error || 'Failed to add reply', 'error');
+        }
+    } catch (error) {
+        console.error('Error adding reply:', error);
+        showToast('Failed to add reply', 'error');
+    }
+}
 
     // ==================== CREATE POST ====================
 

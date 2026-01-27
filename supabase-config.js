@@ -671,18 +671,26 @@ window.hasUserLiked = async function(postId) {
 // ============================================
 
 // Add Comment
-window.addComment = async function(postId, content) {
+// Add Comment (with optional parent_comment_id for replies)
+window.addComment = async function(postId, content, parentCommentId = null) {
     try {
         const user = await window.getCurrentUser();
         if (!user) return { success: false, error: 'Not logged in' };
 
+        const commentData = {
+            user_id: user.id,
+            post_id: postId,
+            content: content
+        };
+
+        // Add parent_comment_id if this is a reply
+        if (parentCommentId) {
+            commentData.parent_comment_id = parentCommentId;
+        }
+
         const { data, error } = await window.supabaseClient
             .from('comments')
-            .insert({
-                user_id: user.id,
-                post_id: postId,
-                content: content
-            })
+            .insert(commentData)
             .select(`
                 *,
                 profiles:user_id (
@@ -703,7 +711,7 @@ window.addComment = async function(postId, content) {
     }
 };
 
-// Get Comments for Post
+// Get Comments for Post (including parent_comment_id for threading)
 window.getComments = async function(postId) {
     try {
         const { data, error } = await window.supabaseClient

@@ -1,3 +1,12 @@
+function viewUserProfile(userId) {
+    if (!userId) return;
+    window.location.href = `user-profile.html?userId=${userId}`;
+}
+
+// Make it globally available
+window.viewUserProfile = viewUserProfile;
+
+
 // index.js - Main application logic
 document.addEventListener('DOMContentLoaded', async function() {
     console.log('DOM loaded, initializing app...');
@@ -11,16 +20,15 @@ document.addEventListener('DOMContentLoaded', async function() {
     let selectedPostForShare = null;
 
     // DOM Elements
+    const profileModal = document.getElementById('profileModal');
     const postsContainer = document.getElementById('postsContainer');
     const uploadModal = document.getElementById('uploadModal');
     const shareModal = document.getElementById('shareModal');
-    const profileModal = document.getElementById('profileModal');
     const notificationBell = document.getElementById('notificationBell');
     const notificationDropdown = document.getElementById('notificationDropdown');
     const notificationBadge = document.getElementById('notificationBadge');
     const currentUserAvatar = document.getElementById('currentUserAvatar');
     const currentUserName = document.getElementById('currentUserName');
-    const userProfile = document.getElementById('userProfile');
 
     // Initialize app
     await init();
@@ -310,12 +318,12 @@ document.addEventListener('DOMContentLoaded', async function() {
         return `
             <div class="post-card" data-post-id="${post.id}">
                 <div class="post-header">
-                    <div class="post-user-info" onclick="window.openUserProfile('${post.user_id}')">
-                        <div class="user-avatar" style="background: linear-gradient(135deg, #${Math.random().toString(16).substr(-6)}, #${Math.random().toString(16).substr(-6)})">
+                    <div class="post-user-info">
+                        <div class="user-avatar" onclick="viewUserProfile('${post.user_id}')" style="cursor: pointer; background: linear-gradient(135deg, #${Math.random().toString(16).substr(-6)}, #${Math.random().toString(16).substr(-6)})">
                             ${initials}
                         </div>
                         <div>
-                            <div class="post-username">
+                            <div class="post-username" onclick="viewUserProfile('${post.user_id}')" style="cursor: pointer;">
                                 ${escapeHTML(profile.full_name || 'Unknown User')}
                                 ${isOwnPost ? '<span class="own-post-badge">You</span>' : ''}
                             </div>
@@ -347,15 +355,17 @@ document.addEventListener('DOMContentLoaded', async function() {
                     </div>
                 ` : ''}
 
-                <div class="post-image-container">
-                    <img src="${post.image_url}" alt="Post image" class="post-image">
-                    ${starRating.stars > 0 ? `
-                        <div class="star-rating-badge stars-${starRating.stars}">
-                            ${Array(starRating.stars).fill('<i class="fas fa-star"></i>').join('')}
-                            <span class="star-rating-label">${starRating.label}</span>
-                        </div>
-                    ` : ''}
-                </div>
+                ${post.image_url ? `
+                    <div class="post-image-container">
+                        <img src="${post.image_url}" alt="Post image" class="post-image">
+                        ${starRating.stars > 0 ? `
+                            <div class="star-rating-badge stars-${starRating.stars}">
+                                ${Array(starRating.stars).fill('<i class="fas fa-star"></i>').join('')}
+                                <span class="star-rating-label">${starRating.label}</span>
+                            </div>
+                        ` : ''}
+                    </div>
+                ` : ''}
 
                 <div class="post-stats">
                     <span class="stat-item">
@@ -426,10 +436,8 @@ document.addEventListener('DOMContentLoaded', async function() {
                 const commentInput = postCard.querySelector('.comment-input');
                 
                 if (commentsSection) {
-                    // Toggle the show class to make comments visible
                     commentsSection.classList.toggle('show');
                     
-                    // If showing comments, focus on input
                     if (commentsSection.classList.contains('show') && commentInput) {
                         setTimeout(() => {
                             commentInput.focus();
@@ -462,14 +470,12 @@ document.addEventListener('DOMContentLoaded', async function() {
                 const isExpanded = this.dataset.action === 'collapse';
 
                 if (isExpanded) {
-                    // Collapse
                     const maxLength = 200;
                     descriptionText.textContent = fullText.substring(0, maxLength) + '...';
                     this.textContent = 'See more';
                     this.dataset.action = 'expand';
                     descriptionText.classList.add('truncated');
                 } else {
-                    // Expand
                     descriptionText.textContent = fullText;
                     this.textContent = 'See less';
                     this.dataset.action = 'collapse';
@@ -504,414 +510,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         loadComments(postId);
     }
 
-    // ==================== PROFILE MODAL ====================
-
-    window.openUserProfile = async function(userId) {
-        try {
-            if (!userId) return;
-
-            console.log('Opening profile for user:', userId);
-
-            // Fetch user profile data
-            const { data: profile, error: profileError } = await window.supabaseClient
-                .from('profiles')
-                .select('*')
-                .eq('id', userId)
-                .single();
-
-            if (profileError) {
-                console.error('Error fetching profile:', profileError);
-                showToast('Failed to load profile', 'error');
-                return;
-            }
-
-            // Fetch user's posts count
-            const { count: postsCount } = await window.supabaseClient
-                .from('posts')
-                .select('*', { count: 'exact', head: true })
-                .eq('user_id', userId);
-
-            // Fetch followers count
-            const { count: followersCount } = await window.supabaseClient
-                .from('followers')
-                .select('*', { count: 'exact', head: true })
-                .eq('following_id', userId);
-
-            // Fetch following count
-            const { count: followingCount } = await window.supabaseClient
-                .from('followers')
-                .select('*', { count: 'exact', head: true })
-                .eq('follower_id', userId);
-
-            // Fetch user's full posts with profile data FIRST (before using it)
-            const { data: userPosts } = await window.supabaseClient
-                .from('posts')
-                .select(`
-                    *,
-                    profiles:user_id (
-                        id,
-                        full_name,
-                        avatar_url,
-                        department
-                    )
-                `)
-                .eq('user_id', userId)
-                .order('created_at', { ascending: false });
-
-            // Calculate total likes and stars from user's posts
-            let totalLikes = 0;
-            let totalStars = 0;
-
-            if (userPosts) {
-                userPosts.forEach(post => {
-                    totalLikes += post.likes_count || 0;
-                    const rating = window.getStarRating(post.likes_count || 0);
-                    totalStars += rating.stars;
-                });
-            }
-
-            // Check if current user is following this user
-            let isFollowing = false;
-            if (currentUser && userId !== currentUser.id) {
-                const { data: followData } = await window.supabaseClient
-                    .from('followers')
-                    .select('id')
-                    .eq('follower_id', currentUser.id)
-                    .eq('following_id', userId)
-                    .maybeSingle();
-                
-                isFollowing = !!followData;
-            }
-
-            // Update modal content
-            const initials = getInitials(profile.full_name);
-            const profileModalAvatar = document.getElementById('profileModalAvatar');
-            const profileModalName = document.getElementById('profileModalName');
-            const profileModalDepartment = document.getElementById('profileModalDepartment');
-            const profilePostsCount = document.getElementById('profilePostsCount');
-            const profileFollowersCount = document.getElementById('profileFollowersCount');
-            const profileFollowingCount = document.getElementById('profileFollowingCount');
-            const profileFollowBtn = document.getElementById('profileFollowBtn');
-
-            if (profileModalAvatar) {
-                profileModalAvatar.textContent = initials;
-                profileModalAvatar.style.background = `linear-gradient(135deg, #${Math.random().toString(16).substr(-6)}, #${Math.random().toString(16).substr(-6)})`;
-            }
-
-            if (profileModalName) {
-                profileModalName.textContent = profile.full_name || 'Unknown User';
-            }
-
-            if (profileModalDepartment) {
-                profileModalDepartment.textContent = profile.department || 'No department specified';
-            }
-
-            if (profilePostsCount) {
-                profilePostsCount.textContent = postsCount || 0;
-            }
-
-            if (profileFollowersCount) {
-                profileFollowersCount.textContent = followersCount || 0;
-            }
-
-            if (profileFollowingCount) {
-                profileFollowingCount.textContent = followingCount || 0;
-            }
-
-            // Add total likes and stars stats
-            const statsContainer = document.querySelector('.profile-modal-stats');
-            if (statsContainer) {
-                // Check if we already added the extra stats
-                if (!document.getElementById('profileTotalLikes')) {
-                    statsContainer.innerHTML += `
-                        <div class="profile-stat">
-                            <div class="profile-stat-value" id="profileTotalLikes">${totalLikes}</div>
-                            <div class="profile-stat-label">Total Likes</div>
-                        </div>
-                        <div class="profile-stat">
-                            <div class="profile-stat-value" id="profileTotalStars">${totalStars}</div>
-                            <div class="profile-stat-label">Total Stars</div>
-                        </div>
-                    `;
-                } else {
-                    document.getElementById('profileTotalLikes').textContent = totalLikes;
-                    document.getElementById('profileTotalStars').textContent = totalStars;
-                }
-            }
-
-            // Update follow button
-            if (profileFollowBtn) {
-                if (userId === currentUser.id) {
-                    // It's the current user's profile
-                    profileFollowBtn.style.display = 'none';
-                } else {
-                    profileFollowBtn.style.display = 'block';
-                    profileFollowBtn.textContent = isFollowing ? 'Following' : 'Follow';
-                    profileFollowBtn.className = isFollowing ? 'profile-follow-btn following' : 'profile-follow-btn';
-                    profileFollowBtn.dataset.userId = userId;
-                    profileFollowBtn.dataset.following = isFollowing;
-
-                    // Remove old event listeners and add new one
-                    const newBtn = profileFollowBtn.cloneNode(true);
-                    profileFollowBtn.parentNode.replaceChild(newBtn, profileFollowBtn);
-                    
-                    newBtn.addEventListener('click', async function() {
-                        const success = await handleFollow(userId, newBtn);
-                        if (success) {
-                            const nowFollowing = newBtn.dataset.following === 'false';
-                            newBtn.dataset.following = nowFollowing;
-                            newBtn.textContent = nowFollowing ? 'Following' : 'Follow';
-                            newBtn.className = nowFollowing ? 'profile-follow-btn following' : 'profile-follow-btn';
-                            
-                            // Update follower count
-                            if (profileFollowersCount) {
-                                const currentCount = parseInt(profileFollowersCount.textContent);
-                                profileFollowersCount.textContent = nowFollowing ? currentCount + 1 : currentCount - 1;
-                            }
-                        }
-                    });
-                }
-            }
-
-            // Add user's posts section
-            const modalBody = profileModal.querySelector('.modal-body');
-            let postsSection = modalBody.querySelector('.profile-posts-section');
-            
-            if (!postsSection) {
-                postsSection = document.createElement('div');
-                postsSection.className = 'profile-posts-section';
-                modalBody.querySelector('.profile-modal-content').appendChild(postsSection);
-            }
-
-            if (userPosts && userPosts.length > 0) {
-                // Get liked posts for this user
-                let likedPostIds = [];
-                if (currentUser) {
-                    const { data: likedData } = await window.supabaseClient
-                        .from('likes')
-                        .select('post_id')
-                        .eq('user_id', currentUser.id)
-                        .in('post_id', userPosts.map(p => p.id));
-                    
-                    if (likedData) {
-                        likedPostIds = likedData.map(l => l.post_id);
-                    }
-                }
-
-                postsSection.innerHTML = `
-                    <h3 style="font-size: 16px; margin: 20px 0 15px 0; text-align: left; color: #050505;">
-                        <i class="fas fa-images"></i> Posts (${postsCount})
-                    </h3>
-                    <div class="profile-posts-container">
-                        ${userPosts.map(post => createProfilePostHTML(post, likedPostIds.includes(post.id))).join('')}
-                    </div>
-                `;
-
-                // Add event listeners to the profile posts
-                setupProfilePostListeners(postsSection);
-            } else {
-                postsSection.innerHTML = `
-                    <p style="text-align: center; color: #65676b; margin-top: 20px;">
-                        <i class="fas fa-image"></i><br>No posts yet
-                    </p>
-                `;
-            }
-
-            // Show modal
-            if (profileModal) {
-                profileModal.classList.add('show');
-            }
-
-        } catch (error) {
-            console.error('Error opening profile:', error);
-            showToast('Failed to load profile', 'error');
-        }
-    };
-
-    // Helper function to create HTML for posts in profile modal
-    function createProfilePostHTML(post, isLiked) {
-        const profile = post.profiles || {};
-        const initials = getInitials(profile.full_name || 'User');
-        const timeAgo = window.timeAgo(post.created_at);
-        const starRating = window.getStarRating(post.likes_count || 0);
-        const avatarColor = stringToColor(profile.full_name || 'User');
-        
-        // Truncate description if too long
-        const maxLength = 200;
-        const description = post.description || '';
-        const truncated = description.length > maxLength;
-        const displayDescription = truncated ? description.substring(0, maxLength) + '...' : description;
-
-        return `
-            <div class="post-card" data-post-id="${post.id}">
-                <div class="post-header">
-                    <div class="post-user" onclick="window.openUserProfile('${post.user_id}')">
-                        <div class="user-avatar" style="background: ${avatarColor}">
-                            ${initials}
-                        </div>
-                        <div>
-                            <div class="post-username">${escapeHTML(profile.full_name || 'Unknown User')}</div>
-                            <div class="post-meta">
-                                <i class="fas fa-graduation-cap"></i>
-                                ${escapeHTML(post.department || 'Unknown')}
-                                <span class="post-time">• ${timeAgo}</span>
-                            </div>
-                        </div>
-                    </div>
-                    ${starRating.stars > 0 ? `
-                        <div class="star-rating-badge stars-${starRating.stars}">
-                            ${Array(starRating.stars).fill('<i class="fas fa-star"></i>').join('')}
-                            <span class="star-rating-label">${starRating.label}</span>
-                        </div>
-                    ` : ''}
-                </div>
-
-                ${description ? `
-                    <p class="post-description">
-                        <span class="description-text ${truncated ? 'truncated' : ''}" data-full-text="${escapeHTML(description)}">
-                            ${escapeHTML(displayDescription)}
-                        </span>
-                        ${truncated ? `<button class="see-more-btn" data-action="expand">See more</button>` : ''}
-                    </p>
-                ` : ''}
-
-                <div class="post-image-container">
-                    <img src="${post.image_url}" alt="Post image" class="post-image" loading="lazy">
-                </div>
-
-                <div class="post-stats">
-                    <span><i class="fas fa-heart"></i> <span class="likes-count">${post.likes_count || 0}</span></span>
-                    <span><i class="fas fa-comment"></i> <span class="comments-count">${post.comments_count || 0}</span></span>
-                    <span><i class="fas fa-share"></i> ${post.shares_count || 0}</span>
-                </div>
-
-                <div class="post-actions">
-                    <button class="action-btn like-btn ${isLiked ? 'liked' : ''}" data-action="like">
-                        <i class="${isLiked ? 'fas' : 'far'} fa-heart"></i>
-                        <span>Like</span>
-                    </button>
-                    <button class="action-btn comment-btn" data-action="comment">
-                        <i class="far fa-comment"></i>
-                        <span>Comment</span>
-                    </button>
-                    <button class="action-btn share-btn" data-action="share">
-                        <i class="far fa-share-square"></i>
-                        <span>Share</span>
-                    </button>
-                </div>
-
-                <div class="comments-section">
-                    <div class="comment-input-wrapper">
-                        <div class="user-avatar small" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%)">
-                            ${currentProfile ? getInitials(currentProfile.full_name) : 'U'}
-                        </div>
-                        <input type="text" class="comment-input" placeholder="Write a comment..." data-post-id="${post.id}">
-                        <button class="send-comment-btn" disabled>
-                            <i class="fas fa-paper-plane"></i>
-                        </button>
-                    </div>
-                    <div class="comments-list" data-post-id="${post.id}">
-                        <!-- Comments will be loaded here -->
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    // Setup event listeners for profile posts
-    function setupProfilePostListeners(container) {
-        // Like buttons
-        container.querySelectorAll('.like-btn').forEach(btn => {
-            btn.addEventListener('click', async function(e) {
-                const postCard = this.closest('.post-card');
-                const postId = postCard.dataset.postId;
-                await handleLike(postId, this);
-            });
-        });
-
-        // Comment buttons
-        container.querySelectorAll('.comment-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const postCard = this.closest('.post-card');
-                const commentsSection = postCard.querySelector('.comments-section');
-                const postId = postCard.dataset.postId;
-                
-                commentsSection.classList.toggle('active');
-                
-                if (commentsSection.classList.contains('active')) {
-                    const commentInput = commentsSection.querySelector('.comment-input');
-                    commentInput.focus();
-                    
-                    // Load comments if not already loaded
-                    const commentsList = commentsSection.querySelector('.comments-list');
-                    if (!commentsList.hasChildNodes()) {
-                        loadComments(postId);
-                    }
-                }
-            });
-        });
-
-        // Share buttons
-        container.querySelectorAll('.share-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const postCard = this.closest('.post-card');
-                const postId = postCard.dataset.postId;
-                openShareModal(postId);
-            });
-        });
-
-        // See more/less buttons
-        container.querySelectorAll('.see-more-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const descriptionText = this.previousElementSibling;
-                const fullText = descriptionText.dataset.fullText;
-                const isExpanded = this.dataset.action === 'collapse';
-
-                if (isExpanded) {
-                    const maxLength = 200;
-                    descriptionText.textContent = fullText.substring(0, maxLength) + '...';
-                    this.textContent = 'See more';
-                    this.dataset.action = 'expand';
-                    descriptionText.classList.add('truncated');
-                } else {
-                    descriptionText.textContent = fullText;
-                    this.textContent = 'See less';
-                    this.dataset.action = 'collapse';
-                    descriptionText.classList.remove('truncated');
-                }
-            });
-        });
-
-        // Comment inputs
-        container.querySelectorAll('.comment-input').forEach(input => {
-            const sendBtn = input.nextElementSibling;
-            
-            input.addEventListener('input', function() {
-                if (sendBtn) {
-                    sendBtn.disabled = !this.value.trim();
-                }
-            });
-
-            input.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter' && this.value.trim()) {
-                    const postId = this.dataset.postId;
-                    handleComment(postId, this.value.trim());
-                }
-            });
-        });
-
-        // Send comment buttons
-        container.querySelectorAll('.send-comment-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const input = this.previousElementSibling;
-                const postId = input.dataset.postId;
-                if (input.value.trim()) {
-                    handleComment(postId, input.value.trim());
-                }
-            });
-        });
-    }
-
     // ==================== INTERACTIONS ====================
 
     async function handleLike(postId) {
@@ -919,17 +517,12 @@ document.addEventListener('DOMContentLoaded', async function() {
             const post = posts.find(p => p.id === postId);
             if (!post) return;
 
-            const isCurrentlyLiked = post.isLiked;
-            
-            // Use toggleLike function
             const result = await window.toggleLike(postId);
 
             if (result.success) {
-                // Update local state
                 post.isLiked = result.liked;
                 post.likes_count = result.liked ? (post.likes_count || 0) + 1 : Math.max(0, (post.likes_count || 0) - 1);
 
-                // Update UI
                 const postCard = document.querySelector(`[data-post-id="${postId}"]`);
                 if (postCard) {
                     const likeBtn = postCard.querySelector('.like-btn');
@@ -946,30 +539,31 @@ document.addEventListener('DOMContentLoaded', async function() {
                     // Update star rating
                     const starRating = window.getStarRating(post.likes_count);
                     const imageContainer = postCard.querySelector('.post-image-container');
-                    let starBadge = imageContainer.querySelector('.star-rating-badge');
-                    
-                    if (starRating.stars > 0) {
-                        if (!starBadge) {
-                            starBadge = document.createElement('div');
-                            imageContainer.appendChild(starBadge);
-                        }
-                        starBadge.className = `star-rating-badge stars-${starRating.stars}`;
-                        starBadge.innerHTML = `
-                            ${Array(starRating.stars).fill('<i class="fas fa-star"></i>').join('')}
-                            <span class="star-rating-label">${starRating.label}</span>
-                        `;
+                    if (imageContainer) {
+                        let starBadge = imageContainer.querySelector('.star-rating-badge');
                         
-                        // Show milestone notification if just reached a new star level
-                        const previousRating = window.getStarRating(post.likes_count - 1);
-                        if (result.liked && starRating.stars > previousRating.stars) {
-                            showStarMilestone({
-                                stars: starRating.stars,
-                                label: starRating.label,
-                                likes: post.likes_count
-                            });
+                        if (starRating.stars > 0) {
+                            if (!starBadge) {
+                                starBadge = document.createElement('div');
+                                imageContainer.appendChild(starBadge);
+                            }
+                            starBadge.className = `star-rating-badge stars-${starRating.stars}`;
+                            starBadge.innerHTML = `
+                                ${Array(starRating.stars).fill('<i class="fas fa-star"></i>').join('')}
+                                <span class="star-rating-label">${starRating.label}</span>
+                            `;
+                            
+                            const previousRating = window.getStarRating(post.likes_count - 1);
+                            if (result.liked && starRating.stars > previousRating.stars) {
+                                showStarMilestone({
+                                    stars: starRating.stars,
+                                    label: starRating.label,
+                                    likes: post.likes_count
+                                });
+                            }
+                        } else if (starBadge) {
+                            starBadge.remove();
                         }
-                    } else if (starBadge) {
-                        starBadge.remove();
                     }
                 }
             }
@@ -983,13 +577,9 @@ document.addEventListener('DOMContentLoaded', async function() {
         try {
             if (!userId || !button) return false;
 
-            const isCurrentlyFollowing = button.classList.contains('following') || button.dataset.following === 'true';
-            
-            // Use toggleFollow function
             const result = await window.toggleFollow(userId);
 
             if (result.success) {
-                // Update button state
                 if (button.classList.contains('follow-btn')) {
                     button.classList.toggle('following', result.following);
                     const icon = button.querySelector('i');
@@ -998,7 +588,6 @@ document.addEventListener('DOMContentLoaded', async function() {
                     if (span) span.textContent = result.following ? 'Following' : 'Follow';
                 }
 
-                // Update post state
                 const post = posts.find(p => p.user_id === userId);
                 if (post) {
                     post.isFollowing = result.following;
@@ -1017,13 +606,11 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     }
 
-    async function handleComment(postId, content, parentCommentId = null) {
+    async function handleComment(postId, content) {
         try {
-            // Use addComment function
             const result = await window.addComment(postId, content);
 
             if (result.success) {
-                // Clear input
                 const postCard = document.querySelector(`[data-post-id="${postId}"]`);
                 if (postCard) {
                     const commentInput = postCard.querySelector('.comment-input');
@@ -1031,7 +618,6 @@ document.addEventListener('DOMContentLoaded', async function() {
                     if (commentInput) commentInput.value = '';
                     if (sendBtn) sendBtn.disabled = true;
 
-                    // Update comment count
                     const post = posts.find(p => p.id === postId);
                     if (post) {
                         post.comments_count = (post.comments_count || 0) + 1;
@@ -1042,9 +628,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                     }
                 }
 
-                // Reload comments
                 await loadComments(postId);
-                
                 showToast('Comment added!', 'success');
             } else {
                 showToast('Failed to add comment', 'error');
@@ -1057,282 +641,224 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     async function handleReply(postId, commentId, content) {
         try {
-            // Use addComment function with parent comment ID for replies
+            console.log('Sending reply:', { postId, commentId, content });
+            
             const result = await window.addComment(postId, content, commentId);
 
+            console.log('Reply result:', result);
+
             if (result.success) {
-                // Clear reply input
-                const replyInput = document.querySelector(`[data-reply-to="${commentId}"]`);
-                if (replyInput) {
-                    replyInput.value = '';
-                    replyInput.style.display = 'none';
+                const replyContainer = document.querySelector(`.reply-input-container[data-comment-id="${commentId}"]`);
+                if (replyContainer) {
+                    replyContainer.classList.remove('show');
+                    const input = replyContainer.querySelector('.reply-input');
+                    if (input) input.value = '';
                 }
 
-                // Hide the send reply button
-                const sendReplyBtn = document.querySelector(`.send-reply-btn[data-comment-id="${commentId}"]`);
-                if (sendReplyBtn) {
-                    sendReplyBtn.style.display = 'none';
-                }
-
-                // Reload comments to show the new reply
                 await loadComments(postId);
-                
                 showToast('Reply added!', 'success');
             } else {
-                showToast('Failed to add reply', 'error');
+                showToast(result.error || 'Failed to add reply', 'error');
             }
         } catch (error) {
             console.error('Error adding reply:', error);
             showToast('Failed to add reply', 'error');
         }
     }
+
     // ==================== COMMENTS ====================
 
-async function loadComments(postId) {
-    try {
-        const result = await window.getComments(postId);
-        
-        if (result.success) {
-            console.log('All comments for post', postId, ':', result.comments);
-            const commentsList = document.querySelector(`.comments-list[data-post-id="${postId}"]`);
-            if (commentsList) {
-                renderComments(commentsList, result.comments, postId);
-            }
-        }
-    } catch (error) {
-        console.error('Error loading comments:', error);
-    }
-}
-
-function renderComments(container, comments, postId) {
-    if (!container || !comments) return;
-
-    console.log('renderComments called with', comments.length, 'comments');
-    console.log('All comments:', comments);
-
-    if (comments.length === 0) {
-        container.innerHTML = '<p class="no-comments-text" style="text-align: center; color: #65676b; padding: 10px;">No comments yet. Be the first to comment!</p>';
-        return;
-    }
-
-    // Separate top-level comments and replies
-    const topLevelComments = comments.filter(c => !c.parent_comment_id);
-    const repliesMap = {};
-
-    // Group replies by parent comment ID
-    comments.forEach(comment => {
-        if (comment.parent_comment_id) {
-            if (!repliesMap[comment.parent_comment_id]) {
-                repliesMap[comment.parent_comment_id] = [];
-            }
-            repliesMap[comment.parent_comment_id].push(comment);
-        }
-    });
-
-    console.log('Top level comments:', topLevelComments.length);
-    console.log('Replies map:', repliesMap);
-
-    // Sort top-level comments by created_at in descending order (newest first)
-    topLevelComments.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-
-    // Sort replies within each comment by created_at in descending order (newest first)
-    Object.keys(repliesMap).forEach(commentId => {
-        repliesMap[commentId].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-    });
-    // Render top-level comments with their replies
-    container.innerHTML = topLevelComments.map(comment => {
-        const replies = repliesMap[comment.id] || [];
-        console.log(`Comment ${comment.id} has ${replies.length} replies:`, replies);
-        return createCommentHTML(comment, postId, replies);
-    }).join('');
-
-    // Add event listeners for reply buttons
-    container.querySelectorAll('.reply-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const commentId = this.dataset.commentId;
-            toggleReplyInput(postId, commentId);
-        });
-    });
-
-    // Add event listeners for reply inputs
-    container.querySelectorAll('.reply-input').forEach(input => {
-        const sendBtn = input.nextElementSibling;
-        
-        // Enable/disable send button based on input
-        input.addEventListener('input', function() {
-            if (sendBtn) {
-                sendBtn.disabled = !this.value.trim();
-            }
-        });
-
-        input.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter' && this.value.trim()) {
-                const commentId = this.dataset.replyTo;
-                handleReply(postId, commentId, this.value.trim());
-            }
-        });
-    });
-
-    // Add event listeners for send reply buttons
-    container.querySelectorAll('.send-reply-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const commentId = this.dataset.commentId;
-            const replyInput = document.querySelector(`[data-reply-to="${commentId}"]`);
-            if (replyInput && replyInput.value.trim()) {
-                handleReply(postId, commentId, replyInput.value.trim());
-            }
-        });
-    });
-
-    // Add event listeners for comment user avatars
-    container.querySelectorAll('.comment-user').forEach(userDiv => {
-        userDiv.addEventListener('click', function() {
-            const userId = this.dataset.userId;
-            if (userId) {
-                window.openUserProfile(userId);
-            }
-        });
-    });
-}
-
-function createCommentHTML(comment, postId, replies = []) {
-    const profile = comment.profiles || {};
-    const initials = getInitials(profile.full_name || 'User');
-    const timeAgo = window.timeAgo(comment.created_at);
-    const avatarColor = stringToColor(profile.full_name || 'User');
-
-    return `
-        <div class="comment-item" data-comment-id="${comment.id}">
-            <div class="comment-user" data-user-id="${comment.user_id}">
-                <div class="user-avatar small" style="background: ${avatarColor}">
-                    ${initials}
-                </div>
-            </div>
-            <div class="comment-content">
-                <div class="comment-bubble">
-                    <div class="comment-author" onclick="window.openUserProfile('${comment.user_id}')">${escapeHTML(profile.full_name || 'Unknown')}</div>
-                    <div class="comment-text">${escapeHTML(comment.content)}</div>
-                </div>
-                <div class="comment-actions">
-                    <span class="comment-time">${timeAgo}</span>
-                    <button class="reply-btn" data-comment-id="${comment.id}">Reply</button>
-                </div>
-                
-                <!-- Reply input (hidden by default) -->
-                <div class="reply-input-container" data-comment-id="${comment.id}">
-                    <div class="user-avatar small" style="background: linear-gradient(135deg, #667eea, #764ba2)">
-                        ${getInitials(currentProfile?.full_name || 'U')}
-                    </div>
-                    <input 
-                        type="text" 
-                        class="reply-input" 
-                        placeholder="Write a reply..."
-                        data-reply-to="${comment.id}"
-                    >
-                    <button class="send-reply-btn" data-comment-id="${comment.id}" disabled>
-                        <i class="fas fa-paper-plane"></i>
-                    </button>
-                </div>
-                
-                <!-- Nested Replies -->
-                ${replies.length > 0 ? `
-                    <div class="replies-container">
-                        ${replies.map(reply => createReplyHTML(reply, postId)).join('')}
-                    </div>
-                ` : ''}
-            </div>
-        </div>
-    `;
-}
-
-function createReplyHTML(reply, postId) {
-    const profile = reply.profiles || {};
-    const initials = getInitials(profile.full_name || 'User');
-    const timeAgo = window.timeAgo(reply.created_at);
-    const avatarColor = stringToColor(profile.full_name || 'User');
-
-    return `
-        <div class="comment-item reply" data-comment-id="${reply.id}">
-            <div class="comment-user" data-user-id="${reply.user_id}">
-                <div class="user-avatar small" style="background: ${avatarColor}">
-                    ${initials}
-                </div>
-            </div>
-            <div class="comment-content">
-                <div class="comment-bubble">
-                    <div class="comment-author" onclick="window.openUserProfile('${reply.user_id}')">${escapeHTML(profile.full_name || 'Unknown')}</div>
-                    <div class="comment-text">${escapeHTML(reply.content)}</div>
-                </div>
-                <div class="comment-actions">
-                    <span class="comment-time">${timeAgo}</span>
-                </div>
-            </div>
-        </div>
-    `;
-}
-
-function toggleReplyInput(postId, commentId) {
-    const replyContainer = document.querySelector(`.reply-input-container[data-comment-id="${commentId}"]`);
-    
-    if (replyContainer) {
-        const isVisible = replyContainer.classList.contains('show');
-        
-        // Hide all other reply inputs first
-        document.querySelectorAll('.reply-input-container.show').forEach(container => {
-            container.classList.remove('show');
-        });
-        
-        // Toggle current one
-        if (!isVisible) {
-            replyContainer.classList.add('show');
-            const input = replyContainer.querySelector('.reply-input');
-            if (input) {
-                setTimeout(() => input.focus(), 100);
-            }
-        }
-    }
-}
-
-// Helper function to generate consistent colors from strings
-function stringToColor(str) {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-        hash = str.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const hue = hash % 360;
-    return `linear-gradient(135deg, hsl(${hue}, 70%, 50%), hsl(${(hue + 40) % 360}, 70%, 40%))`;
-}
-
-async function handleReply(postId, commentId, content) {
-    try {
-        console.log('Sending reply:', { postId, commentId, content });
-        
-        // Use addComment function with parent comment ID for replies
-        const result = await window.addComment(postId, content, commentId);
-
-        console.log('Reply result:', result);
-
-        if (result.success) {
-            // Hide the reply input
-            const replyContainer = document.querySelector(`.reply-input-container[data-comment-id="${commentId}"]`);
-            if (replyContainer) {
-                replyContainer.classList.remove('show');
-                const input = replyContainer.querySelector('.reply-input');
-                if (input) input.value = '';
-            }
-
-            // Reload comments to show the new reply
-            await loadComments(postId);
+    async function loadComments(postId) {
+        try {
+            const result = await window.getComments(postId);
             
-            showToast('Reply added!', 'success');
-        } else {
-            showToast(result.error || 'Failed to add reply', 'error');
+            if (result.success) {
+                console.log('All comments for post', postId, ':', result.comments);
+                const commentsList = document.querySelector(`.comments-list[data-post-id="${postId}"]`);
+                if (commentsList) {
+                    renderComments(commentsList, result.comments, postId);
+                }
+            }
+        } catch (error) {
+            console.error('Error loading comments:', error);
         }
-    } catch (error) {
-        console.error('Error adding reply:', error);
-        showToast('Failed to add reply', 'error');
     }
-}
+
+    function renderComments(container, comments, postId) {
+        if (!container || !comments) return;
+
+        console.log('renderComments called with', comments.length, 'comments');
+
+        if (comments.length === 0) {
+            container.innerHTML = '<p class="no-comments-text" style="text-align: center; color: #65676b; padding: 10px;">No comments yet. Be the first to comment!</p>';
+            return;
+        }
+
+        const topLevelComments = comments.filter(c => !c.parent_comment_id);
+        const repliesMap = {};
+
+        comments.forEach(comment => {
+            if (comment.parent_comment_id) {
+                if (!repliesMap[comment.parent_comment_id]) {
+                    repliesMap[comment.parent_comment_id] = [];
+                }
+                repliesMap[comment.parent_comment_id].push(comment);
+            }
+        });
+
+        topLevelComments.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+        Object.keys(repliesMap).forEach(commentId => {
+            repliesMap[commentId].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        });
+
+        container.innerHTML = topLevelComments.map(comment => {
+            const replies = repliesMap[comment.id] || [];
+            return createCommentHTML(comment, postId, replies);
+        }).join('');
+
+        // Add event listeners for reply buttons
+        container.querySelectorAll('.reply-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const commentId = this.dataset.commentId;
+                toggleReplyInput(postId, commentId);
+            });
+        });
+
+        // Add event listeners for reply inputs
+        container.querySelectorAll('.reply-input').forEach(input => {
+            const sendBtn = input.nextElementSibling;
+            
+            input.addEventListener('input', function() {
+                if (sendBtn) {
+                    sendBtn.disabled = !this.value.trim();
+                }
+            });
+
+            input.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter' && this.value.trim()) {
+                    const commentId = this.dataset.replyTo;
+                    handleReply(postId, commentId, this.value.trim());
+                }
+            });
+        });
+
+        // Add event listeners for send reply buttons
+        container.querySelectorAll('.send-reply-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const commentId = this.dataset.commentId;
+                const replyInput = document.querySelector(`[data-reply-to="${commentId}"]`);
+                if (replyInput && replyInput.value.trim()) {
+                    handleReply(postId, commentId, replyInput.value.trim());
+                }
+            });
+        });
+    }
+
+    function createCommentHTML(comment, postId, replies = []) {
+        const profile = comment.profiles || {};
+        const initials = getInitials(profile.full_name || 'User');
+        const timeAgo = window.timeAgo(comment.created_at);
+        const avatarColor = stringToColor(profile.full_name || 'User');
+
+        return `
+            <div class="comment-item" data-comment-id="${comment.id}">
+                <div class="comment-user" data-user-id="${comment.user_id}">
+                    <div class="user-avatar small" style="background: ${avatarColor}">
+                        ${initials}
+                    </div>
+                </div>
+                <div class="comment-content">
+                    <div class="comment-bubble">
+                        <div class="comment-author">${escapeHTML(profile.full_name || 'Unknown')}</div>
+                        <div class="comment-text">${escapeHTML(comment.content)}</div>
+                    </div>
+                    <div class="comment-actions">
+                        <span class="comment-time">${timeAgo}</span>
+                        <button class="reply-btn" data-comment-id="${comment.id}">Reply</button>
+                    </div>
+                    
+                    <!-- Reply input (hidden by default) -->
+                    <div class="reply-input-container" data-comment-id="${comment.id}">
+                        <div class="user-avatar small" style="background: linear-gradient(135deg, #667eea, #764ba2)">
+                            ${getInitials(currentProfile?.full_name || 'U')}
+                        </div>
+                        <input 
+                            type="text" 
+                            class="reply-input" 
+                            placeholder="Write a reply..."
+                            data-reply-to="${comment.id}"
+                        >
+                        <button class="send-reply-btn" data-comment-id="${comment.id}" disabled>
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                    
+                    <!-- Nested Replies -->
+                    ${replies.length > 0 ? `
+                        <div class="replies-container">
+                            ${replies.map(reply => createReplyHTML(reply, postId)).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    }
+
+    function createReplyHTML(reply, postId) {
+        const profile = reply.profiles || {};
+        const initials = getInitials(profile.full_name || 'User');
+        const timeAgo = window.timeAgo(reply.created_at);
+        const avatarColor = stringToColor(profile.full_name || 'User');
+
+        return `
+            <div class="comment-item reply" data-comment-id="${reply.id}">
+                <div class="comment-user" data-user-id="${reply.user_id}">
+                    <div class="user-avatar small" style="background: ${avatarColor}">
+                        ${initials}
+                    </div>
+                </div>
+                <div class="comment-content">
+                    <div class="comment-bubble">
+                        <div class="comment-author">${escapeHTML(profile.full_name || 'Unknown')}</div>
+                        <div class="comment-text">${escapeHTML(reply.content)}</div>
+                    </div>
+                    <div class="comment-actions">
+                        <span class="comment-time">${timeAgo}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function toggleReplyInput(postId, commentId) {
+        const replyContainer = document.querySelector(`.reply-input-container[data-comment-id="${commentId}"]`);
+        
+        if (replyContainer) {
+            const isVisible = replyContainer.classList.contains('show');
+            
+            document.querySelectorAll('.reply-input-container.show').forEach(container => {
+                container.classList.remove('show');
+            });
+            
+            if (!isVisible) {
+                replyContainer.classList.add('show');
+                const input = replyContainer.querySelector('.reply-input');
+                if (input) {
+                    setTimeout(() => input.focus(), 100);
+                }
+            }
+        }
+    }
+
+    function stringToColor(str) {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            hash = str.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        const hue = hash % 360;
+        return `linear-gradient(135deg, hsl(${hue}, 70%, 50%), hsl(${(hue + 40) % 360}, 70%, 40%))`;
+    }
 
     // ==================== CREATE POST ====================
 
@@ -1353,7 +879,6 @@ async function handleReply(postId, commentId, content) {
         if (openUploadModal) {
             openUploadModal.addEventListener('click', () => {
                 uploadModal.classList.add('show');
-                // Pre-select user's department
                 if (currentProfile?.department && departmentSelect) {
                     departmentSelect.value = currentProfile.department;
                 }
@@ -1448,7 +973,6 @@ async function handleReply(postId, commentId, content) {
                     return;
                 }
 
-                // Disable button and show loading
                 const submitBtnText = document.getElementById('submitBtnText');
                 if (submitPostBtn) submitPostBtn.disabled = true;
                 if (submitBtnText) submitBtnText.textContent = 'Posting...';
@@ -1458,17 +982,13 @@ async function handleReply(postId, commentId, content) {
                 if (result.success) {
                     showToast('Post created successfully!', 'success');
                     
-                    // Reset form
                     if (postDescription) postDescription.value = '';
                     if (charCount) charCount.textContent = '0';
                     if (imageInput) imageInput.value = '';
                     if (uploadPlaceholder) uploadPlaceholder.style.display = 'flex';
                     if (imagePreviewContainer) imagePreviewContainer.style.display = 'none';
                     
-                    // Close modal
                     uploadModal.classList.remove('show');
-                    
-                    // Reload posts
                     await loadPosts();
                 } else {
                     showToast(result.error || 'Failed to create post', 'error');
@@ -1477,7 +997,6 @@ async function handleReply(postId, commentId, content) {
                 console.error('Error creating post:', error);
                 showToast('Failed to create post', 'error');
             } finally {
-                // Re-enable button
                 const submitBtnText = document.getElementById('submitBtnText');
                 if (submitPostBtn) submitPostBtn.disabled = false;
                 if (submitBtnText) submitBtnText.textContent = 'Post';
@@ -1537,7 +1056,6 @@ async function handleReply(postId, commentId, content) {
         const trendsList = document.getElementById('trendsList');
         if (!trendsList) return;
 
-        // For now, show static trends - you can make this dynamic later
         const trends = [
             { tag: 'CampusLife', posts: 245 },
             { tag: 'UEWEvents', posts: 189 },
@@ -1591,30 +1109,11 @@ async function handleReply(postId, commentId, content) {
         }
     }
 
-    function setupProfileModal() {
-        const closeProfileModal = document.getElementById('closeProfileModal');
-
-        if (closeProfileModal) {
-            closeProfileModal.addEventListener('click', () => {
-                profileModal.classList.remove('show');
-            });
-        }
-
-        if (profileModal) {
-            profileModal.addEventListener('click', (e) => {
-                if (e.target === profileModal) {
-                    profileModal.classList.remove('show');
-                }
-            });
-        }
-    }
-
     // ==================== EVENT LISTENERS ====================
 
     function setupEventListeners() {
         setupCreatePostModal();
         setupShareModal();
-        setupProfileModal();
 
         // Filter buttons
         document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -1649,15 +1148,6 @@ async function handleReply(postId, commentId, content) {
                 notificationDropdown.classList.remove('show');
             }
         });
-
-        // User profile click - now opens own profile modal
-        if (userProfile) {
-            userProfile.addEventListener('click', () => {
-                if (currentUser) {
-                    window.openUserProfile(currentUser.id);
-                }
-            });
-        }
     }
 
     // ==================== UTILITY FUNCTIONS ====================
@@ -1706,6 +1196,29 @@ async function handleReply(postId, commentId, content) {
         }
     }
 
-    // Make showToast available globally
     window.showToast = showToast;
+});
+
+// Add function to navigate to own profile
+window.goToOwnProfile = function() {
+    window.location.href = 'user-profile.html';
+};
+
+// Make user profile in header clickable
+document.addEventListener('DOMContentLoaded', function() {
+    const userProfile = document.getElementById('userProfile');
+    if (userProfile) {
+        userProfile.style.cursor = 'pointer';
+        userProfile.addEventListener('click', function() {
+            window.goToOwnProfile();
+        });
+        
+        // Add hover effect
+        userProfile.addEventListener('mouseenter', function() {
+            this.style.opacity = '0.8';
+        });
+        userProfile.addEventListener('mouseleave', function() {
+            this.style.opacity = '1';
+        });
+    }
 });

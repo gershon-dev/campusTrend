@@ -2032,3 +2032,51 @@
     padding: 15px;
     font-size: 14px;
 }
+
+
+
+
+
+
+/* Profile Navigation Hover Effects */
+
+/* Make user avatars and names clickable and styled */
+.post-username {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.post-username:hover {
+    opacity: 0.8;
+    text-decoration: underline;
+}
+
+.user-avatar {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.user-avatar:hover {
+    opacity: 0.8;
+    transform: scale(1.05);
+}
+
+/* User profile in header */
+.user-profile {
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding: 8px 12px;
+    border-radius: 8px;
+}
+
+.user-profile:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* Smooth transitions for all clickable elements */
+.post-user-info .post-username,
+.post-avatar,
+[onclick*="viewUserProfile"] {
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}

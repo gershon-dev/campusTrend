@@ -12,7 +12,10 @@
     <header class="header">
         <div class="logo" onclick="goToHome()">
             <i class="fas fa-graduation-cap"></i>
-            <span>CampusTrend</span>
+            <div>
+                <span>CampusTrend</span>
+                <div class="logo-subtitle">University of Education, Winneba</div>
+            </div>
         </div>
         <div class="header-actions">
             <button class="header-btn" onclick="goToHome()">
@@ -28,176 +31,181 @@
 
     <!-- Profile Container -->
     <div class="profile-container">
-        <!-- Cover Section -->
-        <div class="cover-section">
-            <div class="cover-photo">
-                <div class="cover-overlay">
-                    <button class="change-cover-btn">
+        <!-- Profile Header Section -->
+        <div class="profile-header-section">
+            <!-- Avatar Section -->
+            <div class="avatar-section">
+                <div class="avatar-wrapper">
+                    <div class="profile-avatar" id="profileAvatar">
+                        <img id="avatarImage" style="display: none;">
+                        <span id="avatarInitials">U</span>
+                    </div>
+                    <button class="avatar-edit-btn" id="editAvatarBtn" onclick="openAvatarModal()" style="display: none;">
                         <i class="fas fa-camera"></i>
-                        Edit Cover Photo
                     </button>
                 </div>
             </div>
 
-            <div class="profile-header">
-                <div class="profile-avatar-wrapper">
-                    <div class="profile-avatar" id="profileAvatar">KA</div>
-                    <button class="avatar-edit-btn" onclick="openEditModal('avatar')">
-                        <i class="fas fa-camera"></i>
-                    </button>
+            <!-- Profile Info -->
+            <div class="profile-info-section">
+                <h1 class="profile-name" id="profileName">Loading...</h1>
+                <div class="profile-meta">
+                    <span class="profile-username" id="profileUsername">@student</span>
+                    <span class="profile-separator">•</span>
+                    <span class="profile-department" id="profileDepartment">Department</span>
                 </div>
-
-                <div class="profile-info">
-                    <h1 class="profile-name" id="profileName">Kofi Asante</h1>
-                    <div class="profile-username" id="profileUsername">@kofi.asante</div>
-                    <span class="profile-department" id="profileDepartment">Computer Science</span>
-                </div>
-
-                <div class="profile-actions">
-                    <button class="action-btn primary-btn" onclick="openEditModal('profile')">
-                        <i class="fas fa-edit"></i>
-                        <span>Edit Profile</span>
-                    </button>
-                    <button class="action-btn secondary-btn">
-                        <i class="fas fa-cog"></i>
-                    </button>
-                </div>
+                <div class="profile-bio" id="profileBio"></div>
+                
+                <!-- Edit Profile Button (only for own profile) -->
+                <button class="edit-profile-btn" id="editProfileBtn" onclick="openEditModal()" style="display: none;">
+                    <i class="fas fa-edit"></i>
+                    Edit Profile
+                </button>
+                
+                <!-- Follow Button (only for other users) -->
+                <button class="follow-btn" id="followBtn" style="display: none;">
+                    <i class="fas fa-user-plus"></i>
+                    <span id="followBtnText">Follow</span>
+                </button>
             </div>
+        </div>
 
-            <div class="stats-section">
-                <div class="stat-item">
-                    <div class="stat-value" id="postsCount">24</div>
-                    <div class="stat-label">Posts</div>
+        <!-- Stats Section -->
+        <div class="stats-section">
+            <div class="stat-card">
+                <div class="stat-icon followers">
+                    <i class="fas fa-users"></i>
                 </div>
-                <div class="stat-item">
-                    <div class="stat-value" id="followersCount">156</div>
+                <div class="stat-content">
+                    <div class="stat-value" id="followersCount">0</div>
                     <div class="stat-label">Followers</div>
                 </div>
-                <div class="stat-item">
-                    <div class="stat-value" id="followingCount">89</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon following">
+                    <i class="fas fa-user-friends"></i>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-value" id="followingCount">0</div>
                     <div class="stat-label">Following</div>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon likes">
+                    <i class="fas fa-heart"></i>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-value" id="totalLikes">0</div>
+                    <div class="stat-label">Total Likes</div>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon stars">
+                    <i class="fas fa-star"></i>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-value" id="totalStars">0</div>
+                    <div class="stat-label">Total Stars</div>
                 </div>
             </div>
         </div>
 
-        <!-- Content Grid -->
-        <div class="content-grid">
-            <!-- About Card -->
-            <div class="about-card">
-                <div class="card-header">
-                    <h2 class="card-title">About</h2>
-                    <button class="edit-btn" onclick="openEditModal('about')">Edit</button>
-                </div>
-
-                <div class="about-item">
-                    <div class="about-icon">
-                        <i class="fas fa-building"></i>
-                    </div>
-                    <div class="about-content">
-                        <div class="about-label">Department</div>
-                        <div class="about-value" id="aboutDepartment">Computer Science</div>
-                    </div>
-                </div>
-
-                <div class="about-item">
-                    <div class="about-icon">
-                        <i class="fas fa-graduation-cap"></i>
-                    </div>
-                    <div class="about-content">
-                        <div class="about-label">Level</div>
-                        <div class="about-value" id="aboutLevel">400 Level</div>
-                    </div>
-                </div>
-
-                <div class="about-item">
-                    <div class="about-icon">
-                        <i class="fas fa-map-marker-alt"></i>
-                    </div>
-                    <div class="about-content">
-                        <div class="about-label">Location</div>
-                        <div class="about-value" id="aboutLocation">Winneba, Central Region</div>
-                    </div>
-                </div>
-
-                <div class="about-item">
-                    <div class="about-icon">
-                        <i class="fas fa-calendar-alt"></i>
-                    </div>
-                    <div class="about-content">
-                        <div class="about-label">Joined</div>
-                        <div class="about-value" id="aboutJoined">September 2021</div>
-                    </div>
-                </div>
-
-                <div class="about-item">
-                    <div class="about-icon">
-                        <i class="fas fa-info-circle"></i>
-                    </div>
-                    <div class="about-content">
-                        <div class="about-label">Bio</div>
-                        <div class="about-value" id="aboutBio">Computer Science student passionate about web development and AI.</div>
-                    </div>
-                </div>
+        <!-- Posts Section -->
+        <div class="posts-section">
+            <div class="posts-header">
+                <h2 class="posts-title">
+                    <i class="fas fa-image"></i>
+                    Posts
+                </h2>
+                <div class="posts-count" id="postsCountDisplay">0 posts</div>
             </div>
 
-            <!-- Posts Card -->
-            <div class="posts-card">
-                <div class="posts-header">
-                    <button class="tab-btn active">Posts</button>
-                    <button class="tab-btn">Saved</button>
-                    <button class="tab-btn">Tagged</button>
-                </div>
+            <div class="posts-container" id="postsContainer">
+                <!-- Posts will be dynamically loaded here -->
+            </div>
 
-                <div class="posts-grid" id="postsGrid">
-                    <!-- Posts will be rendered here -->
-                </div>
+            <div class="no-posts" id="noPosts" style="display: none;">
+                <i class="fas fa-image"></i>
+                <h3>No posts yet</h3>
+                <p id="noPostsMessage">No posts to display</p>
+            </div>
+        </div>
+    </div>
 
-                <div class="no-posts" id="noPosts" style="display: none;">
-                    <i class="fas fa-image"></i>
-                    <h3>No posts yet</h3>
-                    <p>Share your first post with the campus community!</p>
+    <!-- Avatar Upload Modal -->
+    <div class="modal-overlay" id="avatarModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 class="modal-title">Change Profile Picture</h2>
+                <button class="modal-close" onclick="closeAvatarModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="avatar-upload-area" id="avatarUploadArea">
+                    <div class="avatar-preview-large" id="avatarPreviewContainer">
+                        <img id="avatarPreview" style="display: none;">
+                        <span id="avatarPreviewInitials">U</span>
+                    </div>
+                    <button class="upload-avatar-btn" onclick="document.getElementById('avatarInput').click()">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        Choose Photo
+                    </button>
+                    <p class="upload-hint">JPG, PNG or GIF (Max 5MB)</p>
+                    <input type="file" id="avatarInput" accept="image/*" style="display: none;">
                 </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeAvatarModal()">Cancel</button>
+                <button class="btn-primary" id="saveAvatarBtn" onclick="saveAvatar()" disabled>
+                    <span id="saveAvatarText">Save Photo</span>
+                </button>
             </div>
         </div>
     </div>
 
     <!-- Edit Profile Modal -->
-    <div class="modal-overlay" id="editModal">
+    <div class="modal-overlay" id="editProfileModal">
         <div class="modal">
             <div class="modal-header">
-                <h2 class="modal-title" id="modalTitle">Edit Profile</h2>
+                <h2 class="modal-title">Edit Profile</h2>
                 <button class="modal-close" onclick="closeEditModal()">&times;</button>
             </div>
             <div class="modal-body">
-                <form id="editForm">
+                <form id="editProfileForm">
                     <div class="form-group">
                         <label class="form-label">Full Name</label>
-                        <input type="text" class="form-input" id="editName" placeholder="Enter your full name">
+                        <input type="text" class="form-input" id="editName" placeholder="Enter your full name" maxlength="100">
                     </div>
                     <div class="form-group">
                         <label class="form-label">Bio</label>
-                        <textarea class="form-textarea" id="editBio" placeholder="Tell us about yourself"></textarea>
+                        <textarea class="form-textarea" id="editBio" placeholder="Tell us about yourself" maxlength="200"></textarea>
+                        <div class="char-count"><span id="bioCharCount">0</span>/200</div>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Location</label>
-                        <input type="text" class="form-input" id="editLocation" placeholder="Your location">
+                        <input type="text" class="form-input" id="editLocation" placeholder="Your location" maxlength="100">
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
-                <button class="action-btn secondary-btn" onclick="closeEditModal()">Cancel</button>
-                <button class="action-btn primary-btn" onclick="saveProfile()">Save Changes</button>
+                <button class="btn-secondary" onclick="closeEditModal()">Cancel</button>
+                <button class="btn-primary" onclick="saveProfile()">
+                    <span id="saveProfileText">Save Changes</span>
+                </button>
             </div>
         </div>
     </div>
 
-    <!-- Toast -->
+    <!-- Toast Notification -->
     <div class="toast" id="toast">
         <i class="fas fa-check-circle"></i>
         <span id="toastMessage">Success!</span>
     </div>
-     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-config.js"></script>
     <script src="scripts/user-profile.js"></script>
 </body>

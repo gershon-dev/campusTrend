@@ -543,6 +543,21 @@ document.addEventListener('DOMContentLoaded', async function() {
                 .select('*', { count: 'exact', head: true })
                 .eq('follower_id', userId);
 
+            // Fetch user's full posts with profile data FIRST (before using it)
+            const { data: userPosts } = await window.supabaseClient
+                .from('posts')
+                .select(`
+                    *,
+                    profiles:user_id (
+                        id,
+                        full_name,
+                        avatar_url,
+                        department
+                    )
+                `)
+                .eq('user_id', userId)
+                .order('created_at', { ascending: false });
+
             // Calculate total likes and stars from user's posts
             let totalLikes = 0;
             let totalStars = 0;
@@ -567,21 +582,6 @@ document.addEventListener('DOMContentLoaded', async function() {
                 
                 isFollowing = !!followData;
             }
-
-            // Fetch user's full posts with profile data
-            const { data: userPosts } = await window.supabaseClient
-                .from('posts')
-                .select(`
-                    *,
-                    profiles:user_id (
-                        id,
-                        full_name,
-                        avatar_url,
-                        department
-                    )
-                `)
-                .eq('user_id', userId)
-                .order('created_at', { ascending: false });
 
             // Update modal content
             const initials = getInitials(profile.full_name);

@@ -13,6 +13,9 @@ let profileData = {
     location: "",
     avatar_url: null,
     index_number: "",
+    posts_count: 0,
+    followers_count: 0,
+    following_count: 0,
     created_at: new Date()
 };
 
@@ -62,9 +65,8 @@ async function initializeProfile() {
             await loadOwnProfile(currentUser);
         }
 
-        // Load posts and stats
+        // Load posts and update stats display
         await loadUserPosts();
-        await loadFollowCounts();
 
     } catch (error) {
         console.error('Profile initialization error:', error);
@@ -87,10 +89,14 @@ async function loadOwnProfile(user) {
                 location: profile.location || '',
                 avatar_url: profile.avatar_url,
                 index_number: profile.index_number,
+                posts_count: profile.posts_count || 0,
+                followers_count: profile.followers_count || 0,
+                following_count: profile.following_count || 0,
                 created_at: profile.created_at
             };
 
             updateProfileUI();
+            updateStatsFromProfile();
             
             // Show edit buttons for own profile
             document.getElementById('editAvatarBtn').style.display = 'flex';
@@ -120,10 +126,14 @@ async function loadOtherUserProfile(userId) {
                 location: profile.location || '',
                 avatar_url: profile.avatar_url,
                 index_number: profile.index_number,
+                posts_count: profile.posts_count || 0,
+                followers_count: profile.followers_count || 0,
+                following_count: profile.following_count || 0,
                 created_at: profile.created_at
             };
 
             updateProfileUI();
+            updateStatsFromProfile();
             
             // Show follow button for other users
             document.getElementById('editAvatarBtn').style.display = 'none';
@@ -184,54 +194,130 @@ function updateProfileUI() {
     }
 }
 
+// Update stats from profile data (using count fields from profiles table)
+function updateStatsFromProfile() {
+    // Use count fields from profiles table
+    statsData.followers = profileData.followers_count;
+    statsData.following = profileData.following_count;
+    statsData.postsCount = profileData.posts_count;
+
+    // Update UI
+    document.getElementById('followersCount').textContent = statsData.followers;
+    document.getElementById('followingCount').textContent = statsData.following;
+    document.getElementById('postsCountDisplay').textContent = `${statsData.postsCount} post${statsData.postsCount !== 1 ? 's' : ''}`;
+}
+
 // ============================================
-// POSTS LOADING
+// POSTS LOADING - FIXED QUERY
 // ============================================
 
-// Load user's posts
+// Load user's posts with full data including likes and comments
 async function loadUserPosts() {
     try {
-        const result = await window.getPosts('all', 100);
+        console.log('Loading posts for user:', currentProfileUserId);
         
-        if (result.success && result.posts) {
-            // Filter posts for current profile user
-            const userPosts = result.posts.filter(post => post.user_id === currentProfileUserId);
-            
-            // Calculate stats
-            statsData.postsCount = userPosts.length;
-            
-            // Calculate total likes and stars
-            statsData.totalLikes = 0;
-            statsData.totalStars = 0;
-            
-            userPosts.forEach(post => {
-                const likes = post.likes_count || 0;
-                statsData.totalLikes += likes;
-                
-                const rating = window.getStarRating(likes);
-                statsData.totalStars += rating.stars;
-            });
+        // STEP 1: Fetch posts with post author profile, likes, and comments (WITHOUT nested profiles in comments)
+        const { data: posts, error: postsError } = await window.supabaseClient
+            .from('posts')
+            .select(`
+                *,
+                profiles:user_id (
+                    id,
+                    full_name,
+                    avatar_url,
+                    department,
+                    index_number
+                ),
+                likes (
+                    id,
+                    user_id
+                ),
+                comments (
+                    id,
+                    comment_text,
+                    created_at,
+                    user_id
+                )
+            `)
+            .eq('user_id', currentProfileUserId)
+            .order('created_at', { ascending: false });
+        
+        if (postsError) {
+            console.error('Error loading posts:', postsError);
+            showToast('Error loading posts', 'error');
+            return;
+        }
 
-            // Update stats UI
-            document.getElementById('totalLikes').textContent = statsData.totalLikes;
-            document.getElementById('totalStars').textContent = statsData.totalStars;
-            document.getElementById('postsCountDisplay').textContent = `${statsData.postsCount} post${statsData.postsCount !== 1 ? 's' : ''}`;
+        const userPosts = posts || [];
+        console.log('Loaded posts:', userPosts.length);
 
-            // Render posts
-            if (userPosts.length === 0) {
-                document.getElementById('noPosts').style.display = 'block';
-                document.getElementById('postsContainer').innerHTML = '';
-                
-                const noPostsMessage = document.getElementById('noPostsMessage');
-                if (isOwnProfile) {
-                    noPostsMessage.textContent = 'Share your first post with the campus community!';
-                } else {
-                    noPostsMessage.textContent = 'This user hasn\'t posted anything yet.';
-                }
-            } else {
-                document.getElementById('noPosts').style.display = 'none';
-                await renderPosts(userPosts);
+        // STEP 2: Get all unique user IDs from comments
+        const commentUserIds = new Set();
+        userPosts.forEach(post => {
+            if (post.comments) {
+                post.comments.forEach(comment => {
+                    if (comment.user_id) {
+                        commentUserIds.add(comment.user_id);
+                    }
+                });
             }
+        });
+
+        // STEP 3: Fetch profiles for all comment authors
+        let commentProfiles = {};
+        if (commentUserIds.size > 0) {
+            const { data: profiles, error: profilesError } = await window.supabaseClient
+                .from('profiles')
+                .select('id, full_name, avatar_url')
+                .in('id', Array.from(commentUserIds));
+            
+            if (!profilesError && profiles) {
+                profiles.forEach(profile => {
+                    commentProfiles[profile.id] = profile;
+                });
+            }
+        }
+
+        // STEP 4: Attach profile data to comments
+        userPosts.forEach(post => {
+            if (post.comments) {
+                post.comments = post.comments.map(comment => ({
+                    ...comment,
+                    profiles: commentProfiles[comment.user_id] || null
+                }));
+            }
+        });
+        
+        // Calculate total likes and stars from posts
+        statsData.totalLikes = 0;
+        statsData.totalStars = 0;
+        
+        userPosts.forEach(post => {
+            const likes = post.likes_count || 0;
+            statsData.totalLikes += likes;
+            
+            const rating = window.getStarRating(likes);
+            statsData.totalStars += rating.stars;
+        });
+
+        // Update likes and stars UI
+        document.getElementById('totalLikes').textContent = statsData.totalLikes;
+        document.getElementById('totalStars').textContent = statsData.totalStars;
+
+        // Render posts
+        if (userPosts.length === 0) {
+            document.getElementById('noPosts').style.display = 'block';
+            document.getElementById('postsContainer').innerHTML = '';
+            
+            const noPostsMessage = document.getElementById('noPostsMessage');
+            if (isOwnProfile) {
+                noPostsMessage.textContent = 'Share your first post with the campus community!';
+            } else {
+                noPostsMessage.textContent = 'This user hasn\'t posted anything yet.';
+            }
+        } else {
+            document.getElementById('noPosts').style.display = 'none';
+            await renderPosts(userPosts);
         }
     } catch (error) {
         console.error('Error loading posts:', error);
@@ -248,20 +334,23 @@ async function renderPosts(posts) {
         new Date(b.created_at) - new Date(a.created_at)
     );
 
-    const postCards = await Promise.all(sortedPosts.map(async post => {
+    const currentUser = await window.getCurrentUser();
+    
+    const postCards = sortedPosts.map(post => {
         const userInitials = getInitials(post.profiles?.full_name || 'User');
         const rating = window.getStarRating(post.likes_count || 0);
         const timeAgo = window.timeAgo(post.created_at);
         
         // Check if current user liked this post
-        const currentUser = await window.getCurrentUser();
         let isLiked = false;
         if (currentUser && post.likes) {
             isLiked = post.likes.some(like => like.user_id === currentUser.id);
         }
 
-        // Get comments
-        const comments = post.comments || [];
+        // Get comments and sort by date (newest first)
+        const comments = (post.comments || []).sort((a, b) => 
+            new Date(b.created_at) - new Date(a.created_at)
+        );
         
         return `
             <div class="post-card" data-post-id="${post.id}">
@@ -274,7 +363,7 @@ async function renderPosts(posts) {
                         }
                     </div>
                     <div class="post-user-info">
-                        <div class="post-username">${post.profiles?.full_name || 'Unknown User'}</div>
+                        <div class="post-username">${escapeHtml(post.profiles?.full_name || 'Unknown User')}</div>
                         <div class="post-meta">
                             <i class="fas fa-clock"></i>
                             <span>${timeAgo}</span>
@@ -304,7 +393,7 @@ async function renderPosts(posts) {
                     
                     <div class="post-department-tag">
                         <i class="fas fa-building"></i>
-                        ${post.department || 'General'}
+                        ${escapeHtml(post.department || 'General')}
                     </div>
 
                     <!-- Post Actions -->
@@ -313,7 +402,7 @@ async function renderPosts(posts) {
                             <i class="fas fa-heart"></i>
                             <span class="likes-count">${post.likes_count || 0}</span>
                         </button>
-                        <button class="post-action-btn" onclick="focusComment('${post.id}')">
+                        <button class="post-action-btn" onclick="toggleComments('${post.id}')">
                             <i class="fas fa-comment"></i>
                             <span>${comments.length}</span>
                         </button>
@@ -325,95 +414,158 @@ async function renderPosts(posts) {
                 </div>
 
                 <!-- Comments Section -->
-                ${comments.length > 0 ? `
-                    <div class="post-comments">
-                        ${comments.slice(0, 3).map(comment => {
+                <div class="post-comments-section" id="comments-${post.id}" style="display: none;">
+                    <div class="post-comments" id="comments-list-${post.id}">
+                        ${comments.length > 0 ? comments.map(comment => {
                             const commentInitials = getInitials(comment.profiles?.full_name || 'User');
+                            const commentTimeAgo = window.timeAgo(comment.created_at);
                             return `
                                 <div class="comment">
                                     <div class="comment-avatar">${commentInitials}</div>
-                                    <div>
+                                    <div style="flex: 1;">
                                         <div class="comment-content">
-                                            <div class="comment-author">${comment.profiles?.full_name || 'Unknown'}</div>
+                                            <div class="comment-author">${escapeHtml(comment.profiles?.full_name || 'Unknown')}</div>
                                             <div class="comment-text">${escapeHtml(comment.comment_text)}</div>
                                         </div>
-                                        <div class="comment-time">${window.timeAgo(comment.created_at)}</div>
+                                        <div class="comment-time">${commentTimeAgo}</div>
                                     </div>
                                 </div>
                             `;
-                        }).join('')}
-                        ${comments.length > 3 ? `
-                            <div style="text-align: center; padding-top: 8px;">
-                                <button class="post-action-btn" style="color: #1877f2;">
-                                    View all ${comments.length} comments
-                                </button>
-                            </div>
-                        ` : ''}
+                        }).join('') : '<p style="text-align: center; color: #65676b; padding: 16px;">No comments yet. Be the first to comment!</p>'}
                     </div>
-                ` : ''}
+                    
+                    <!-- Comment Input -->
+                    <div class="comment-input-section">
+                        <div class="comment-input-wrapper">
+                            <input type="text" 
+                                   class="comment-input" 
+                                   id="comment-input-${post.id}"
+                                   placeholder="Write a comment..." 
+                                   maxlength="500">
+                            <button class="comment-submit-btn" onclick="submitComment('${post.id}')">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         `;
-    }));
+    });
 
     container.innerHTML = postCards.join('');
 }
 
 // ============================================
-// FOLLOW FUNCTIONALITY
+// COMMENT FUNCTIONALITY
 // ============================================
 
-// Load follow counts
-async function loadFollowCounts() {
-    try {
-        const followersResult = await window.getFollowers(currentProfileUserId);
-        const followingResult = await window.getFollowing(currentProfileUserId);
-
-        statsData.followers = followersResult.success ? followersResult.followers.length : 0;
-        statsData.following = followingResult.success ? followingResult.following.length : 0;
-
-        document.getElementById('followersCount').textContent = statsData.followers;
-        document.getElementById('followingCount').textContent = statsData.following;
-    } catch (error) {
-        console.error('Error loading follow counts:', error);
+// Toggle comments section visibility
+function toggleComments(postId) {
+    const commentsSection = document.getElementById(`comments-${postId}`);
+    if (commentsSection) {
+        if (commentsSection.style.display === 'none') {
+            commentsSection.style.display = 'block';
+            // Focus on comment input
+            const commentInput = document.getElementById(`comment-input-${postId}`);
+            if (commentInput) {
+                setTimeout(() => commentInput.focus(), 100);
+            }
+        } else {
+            commentsSection.style.display = 'none';
+        }
     }
 }
+
+// Submit a comment
+async function submitComment(postId) {
+    const commentInput = document.getElementById(`comment-input-${postId}`);
+    if (!commentInput) return;
+
+    const commentText = commentInput.value.trim();
+    if (!commentText) {
+        showToast('Please enter a comment', 'error');
+        return;
+    }
+
+    try {
+        const result = await window.addComment(postId, commentText);
+        
+        if (result.success) {
+            commentInput.value = '';
+            showToast('Comment added!', 'success');
+            
+            // Reload posts to show new comment
+            await loadUserPosts();
+        } else {
+            showToast('Error adding comment', 'error');
+        }
+    } catch (error) {
+        console.error('Error submitting comment:', error);
+        showToast('Error adding comment', 'error');
+    }
+}
+
+// Handle enter key in comment input
+document.addEventListener('keydown', function(e) {
+    if (e.target.classList.contains('comment-input') && e.key === 'Enter') {
+        e.preventDefault();
+        const postId = e.target.id.replace('comment-input-', '');
+        submitComment(postId);
+    }
+});
+
+// ============================================
+// FOLLOW FUNCTIONALITY
+// ============================================
 
 // Update follow button state
 async function updateFollowButton() {
     if (isOwnProfile) return;
 
     const followBtn = document.getElementById('followBtn');
-    const isFollowing = await window.isFollowing(currentProfileUserId);
+    if (!followBtn) return;
+
+    const isFollowingUser = await window.isFollowing(currentProfileUserId);
     
-    if (isFollowing) {
+    if (isFollowingUser) {
         followBtn.classList.add('following');
         followBtn.innerHTML = '<i class="fas fa-user-check"></i><span id="followBtnText">Following</span>';
     } else {
         followBtn.classList.remove('following');
         followBtn.innerHTML = '<i class="fas fa-user-plus"></i><span id="followBtnText">Follow</span>';
     }
+    
+    // Add click handler
+    followBtn.onclick = toggleFollow;
 }
 
 // Toggle follow
 async function toggleFollow() {
     if (isOwnProfile) return;
 
+    const followBtn = document.getElementById('followBtn');
+    if (!followBtn) return;
+
     try {
-        const isFollowing = await window.isFollowing(currentProfileUserId);
+        const isFollowingUser = await window.isFollowing(currentProfileUserId);
         
-        if (isFollowing) {
+        if (isFollowingUser) {
             const result = await window.unfollowUser(currentProfileUserId);
             if (result.success) {
                 showToast('Unfollowed successfully', 'success');
-                await loadFollowCounts();
                 await updateFollowButton();
+                
+                // Refresh profile to get updated counts from database
+                await loadOtherUserProfile(currentProfileUserId);
             }
         } else {
             const result = await window.followUser(currentProfileUserId);
             if (result.success) {
-                showToast('Following successfully', 'success');
-                await loadFollowCounts();
+                showToast('Followed successfully', 'success');
                 await updateFollowButton();
+                
+                // Refresh profile to get updated counts from database
+                await loadOtherUserProfile(currentProfileUserId);
             }
         }
     } catch (error) {
@@ -422,55 +574,55 @@ async function toggleFollow() {
     }
 }
 
-// Add event listener to follow button
-document.addEventListener('DOMContentLoaded', () => {
-    const followBtn = document.getElementById('followBtn');
-    if (followBtn) {
-        followBtn.addEventListener('click', toggleFollow);
-    }
-});
-
 // ============================================
-// AVATAR UPLOAD
+// AVATAR MANAGEMENT
 // ============================================
 
 // Open avatar modal
 function openAvatarModal() {
-    if (!isOwnProfile) return;
-    
     const modal = document.getElementById('avatarModal');
-    const preview = document.getElementById('avatarPreview');
-    const initials = document.getElementById('avatarPreviewInitials');
-    
-    // Show current avatar
-    if (profileData.avatar_url) {
-        preview.src = profileData.avatar_url;
-        preview.style.display = 'block';
-        initials.style.display = 'none';
-    } else {
-        preview.style.display = 'none';
-        initials.style.display = 'block';
-        initials.textContent = getInitials(profileData.full_name);
+    if (modal) {
+        modal.classList.add('show');
+        
+        // Set current avatar in preview
+        const avatarPreview = document.getElementById('avatarPreview');
+        const avatarPreviewInitials = document.getElementById('avatarPreviewInitials');
+        
+        if (profileData.avatar_url) {
+            avatarPreview.src = profileData.avatar_url;
+            avatarPreview.style.display = 'block';
+            avatarPreviewInitials.style.display = 'none';
+        } else {
+            avatarPreview.style.display = 'none';
+            avatarPreviewInitials.style.display = 'flex';
+            avatarPreviewInitials.textContent = getInitials(profileData.full_name);
+        }
     }
-    
-    selectedAvatarFile = null;
-    document.getElementById('saveAvatarBtn').disabled = true;
-    modal.classList.add('show');
 }
 
 // Close avatar modal
 function closeAvatarModal() {
-    document.getElementById('avatarModal').classList.remove('show');
-    selectedAvatarFile = null;
+    const modal = document.getElementById('avatarModal');
+    if (modal) {
+        modal.classList.remove('show');
+        selectedAvatarFile = null;
+        document.getElementById('saveAvatarBtn').disabled = true;
+    }
 }
 
-// Handle avatar file selection
+// Avatar input change handler
 document.addEventListener('DOMContentLoaded', () => {
     const avatarInput = document.getElementById('avatarInput');
     if (avatarInput) {
-        avatarInput.addEventListener('change', (e) => {
+        avatarInput.addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (!file) return;
+
+            // Validate file size (5MB)
+            if (file.size > 5 * 1024 * 1024) {
+                showToast('Image must be less than 5MB', 'error');
+                return;
+            }
 
             // Validate file type
             if (!file.type.startsWith('image/')) {
@@ -478,23 +630,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            // Validate file size (5MB max)
-            if (file.size > 5 * 1024 * 1024) {
-                showToast('Image must be less than 5MB', 'error');
-                return;
-            }
-
             selectedAvatarFile = file;
-
+            
             // Preview the image
             const reader = new FileReader();
-            reader.onload = (e) => {
-                const preview = document.getElementById('avatarPreview');
-                const initials = document.getElementById('avatarPreviewInitials');
+            reader.onload = function(e) {
+                const avatarPreview = document.getElementById('avatarPreview');
+                const avatarPreviewInitials = document.getElementById('avatarPreviewInitials');
                 
-                preview.src = e.target.result;
-                preview.style.display = 'block';
-                initials.style.display = 'none';
+                avatarPreview.src = e.target.result;
+                avatarPreview.style.display = 'block';
+                avatarPreviewInitials.style.display = 'none';
                 
                 document.getElementById('saveAvatarBtn').disabled = false;
             };
@@ -509,50 +655,27 @@ async function saveAvatar() {
 
     const saveBtn = document.getElementById('saveAvatarBtn');
     const saveText = document.getElementById('saveAvatarText');
-    const originalText = saveText.textContent;
-
+    
     try {
         saveBtn.disabled = true;
         saveText.textContent = 'Uploading...';
 
-        // Upload to Supabase Storage
-        const fileExt = selectedAvatarFile.name.split('.').pop();
-        const fileName = `${profileData.id}_${Date.now()}.${fileExt}`;
-        const filePath = `avatars/${fileName}`;
-
-        const { data: uploadData, error: uploadError } = await window.supabaseClient.storage
-            .from('avatars')
-            .upload(filePath, selectedAvatarFile, {
-                cacheControl: '3600',
-                upsert: false
-            });
-
-        if (uploadError) throw uploadError;
-
-        // Get public URL
-        const { data: urlData } = window.supabaseClient.storage
-            .from('avatars')
-            .getPublicUrl(filePath);
-
-        const avatarUrl = urlData.publicUrl;
-
-        // Update profile with new avatar URL
-        const result = await window.updateProfile({ avatar_url: avatarUrl });
-
+        const result = await window.uploadAvatar(selectedAvatarFile);
+        
         if (result.success) {
-            profileData.avatar_url = avatarUrl;
+            profileData.avatar_url = result.avatarUrl;
             updateProfileUI();
             closeAvatarModal();
-            showToast('Profile picture updated successfully!', 'success');
+            showToast('Profile picture updated!', 'success');
         } else {
-            throw new Error('Failed to update profile');
+            showToast('Error uploading avatar', 'error');
         }
-
     } catch (error) {
-        console.error('Error saving avatar:', error);
-        showToast('Error uploading photo. Please try again.', 'error');
+        console.error('Save avatar error:', error);
+        showToast('Error uploading avatar', 'error');
+    } finally {
         saveBtn.disabled = false;
-        saveText.textContent = originalText;
+        saveText.textContent = 'Save Photo';
     }
 }
 
@@ -562,15 +685,18 @@ async function saveAvatar() {
 
 // Open edit modal
 function openEditModal() {
-    if (!isOwnProfile) return;
-    
-    document.getElementById('editProfileModal').classList.add('show');
-    updateCharCount();
+    const modal = document.getElementById('editProfileModal');
+    if (modal) {
+        modal.classList.add('show');
+    }
 }
 
 // Close edit modal
 function closeEditModal() {
-    document.getElementById('editProfileModal').classList.remove('show');
+    const modal = document.getElementById('editProfileModal');
+    if (modal) {
+        modal.classList.remove('show');
+    }
 }
 
 // Update character count
@@ -652,7 +778,7 @@ async function toggleLike(postId, button) {
             }
         }
 
-        // Reload stats
+        // Reload posts to update star ratings and total likes
         await loadUserPosts();
     } catch (error) {
         console.error('Error toggling like:', error);
@@ -660,14 +786,22 @@ async function toggleLike(postId, button) {
     }
 }
 
-// Focus comment input
-function focusComment(postId) {
-    showToast('Comment feature coming soon!', 'success');
-}
-
 // Share post
 function sharePost(postId) {
-    showToast('Share feature coming soon!', 'success');
+    const url = `${window.location.origin}/index.html?post=${postId}`;
+    
+    if (navigator.share) {
+        navigator.share({
+            title: 'CampusTrend UEW Post',
+            url: url
+        }).catch(err => {
+            console.log('Share cancelled', err);
+        });
+    } else {
+        navigator.clipboard.writeText(url).then(() => {
+            showToast('Link copied to clipboard!', 'success');
+        });
+    }
 }
 
 // ============================================
@@ -740,79 +874,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-
-
-    
-
     // Initialize profile
     initializeProfile();
 });
-
-
-// ADD THIS FUNCTION TO YOUR INDEX.JS FILE
-// This enables viewing user profiles when clicking on their name/avatar in posts
-
-// Function to view a user's profile
-function viewUserProfile(userId) {
-    if (!userId) return;
-    
-    // Redirect to user profile page with userId parameter
-    window.location.href = `user-profile.html?userId=${userId}`;
-}
-
-// When rendering posts, make sure to add onclick handlers to user avatars and names
-// Example modification for your renderPosts function:
-
-/*
-MODIFY YOUR POST RENDERING TO INCLUDE THESE onclick ATTRIBUTES:
-
-In your post card HTML, update the post header section like this:
-
-<div class="post-header">
-    <div class="post-avatar" onclick="viewUserProfile('${post.user_id}')" style="cursor: pointer;">
-        ${post.profiles?.avatar_url ? 
-            `<img src="${post.profiles.avatar_url}" alt="${post.profiles.full_name}">` :
-            `<span>${userInitials}</span>`
-        }
-    </div>
-    <div class="post-user-info">
-        <div class="post-username" onclick="viewUserProfile('${post.user_id}')" style="cursor: pointer;">
-            ${post.profiles?.full_name || 'Unknown User'}
-        </div>
-        <div class="post-meta">
-            <i class="fas fa-clock"></i>
-            <span>${timeAgo}</span>
-        </div>
-    </div>
-</div>
-
-This makes both the avatar and username clickable to view that user's profile.
-*/
-
-// Also update your user profile click handler in the header
-// Add this to your setupEventListeners function or similar:
-
-if (userProfile) {
-    userProfile.addEventListener('click', () => {
-        // When clicking on own profile in header, go to own profile page
-        window.location.href = 'user-profile.html';
-    });
-}
-
-// Add CSS for clickable user elements (add to your styles/index.css):
-/*
-.post-avatar:hover,
-.post-username:hover {
-    opacity: 0.8;
-}
-
-.post-username {
-    cursor: pointer;
-    transition: opacity 0.2s;
-}
-
-.post-avatar {
-    cursor: pointer;
-    transition: opacity 0.2s;
-}
-*/

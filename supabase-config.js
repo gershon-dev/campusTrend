@@ -994,4 +994,68 @@ window.showToast = window.showToast || function(message, type = 'success') {
     }
 };
 
+// ============================================
+// AVATAR UPLOAD
+// ============================================
+window.uploadAvatar = async function(file) {
+    try {
+        const user = await window.getCurrentUser();
+        if (!user) return { success: false, error: 'Not logged in' };
+
+        // Create unique file name
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+        const filePath = fileName;
+
+        // Upload file to storage
+        const { data: uploadData, error: uploadError } = await window.supabaseClient.storage
+            .from('avatar')
+            .upload(filePath, file, {
+                cacheControl: '3600',
+                upsert: true
+            });
+
+        if (uploadError) {
+            console.error('Upload error:', uploadError);
+            return { success: false, error: uploadError.message };
+        }
+
+        // Get public URL
+        const { data: urlData } = window.supabaseClient.storage
+            .from('avatar')
+            .getPublicUrl(filePath);
+
+        const avatarUrl = urlData.publicUrl;
+
+        // Update profile with new avatar URL
+        const { data: profileData, error: updateError } = await window.supabaseClient
+            .from('profiles')
+            .update({ avatar_url: avatarUrl })
+            .eq('id', user.id)
+            .select()
+            .single();
+
+        if (updateError) {
+            console.error('Profile update error:', updateError);
+            return { success: false, error: updateError.message };
+        }
+
+        return { success: true, avatarUrl: avatarUrl };
+    } catch (error) {
+        console.error('Upload avatar error:', error);
+        return { success: false, error: error.message };
+    }
+};
+
+// ============================================
+// LIKE/UNLIKE POST (Alternative names for toggleLike)
+// ============================================
+window.likePost = async function(postId) {
+    return await window.toggleLike(postId);
+};
+
+window.unlikePost = async function(postId) {
+    return await window.toggleLike(postId);
+};
+
 console.log('Supabase config loaded successfully!');

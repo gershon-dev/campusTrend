@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UEW Past Questions - Student Portal</title>
+    <meta name="description" content="Access past examination questions for students in UEW Campuses. Browse by faculty and course.">
+    <meta name="author" content="Mack Jac">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&family=Open+Sans:wght@300;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles/past-questions.css">
+</head>
+<body>
+    <div class="container">
+        <h1>📚 UEW Past Questions</h1>
+        
+        <div class="faculty-grid">
+            <div class="faculty-card" onclick="navigateToFaculty('social-science')">
+                <div class="faculty-icon">🎓</div>
+                <h2>Faculty of Social Science Education</h2>
+                <p>Access past questions for all social science programs</p>
+            </div>
+            
+            <div class="faculty-card" onclick="navigateToFaculty('general')">
+                <div class="faculty-icon">📖</div>
+                <h2>General Papers</h2>
+                <p>Common courses and general education papers</p>
+            </div>
+            
+            <div class="faculty-card" onclick="navigateToFaculty('science')">
+                <div class="faculty-icon">🔬</div>
+                <h2>Faculty of Science Education</h2>
+                <p>Science, Mathematics, and Technology programs</p>
+            </div>
+            
+            <div class="faculty-card" onclick="navigateToFaculty('business')">
+                <div class="faculty-icon">💼</div>
+                <h2>School of Business</h2>
+                <p>Business Administration and related courses</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="scripts/past-questions.js"></script>
+</body>
+</html>

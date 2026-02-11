@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Choose Semester - UEW Past Questions</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&family=Open+Sans:wght@300;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles/courses.css">
+</head>
+<body>
+    <div class="container">
+        <nav class="breadcrumb">
+            <a href="#" onclick="goBack()">← Back</a>
+        </nav>
+        
+        <h1>📅 Choose Semester</h1>
+        <p class="subtitle" id="levelInfo"></p>
+        
+        <div class="courses-grid" id="semestersGrid">
+            <div class="course-card" data-semester="first">
+                <div class="semester-icon">📖</div>
+                <h3>First Semester</h3>
+                <p class="semester-desc">September - January</p>
+            </div>
+            
+            <div class="course-card" data-semester="second">
+                <div class="semester-icon">📚</div>
+                <h3>Second Semester</h3>
+                <p class="semester-desc">February - June</p>
+            </div>
+        </div>
+    </div>
+    
+    <script src="scripts/semesters.js"></script>
+</body>
+</html>

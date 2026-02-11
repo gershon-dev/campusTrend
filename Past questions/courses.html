@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Courses - UEW Past Questions</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&family=Open+Sans:wght@300;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles/courses.css">
+</head>
+<body>
+    <div class="container">
+        <nav class="breadcrumb">
+            <a href="past-questions.html">← Back to Faculties</a>
+        </nav>
+        
+        <h1>📚 Select Your Course</h1>
+        <p class="subtitle">Faculty of Social Science Education</p>
+        
+        <div class="search-box">
+            <input type="text" id="courseSearch" placeholder="Search for a course..." onkeyup="filterCourses()">
+        </div>
+        
+        <div class="courses-grid" id="coursesGrid">
+            <!-- Example courses - replace with actual data -->
+            <div class="course-card" data-course="Economics">
+                <h3>Economics</h3>
+                <p class="course-code">ECON 101 - ECON 401</p>
+                <span class="question-count">24 past papers</span>
+            </div>
+            
+            <div class="course-card" data-course="Geography">
+                <h3>Geography</h3>
+                <p class="course-code">GEOG 101 - GEOG 401</p>
+                <span class="question-count">18 past papers</span>
+            </div>
+            
+            <div class="course-card" data-course="History">
+                <h3>History</h3>
+                <p class="course-code">HIST 101 - HIST 401</p>
+                <span class="question-count">20 past papers</span>
+            </div>
+            
+            <div class="course-card" data-course="Political Science">
+                <h3>Political Science</h3>
+                <p class="course-code">POLS 101 - POLS 401</p>
+                <span class="question-count">16 past papers</span>
+            </div>
+        </div>
+    </div>
+    
+    <script src="courses.js"></script>
+</body>
+</html>

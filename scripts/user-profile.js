@@ -211,84 +211,134 @@ function updateStatsFromProfile() {
 // POSTS LOADING - FIXED QUERY
 // ============================================
 
-// Load user's posts with full data including likes and comments
+// ============================================
+// DIAGNOSTIC VERSION - POSTS LOADING
+// Replace your loadUserPosts function with this
+// to see detailed error information
+// ============================================
+
 async function loadUserPosts() {
     try {
-        console.log('Loading posts for user:', currentProfileUserId);
+        console.log('=== STARTING POST LOAD ===');
+        console.log('Current profile user ID:', currentProfileUserId);
         
-        // STEP 1: Fetch posts with post author profile, likes, and comments (WITHOUT nested profiles in comments)
+        // Check if we have a valid user ID
+        if (!currentProfileUserId) {
+            console.error('ERROR: No currentProfileUserId set!');
+            showToast('Profile user ID not set', 'error');
+            return;
+        }
+        
+        // STEP 1: Fetch posts with simplified query first
+        console.log('Step 1: Fetching posts...');
         const { data: posts, error: postsError } = await window.supabaseClient
             .from('posts')
             .select(`
                 *,
-                profiles:user_id (
+                profiles!posts_user_id_fkey (
                     id,
                     full_name,
                     avatar_url,
                     department,
                     index_number
-                ),
-                likes (
-                    id,
-                    user_id
-                ),
-                comments (
-                    id,
-                    comment_text,
-                    created_at,
-                    user_id
                 )
             `)
             .eq('user_id', currentProfileUserId)
             .order('created_at', { ascending: false });
         
         if (postsError) {
-            console.error('Error loading posts:', postsError);
-            showToast('Error loading posts', 'error');
+            console.error('ERROR loading posts:', postsError);
+            console.error('Error details:', {
+                message: postsError.message,
+                details: postsError.details,
+                hint: postsError.hint,
+                code: postsError.code
+            });
+            showToast('Error loading posts: ' + postsError.message, 'error');
             return;
         }
 
         const userPosts = posts || [];
-        console.log('Loaded posts:', userPosts.length);
+        console.log('✓ Posts loaded successfully:', userPosts.length);
+        console.log('Posts data:', userPosts);
 
-        // STEP 2: Get all unique user IDs from comments
-        const commentUserIds = new Set();
-        userPosts.forEach(post => {
-            if (post.comments) {
-                post.comments.forEach(comment => {
-                    if (comment.user_id) {
-                        commentUserIds.add(comment.user_id);
-                    }
-                });
-            }
-        });
-
-        // STEP 3: Fetch profiles for all comment authors
-        let commentProfiles = {};
-        if (commentUserIds.size > 0) {
-            const { data: profiles, error: profilesError } = await window.supabaseClient
-                .from('profiles')
-                .select('id, full_name, avatar_url')
-                .in('id', Array.from(commentUserIds));
+        // STEP 2: Fetch likes separately
+        console.log('Step 2: Fetching likes...');
+        const postIds = userPosts.map(p => p.id);
+        let likesData = [];
+        
+        if (postIds.length > 0) {
+            const { data: likes, error: likesError } = await window.supabaseClient
+                .from('likes')
+                .select('id, user_id, post_id')
+                .in('post_id', postIds);
             
-            if (!profilesError && profiles) {
-                profiles.forEach(profile => {
-                    commentProfiles[profile.id] = profile;
-                });
+            if (likesError) {
+                console.error('ERROR loading likes:', likesError);
+            } else {
+                likesData = likes || [];
+                console.log('✓ Likes loaded:', likesData.length);
             }
         }
 
-        // STEP 4: Attach profile data to comments
+        // STEP 3: Fetch comments separately
+        console.log('Step 3: Fetching comments...');
+        let commentsData = [];
+        
+        if (postIds.length > 0) {
+            const { data: comments, error: commentsError } = await window.supabaseClient
+                .from('comments')
+                .select('id, content, created_at, user_id, post_id')
+                .in('post_id', postIds)
+                .order('created_at', { ascending: false });
+            
+            if (commentsError) {
+                console.error('ERROR loading comments:', commentsError);
+            } else {
+                commentsData = comments || [];
+                console.log('✓ Comments loaded:', commentsData.length);
+            }
+        }
+
+        // STEP 4: Fetch comment author profiles
+        console.log('Step 4: Fetching comment author profiles...');
+        const commentUserIds = [...new Set(commentsData.map(c => c.user_id))];
+        let commentProfiles = {};
+        
+        if (commentUserIds.length > 0) {
+            const { data: profiles, error: profilesError } = await window.supabaseClient
+                .from('profiles')
+                .select('id, full_name, avatar_url')
+                .in('id', commentUserIds);
+            
+            if (profilesError) {
+                console.error('ERROR loading comment profiles:', profilesError);
+            } else {
+                (profiles || []).forEach(profile => {
+                    commentProfiles[profile.id] = profile;
+                });
+                console.log('✓ Comment profiles loaded:', Object.keys(commentProfiles).length);
+            }
+        }
+
+        // STEP 5: Combine all data
+        console.log('Step 5: Combining data...');
         userPosts.forEach(post => {
-            if (post.comments) {
-                post.comments = post.comments.map(comment => ({
+            // Attach likes
+            post.likes = likesData.filter(like => like.post_id === post.id);
+            
+            // Attach comments with profiles
+            post.comments = commentsData
+                .filter(comment => comment.post_id === post.id)
+                .map(comment => ({
                     ...comment,
                     profiles: commentProfiles[comment.user_id] || null
                 }));
-            }
         });
         
-        // Calculate total likes and stars from posts
+        console.log('✓ Data combined successfully');
+
+        // Calculate total likes and stars
         statsData.totalLikes = 0;
         statsData.totalStars = 0;
         
@@ -300,12 +350,18 @@ async function loadUserPosts() {
             statsData.totalStars += rating.stars;
         });
 
-        // Update likes and stars UI
+        console.log('Stats calculated:', {
+            totalLikes: statsData.totalLikes,
+            totalStars: statsData.totalStars
+        });
+
+        // Update UI
         document.getElementById('totalLikes').textContent = statsData.totalLikes;
         document.getElementById('totalStars').textContent = statsData.totalStars;
 
         // Render posts
         if (userPosts.length === 0) {
+            console.log('No posts to display');
             document.getElementById('noPosts').style.display = 'block';
             document.getElementById('postsContainer').innerHTML = '';
             
@@ -316,14 +372,30 @@ async function loadUserPosts() {
                 noPostsMessage.textContent = 'This user hasn\'t posted anything yet.';
             }
         } else {
+            console.log('Rendering', userPosts.length, 'posts');
             document.getElementById('noPosts').style.display = 'none';
             await renderPosts(userPosts);
+            console.log('✓ Posts rendered successfully');
         }
+        
+        console.log('=== POST LOAD COMPLETE ===');
+        
     } catch (error) {
-        console.error('Error loading posts:', error);
-        showToast('Error loading posts', 'error');
+        console.error('=== CRITICAL ERROR ===');
+        console.error('Error type:', error.constructor.name);
+        console.error('Error message:', error.message);
+        console.error('Error stack:', error.stack);
+        console.error('Full error object:', error);
+        showToast('Error loading posts: ' + error.message, 'error');
     }
 }
+
+// INSTRUCTIONS:
+// 1. Replace your loadUserPosts function with this diagnostic version
+// 2. Open browser Console (F12)
+// 3. Reload the profile page
+// 4. Copy ALL the console output and share it
+// 5. This will help identify exactly where the error is happening
 
 // Render posts as full cards
 async function renderPosts(posts) {
@@ -425,7 +497,7 @@ async function renderPosts(posts) {
                                     <div style="flex: 1;">
                                         <div class="comment-content">
                                             <div class="comment-author">${escapeHtml(comment.profiles?.full_name || 'Unknown')}</div>
-                                            <div class="comment-text">${escapeHtml(comment.comment_text)}</div>
+                                            <div class="comment-text">${escapeHtml(comment.content)}</div>
                                         </div>
                                         <div class="comment-time">${commentTimeAgo}</div>
                                     </div>

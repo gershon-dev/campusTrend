@@ -90,9 +90,13 @@ document.addEventListener('DOMContentLoaded', async function() {
 
         // Update header avatar
         if (currentUserAvatar) {
-            currentUserAvatar.textContent = initials;
-            currentUserAvatar.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
-            currentUserAvatar.style.color = 'white';
+            if (currentProfile.avatar_url) {
+                currentUserAvatar.innerHTML = `<img src="${currentProfile.avatar_url}" alt="${currentProfile.full_name}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
+            } else {
+                currentUserAvatar.textContent = initials;
+                currentUserAvatar.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+                currentUserAvatar.style.color = 'white';
+            }
         }
 
         // Update header username
@@ -105,7 +109,11 @@ document.addEventListener('DOMContentLoaded', async function() {
         const modalUserName = document.getElementById('modalUserName');
         
         if (modalUserAvatar) {
-            modalUserAvatar.textContent = initials;
+            if (currentProfile.avatar_url) {
+                modalUserAvatar.innerHTML = `<img src="${currentProfile.avatar_url}" alt="${currentProfile.full_name}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
+            } else {
+                modalUserAvatar.textContent = initials;
+            }
         }
         
         if (modalUserName) {
@@ -309,6 +317,11 @@ document.addEventListener('DOMContentLoaded', async function() {
         const isOwnPost = currentUser && post.user_id === currentUser.id;
         const starRating = window.getStarRating(post.likes_count);
 
+        // Avatar display - show image if available, otherwise initials
+        const avatarHTML = profile.avatar_url 
+            ? `<img src="${profile.avatar_url}" alt="${profile.full_name}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">` 
+            : initials;
+
         // Truncate description for "see more" functionality
         const maxLength = 200;
         const description = post.content || '';
@@ -320,7 +333,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                 <div class="post-header">
                     <div class="post-user-info">
                         <div class="user-avatar" onclick="viewUserProfile('${post.user_id}')" style="cursor: pointer; background: linear-gradient(135deg, #${Math.random().toString(16).substr(-6)}, #${Math.random().toString(16).substr(-6)})">
-                            ${initials}
+                            ${avatarHTML}
                         </div>
                         <div>
                             <div class="post-username" onclick="viewUserProfile('${post.user_id}')" style="cursor: pointer;">

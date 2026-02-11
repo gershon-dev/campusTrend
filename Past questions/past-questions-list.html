@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Past Questions - UEW Past Questions</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&family=Open+Sans:wght@300;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles/courses.css">
+    <style>
+        .question-item {
+            background: white;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s ease;
+        }
+        
+        .question-item:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            transform: translateY(-2px);
+        }
+        
+        .question-info h3 {
+            color: #333;
+            margin-bottom: 5px;
+            font-size: 1.1rem;
+        }
+        
+        .question-meta {
+            color: #666;
+            font-size: 0.9rem;
+            margin-bottom: 5px;
+        }
+        
+        .price-badge {
+            background: #667eea;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+        
+        .free-badge {
+            background: #48bb78;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+        
+        .download-btn, .buy-btn {
+            padding: 10px 25px;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .download-btn {
+            background: #48bb78;
+            color: white;
+        }
+        
+        .download-btn:hover {
+            background: #38a169;
+            transform: scale(1.05);
+        }
+        
+        .buy-btn {
+            background: #667eea;
+            color: white;
+        }
+        
+        .buy-btn:hover {
+            background: #5568d3;
+            transform: scale(1.05);
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: white;
+            font-size: 1.2rem;
+        }
+        
+        .no-results {
+            text-align: center;
+            padding: 40px;
+            color: white;
+            background: rgba(255,255,255,0.2);
+            border-radius: 12px;
+            margin-top: 20px;
+        }
+        
+        .filter-info {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <nav class="breadcrumb">
+            <a href="#" onclick="goBack()">← Back</a>
+        </nav>
+        
+        <h1>📄 Available Past Questions</h1>
+        <div class="filter-info" id="filterInfo"></div>
+        
+        <div id="loadingDiv" class="loading">
+            Loading past questions...
+        </div>
+        
+        <div id="questionsContainer"></div>
+        
+        <div id="noResults" class="no-results" style="display: none;">
+            No past questions found for this selection. Check back later!
+        </div>
+    </div>
+    
+    <!-- Supabase JS SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <!-- Our Supabase files -->
+    <script src="scripts/supabase-config.js"></script>
+    <script src="scripts/supabase-auth.js"></script>
+    <script src="scripts/supabase-db.js"></script>
+    
+    <script>
+        // Get URL parameters
+        function getUrlParameter(name) {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get(name);
+        }
+        
+        // Go back function
+        function goBack() {
+            window.history.back();
+        }
+        
+        // Load past questions
+        async function loadPastQuestions() {
+            const department = getUrlParameter('department');
+            const faculty = getUrlParameter('faculty');
+            const level = getUrlParameter('level');
+            const semester = getUrlParameter('semester');
+            
+            // Update filter info
+            document.getElementById('filterInfo').innerHTML = `
+                <strong>Faculty:</strong> ${faculty || 'All'} | 
+                <strong>Department:</strong> ${department || 'All'} | 
+                <strong>Level:</strong> ${level || 'All'} | 
+                <strong>Semester:</strong> ${semester === 'first' ? 'First Semester' : 'Second Semester'}
+            `;
+            
+            // Build filters
+            const filters = {};
+            if (faculty) filters.faculty = faculty;
+            if (department) filters.department = department;
+            if (level) filters.level = parseInt(level);
+            if (semester) filters.semester = semester;
+            
+            // Fetch past questions
+            const result = await window.dbOperations.getPastQuestions(filters);
+            
+            document.getElementById('loadingDiv').style.display = 'none';
+            
+            if (result.success && result.data.length > 0) {
+                displayQuestions(result.data);
+            } else {
+                document.getElementById('noResults').style.display = 'block';
+            }
+        }
+        
+        // Display questions
+        function displayQuestions(questions) {
+            const container = document.getElementById('questionsContainer');
+            container.innerHTML = '';
+            
+            questions.forEach(question => {
+                const questionDiv = document.createElement('div');
+                questionDiv.className = 'question-item';
+                
+                const isFree = question.is_free;
+                const price = question.price;
+                
+                questionDiv.innerHTML = `
+                    <div class="question-info">
+                        <h3>${question.title}</h3>
+                        <div class="question-meta">
+                            ${question.course_code ? question.course_code + ' - ' : ''}${question.course_name || ''}
+                        </div>
+                        <div class="question-meta">
+                            Year: ${question.year || 'N/A'} | Downloads: ${question.download_count}
+                        </div>
+                        ${isFree ? 
+                            '<span class="free-badge">FREE</span>' : 
+                            `<span class="price-badge">GH₵ ${price.toFixed(2)}</span>`
+                        }
+                    </div>
+                    <div>
+                        ${isFree ? 
+                            `<button class="download-btn" onclick="downloadQuestion('${question.id}')">Download</button>` :
+                            `<button class="buy-btn" onclick="purchaseQuestion('${question.id}', ${price})">Buy & Download</button>`
+                        }
+                    </div>
+                `;
+                
+                container.appendChild(questionDiv);
+            });
+        }
+        
+        // Download question
+        async function downloadQuestion(questionId) {
+            const result = await window.dbOperations.generateDownloadUrl(questionId);
+            
+            if (result.success) {
+                // Open download URL
+                window.open(result.url, '_blank');
+            } else {
+                alert(result.error || 'Failed to generate download link. Please try again.');
+            }
+        }
+        
+        // Purchase question (this will integrate with payment gateway)
+        async function purchaseQuestion(questionId, price) {
+            // Check if user is logged in
+            const userResult = await window.authFunctions.getCurrentUser();
+            
+            if (!userResult.success || !userResult.user) {
+                alert('Please log in to purchase past questions');
+                window.location.href = 'login.html';
+                return;
+            }
+            
+            // For now, redirect to payment page
+            window.location.href = `payment.html?questionId=${questionId}&amount=${price}`;
+        }
+        
+        // Load questions when page loads
+        document.addEventListener('DOMContentLoaded', loadPastQuestions);
+    </script>
+</body>
+</html>

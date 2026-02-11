@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Faculty of Social Science Education - UEW Past Questions</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&family=Open+Sans:wght@300;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles/courses.css">
+</head>
+<body>
+    <div class="container">
+        <nav class="breadcrumb">
+            <a href="past-questions.html">← Back to Faculties</a>
+        </nav>
+        
+        <h1>📚 Choose Department</h1>
+        <p class="subtitle">Faculty of Social Science Education</p>
+        
+        <div class="search-box">
+            <input type="text" id="courseSearch" placeholder="Search for a department..." onkeyup="filterCourses()">
+        </div>
+        
+        <div class="courses-grid" id="coursesGrid">
+            <div class="course-card" data-course="History Education">
+                <h3>History Education</h3>
+            </div>
+            
+            <div class="course-card" data-course="Political Science Education">
+                <h3>Political Science Education</h3>
+            </div>
+            
+            <div class="course-card" data-course="Geography Education">
+                <h3>Geography Education</h3>
+            </div>
+            
+            <div class="course-card" data-course="Social Studies Education">
+                <h3>Social Studies Education</h3>
+            </div>
+            
+            <div class="course-card" data-course="Economics Education">
+                <h3>Economics Education</h3>
+            </div>
+            
+            <div class="course-card" data-course="Centre for African Studies">
+                <h3>Centre for African Studies</h3>
+            </div>
+        </div>
+    </div>
+    
+    <script src="scripts/courses.js"></script>
+</body>
+</html>

@@ -1,5 +1,5 @@
 // ============================================
-// SUPABASE DATABASE OPERATIONS
+// SUPABASE DATABASE OPERATIONS - FIXED VERSION
 // ============================================
 
 // Get all past questions with optional filters
@@ -64,7 +64,7 @@ async function checkUserAccess(questionId) {
         }
         
         // Get the question details
-        const { data: question } = await supabase
+        const { data: question } = await window.supabaseClient
             .from('past_questions')
             .select('is_free, price')
             .eq('id', questionId)
@@ -76,7 +76,7 @@ async function checkUserAccess(questionId) {
         }
         
         // Check if user has purchased access
-        const { data: access } = await supabase
+        const { data: access } = await window.supabaseClient
             .from('user_access')
             .select('*, past_questions(*)')
             .eq('user_id', user.id)
@@ -109,7 +109,7 @@ async function getUserPurchases() {
             throw new Error('User not authenticated');
         }
         
-        const { data, error } = await supabase
+        const { data, error } = await window.supabaseClient
             .from('user_access')
             .select(`
                 *,
@@ -135,7 +135,7 @@ async function recordPayment(paymentData) {
             throw new Error('User not authenticated');
         }
         
-        const { data, error } = await supabase
+        const { data, error } = await window.supabaseClient
             .from('payments')
             .insert({
                 user_id: user.id,
@@ -161,7 +161,7 @@ async function recordPayment(paymentData) {
 async function confirmPayment(paymentReference) {
     try {
         // Update payment status
-        const { data: payment, error: paymentError } = await supabase
+        const { data: payment, error: paymentError } = await window.supabaseClient
             .from('payments')
             .update({
                 payment_status: 'completed',
@@ -174,7 +174,7 @@ async function confirmPayment(paymentReference) {
         if (paymentError) throw paymentError;
         
         // Grant access to the user
-        const { data: access, error: accessError } = await supabase
+        const { data: access, error: accessError } = await window.supabaseClient
             .from('user_access')
             .insert({
                 user_id: payment.user_id,
@@ -206,7 +206,7 @@ async function generateDownloadUrl(questionId) {
         }
         
         // Get the file path
-        const { data: question } = await supabase
+        const { data: question } = await window.supabaseClient
             .from('past_questions')
             .select('file_path')
             .eq('id', questionId)
@@ -214,7 +214,7 @@ async function generateDownloadUrl(questionId) {
         
         // Generate signed URL (expires in 1 hour)
         const { data, error } = await window.supabaseClient.storage
-            .from(PAST_QUESTIONS_BUCKET)
+            .from(window.PAST_QUESTIONS_BUCKET)
             .createSignedUrl(question.file_path, 3600); // 3600 seconds = 1 hour
         
         if (error) throw error;
@@ -238,19 +238,29 @@ async function generateDownloadUrl(questionId) {
 // Upload a past question (Admin function)
 async function uploadPastQuestion(file, metadata) {
     try {
+        // Check if user is authenticated
+        const { data: { user } } = await window.supabaseClient.auth.getUser();
+        
+        if (!user) {
+            throw new Error('User must be authenticated to upload files');
+        }
+        
         // Create file path: faculty/department/level/semester/filename
-        const fileName = `${Date.now()}_${file.name}`;
+        const fileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
         const filePath = `${metadata.faculty}/${metadata.department}/${metadata.level}/${metadata.semester}/${fileName}`;
         
         // Upload file to storage
         const { data: uploadData, error: uploadError } = await window.supabaseClient.storage
-            .from(PAST_QUESTIONS_BUCKET)
-            .upload(filePath, file);
+            .from(window.PAST_QUESTIONS_BUCKET)
+            .upload(filePath, file, {
+                cacheControl: '3600',
+                upsert: false
+            });
         
         if (uploadError) throw uploadError;
         
         // Insert record in database
-        const { data: question, error: dbError } = await supabase
+        const { data: question, error: dbError } = await window.supabaseClient
             .from('past_questions')
             .insert({
                 title: metadata.title,
@@ -269,11 +279,78 @@ async function uploadPastQuestion(file, metadata) {
             .select()
             .single();
         
-        if (dbError) throw dbError;
+        if (dbError) {
+            // If database insert fails, try to delete the uploaded file
+            await window.supabaseClient.storage
+                .from(window.PAST_QUESTIONS_BUCKET)
+                .remove([filePath]);
+            
+            throw dbError;
+        }
         
         return { success: true, data: question };
     } catch (error) {
         console.error('Error uploading past question:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+// Search past questions
+async function searchPastQuestions(searchTerm) {
+    try {
+        const { data, error } = await window.supabaseClient
+            .from('past_questions')
+            .select('*')
+            .or(`title.ilike.%${searchTerm}%,course_name.ilike.%${searchTerm}%,course_code.ilike.%${searchTerm}%`)
+            .order('created_at', { ascending: false });
+        
+        if (error) throw error;
+        return { success: true, data };
+    } catch (error) {
+        console.error('Error searching past questions:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+// Get statistics (for admin dashboard)
+async function getStatistics() {
+    try {
+        // Get total questions
+        const { count: totalQuestions } = await window.supabaseClient
+            .from('past_questions')
+            .select('*', { count: 'exact', head: true });
+        
+        // Get free questions
+        const { count: freeQuestions } = await window.supabaseClient
+            .from('past_questions')
+            .select('*', { count: 'exact', head: true })
+            .eq('is_free', true);
+        
+        // Get total users
+        const { count: totalUsers } = await window.supabaseClient
+            .from('user_profiles')
+            .select('*', { count: 'exact', head: true });
+        
+        // Get total revenue
+        const { data: payments } = await window.supabaseClient
+            .from('payments')
+            .select('amount')
+            .eq('payment_status', 'completed');
+        
+        const totalRevenue = payments?.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0) || 0;
+        
+        return {
+            success: true,
+            data: {
+                totalQuestions: totalQuestions || 0,
+                freeQuestions: freeQuestions || 0,
+                paidQuestions: (totalQuestions || 0) - (freeQuestions || 0),
+                totalUsers: totalUsers || 0,
+                totalRevenue: totalRevenue.toFixed(2)
+            }
+        };
+    } catch (error) {
+        console.error('Error getting statistics:', error);
         return { success: false, error: error.message };
     }
 }
@@ -287,5 +364,7 @@ window.dbOperations = {
     recordPayment,
     confirmPayment,
     generateDownloadUrl,
-    uploadPastQuestion
+    uploadPastQuestion,
+    searchPastQuestions,
+    getStatistics
 };

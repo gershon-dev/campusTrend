@@ -267,7 +267,7 @@
             if (result.success) {
                 showSuccess('Login successful! Redirecting...');
                 setTimeout(() => {
-                    window.location.href = 'past-questions.html';
+                    window.location.href = 'admin-upload.html';
                 }, 1500);
             } else {
                 showError(result.error || 'Login failed. Please try again.');
@@ -314,7 +314,7 @@
         window.addEventListener('load', async () => {
             const result = await window.authFunctions.getCurrentUser();
             if (result.success && result.user) {
-                window.location.href = 'past-questions.html';
+                window.location.href = 'admin-upload.html';
             }
         });
     </script>

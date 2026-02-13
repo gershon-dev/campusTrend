@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment - UEW Past Questions</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&family=Open+Sans:wght@300;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles/payment.css">
+</head>
+<body>
+    <div class="container">
+        <div class="payment-wrapper">
+            <!-- Left Side: Order Summary -->
+            <div class="order-summary">
+                <h2>📄 Order Summary</h2>
+                <div id="questionDetails" class="question-details">
+                    <div class="loading">Loading question details...</div>
+                </div>
+                
+                <div class="price-breakdown">
+                    <div class="price-row">
+                        <span>Subtotal:</span>
+                        <span id="subtotal">GH₵ 0.00</span>
+                    </div>
+                    <div class="price-row">
+                        <span>Transaction Fee:</span>
+                        <span id="fee">GH₵ 0.00</span>
+                    </div>
+                    <div class="price-row total">
+                        <span>Total:</span>
+                        <span id="total">GH₵ 0.00</span>
+                    </div>
+                </div>
+
+                <div class="security-badge">
+                    <span class="lock-icon">🔒</span>
+                    <span>Secure Payment</span>
+                </div>
+            </div>
+
+            <!-- Right Side: Payment Methods -->
+            <div class="payment-section">
+                <h1>💳 Complete Payment</h1>
+                
+                <div id="errorMessage" class="message error" style="display: none;"></div>
+                <div id="successMessage" class="message success" style="display: none;"></div>
+
+                <!-- Payment Method Selection -->
+                <div class="payment-methods">
+                    <h3>Select Payment Method</h3>
+                    
+                    <div class="method-grid">
+                        <div class="payment-method" data-method="momo">
+                            <div class="method-icon">📱</div>
+                            <div class="method-name">Mobile Money</div>
+                            <div class="method-desc">MTN, Vodafone, AirtelTigo</div>
+                        </div>
+
+                        <div class="payment-method" data-method="card">
+                            <div class="method-icon">💳</div>
+                            <div class="method-name">Card Payment</div>
+                            <div class="method-desc">Visa, Mastercard</div>
+                        </div>
+
+                        <div class="payment-method" data-method="bank">
+                            <div class="method-icon">🏦</div>
+                            <div class="method-name">Bank Transfer</div>
+                            <div class="method-desc">Direct bank deposit</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Mobile Money Form -->
+                <div id="momoForm" class="payment-form" style="display: none;">
+                    <h3>Mobile Money Payment</h3>
+                    
+                    <div class="form-group">
+                        <label>Select Network</label>
+                        <div class="network-options">
+                            <label class="network-option">
+                                <input type="radio" name="network" value="mtn" checked>
+                                <span class="network-card">
+                                    <span class="network-logo">📱</span>
+                                    <span class="network-name">MTN</span>
+                                </span>
+                            </label>
+                            <label class="network-option">
+                                <input type="radio" name="network" value="vodafone">
+                                <span class="network-card">
+                                    <span class="network-logo">📱</span>
+                                    <span class="network-name">Vodafone</span>
+                                </span>
+                            </label>
+                            <label class="network-option">
+                                <input type="radio" name="network" value="airteltigo">
+                                <span class="network-card">
+                                    <span class="network-logo">📱</span>
+                                    <span class="network-name">AirtelTigo</span>
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="momoNumber">Phone Number</label>
+                        <input type="tel" id="momoNumber" placeholder="0XX XXX XXXX" pattern="[0-9]{10}" required>
+                        <small>Enter your mobile money number</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="momoName">Account Name</label>
+                        <input type="text" id="momoName" placeholder="John Doe" required>
+                    </div>
+
+                    <button class="pay-btn" onclick="processMoMoPayment()">
+                        <span>Pay GH₵ <span id="momoAmount">0.00</span></span>
+                    </button>
+                </div>
+
+                <!-- Card Payment Form -->
+                <div id="cardForm" class="payment-form" style="display: none;">
+                    <h3>Card Payment</h3>
+                    
+                    <div class="form-group">
+                        <label for="cardNumber">Card Number</label>
+                        <input type="text" id="cardNumber" placeholder="1234 5678 9012 3456" maxlength="19" required>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="cardExpiry">Expiry Date</label>
+                            <input type="text" id="cardExpiry" placeholder="MM/YY" maxlength="5" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="cardCVV">CVV</label>
+                            <input type="text" id="cardCVV" placeholder="123" maxlength="3" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="cardName">Cardholder Name</label>
+                        <input type="text" id="cardName" placeholder="John Doe" required>
+                    </div>
+
+                    <button class="pay-btn" onclick="processCardPayment()">
+                        <span>Pay GH₵ <span id="cardAmount">0.00</span></span>
+                    </button>
+                </div>
+
+                <!-- Bank Transfer Info -->
+                <div id="bankForm" class="payment-form" style="display: none;">
+                    <h3>Bank Transfer Details</h3>
+                    
+                    <div class="bank-details">
+                        <div class="bank-info">
+                            <div class="bank-field">
+                                <label>Bank Name:</label>
+                                <span>Absa Bank Ghana Limited</span>
+                            </div>
+                            <div class="bank-field">
+                                <label>Account Name:</label>
+                                <span>UEW Past Questions</span>
+                            </div>
+                            <div class="bank-field">
+                                <label>Account Number:</label>
+                                <span class="copyable" onclick="copyToClipboard('0012345678901')">
+                                    0012345678901 <span class="copy-icon">📋</span>
+                                </span>
+                            </div>
+                            <div class="bank-field">
+                                <label>Branch:</label>
+                                <span>Winneba Branch</span>
+                            </div>
+                            <div class="bank-field">
+                                <label>Amount to Pay:</label>
+                                <span class="highlight" id="bankAmount">GH₵ 0.00</span>
+                            </div>
+                        </div>
+
+                        <div class="bank-instructions">
+                            <h4>📌 Instructions:</h4>
+                            <ol>
+                                <li>Transfer the exact amount to the account above</li>
+                                <li>Use your Order ID as reference: <strong id="orderId">Loading...</strong></li>
+                                <li>Upload your payment receipt below</li>
+                                <li>You'll receive access within 24 hours after verification</li>
+                            </ol>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="receiptUpload">Upload Payment Receipt</label>
+                            <div class="file-upload-zone" onclick="document.getElementById('receiptUpload').click()">
+                                <input type="file" id="receiptUpload" accept="image/*,.pdf" style="display: none;" onchange="handleReceiptUpload(event)">
+                                <div class="upload-placeholder">
+                                    <span class="upload-icon">📤</span>
+                                    <span>Click to upload receipt (Image or PDF)</span>
+                                </div>
+                            </div>
+                            <div id="receiptPreview" style="display: none;"></div>
+                        </div>
+
+                        <button class="pay-btn" onclick="submitBankTransfer()">
+                            Submit Payment Proof
+                        </button>
+                    </div>
+                </div>
+
+                <div class="back-link">
+                    <a href="#" onclick="goBack()">← Back to Past Questions</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Payment Processing Modal -->
+    <div id="processingModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="spinner"></div>
+            <h3>Processing Payment...</h3>
+            <p id="processingMessage">Please wait while we process your payment</p>
+        </div>
+    </div>
+
+    <!-- MoMo Prompt Modal -->
+    <div id="momoPromptModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h3>📱 Complete Payment on Your Phone</h3>
+            <p>A prompt has been sent to <strong id="promptNumber"></strong></p>
+            <div class="prompt-instructions">
+                <ol>
+                    <li>Check your phone for a payment prompt</li>
+                    <li>Enter your Mobile Money PIN</li>
+                    <li>Confirm the payment</li>
+                </ol>
+            </div>
+            <div class="spinner"></div>
+            <p class="timer">Waiting for confirmation... <span id="countdown">120</span>s</p>
+            <button class="cancel-btn" onclick="cancelPayment()">Cancel Payment</button>
+        </div>
+    </div>
+
+    <!-- Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="scripts/supabase-config.js"></script>
+    <script src="scripts/supabase-auth.js"></script>
+    <script src="scripts/supabase-db.js"></script>
+    <script src="scripts/payment-config.js"></script>
+    <script src="scripts/payment.js"></script>
+</body>
+</html>

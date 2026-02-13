@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Successful - UEW Past Questions</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&family=Open+Sans:wght@300;600&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Open Sans', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .success-container {
+            background: white;
+            border-radius: 16px;
+            padding: 50px;
+            max-width: 600px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            animation: slideUp 0.5s ease;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .success-icon {
+            font-size: 5rem;
+            margin-bottom: 20px;
+            animation: bounce 1s ease infinite;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        h1 {
+            font-family: 'Roboto', sans-serif;
+            color: #333;
+            font-size: 2rem;
+            margin-bottom: 15px;
+        }
+
+        .success-message {
+            color: #666;
+            font-size: 1.1rem;
+            line-height: 1.6;
+            margin-bottom: 30px;
+        }
+
+        .payment-details {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 12px;
+            margin: 30px 0;
+            text-align: left;
+        }
+
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .detail-row:last-child {
+            border-bottom: none;
+        }
+
+        .detail-label {
+            font-weight: 600;
+            color: #555;
+        }
+
+        .detail-value {
+            color: #333;
+            font-weight: 500;
+        }
+
+        .reference {
+            color: #667eea !important;
+            font-family: monospace;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            margin-top: 30px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: #f8f9fa;
+            color: #333;
+            border: 2px solid #e0e0e0;
+        }
+
+        .btn-secondary:hover {
+            background: #e9ecef;
+        }
+
+        .info-box {
+            background: #e8f5e9;
+            border-left: 4px solid #4caf50;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            text-align: left;
+        }
+
+        .info-box h4 {
+            color: #2e7d32;
+            margin-bottom: 10px;
+        }
+
+        .info-box p {
+            color: #555;
+            line-height: 1.6;
+            font-size: 0.95rem;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 768px) {
+            .success-container {
+                padding: 30px 20px;
+            }
+
+            h1 {
+                font-size: 1.5rem;
+            }
+
+            .success-icon {
+                font-size: 4rem;
+            }
+
+            .action-buttons {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="success-container">
+        <div id="loadingState" class="loading">
+            <div class="spinner"></div>
+            <p>Loading payment details...</p>
+        </div>
+
+        <div id="successState" style="display: none;">
+            <div class="success-icon">✅</div>
+            <h1>Payment Successful!</h1>
+            <p class="success-message">
+                Your payment has been processed successfully. You now have access to download your past question.
+            </p>
+
+            <div class="payment-details">
+                <div class="detail-row">
+                    <span class="detail-label">Transaction Reference:</span>
+                    <span class="detail-value reference" id="reference">-</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Past Question:</span>
+                    <span class="detail-value" id="questionTitle">-</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Amount Paid:</span>
+                    <span class="detail-value" id="amount">-</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Payment Method:</span>
+                    <span class="detail-value" id="method">-</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Date:</span>
+                    <span class="detail-value" id="date">-</span>
+                </div>
+            </div>
+
+            <div class="info-box">
+                <h4>📥 Download Information</h4>
+                <p>
+                    You can download this past question up to <strong>5 times</strong>. 
+                    The download link is valid and you can access it anytime from your purchases.
+                </p>
+            </div>
+
+            <div class="action-buttons">
+                <button class="btn btn-primary" onclick="downloadNow()">
+                    📥 Download Now
+                </button>
+                <button class="btn btn-secondary" onclick="goToHome()">
+                    🏠 Back to Home
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="scripts/supabase-config.js"></script>
+    <script src="scripts/supabase-auth.js"></script>
+    <script src="scripts/supabase-db.js"></script>
+
+    <script>
+        let questionId = null;
+
+        // Load payment details
+        document.addEventListener('DOMContentLoaded', async () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const reference = urlParams.get('reference');
+            questionId = urlParams.get('questionId');
+
+            if (!reference || !questionId) {
+                showError('Invalid payment confirmation');
+                return;
+            }
+
+            try {
+                // Get payment details
+                const { data: payment, error: paymentError } = await window.supabaseClient
+                    .from('payments')
+                    .select('*')
+                    .eq('payment_reference', reference)
+                    .single();
+
+                if (paymentError) throw paymentError;
+
+                // Get question details
+                const questionResult = await window.dbOperations.getPastQuestionById(questionId);
+                if (!questionResult.success) throw new Error('Failed to load question');
+
+                const question = questionResult.data;
+
+                // Update UI
+                document.getElementById('reference').textContent = reference;
+                document.getElementById('questionTitle').textContent = question.title;
+                document.getElementById('amount').textContent = `GH₵ ${parseFloat(payment.amount).toFixed(2)}`;
+                document.getElementById('method').textContent = formatPaymentMethod(payment.payment_method);
+                document.getElementById('date').textContent = new Date(payment.created_at).toLocaleDateString('en-GB', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+
+                // Show success state
+                document.getElementById('loadingState').style.display = 'none';
+                document.getElementById('successState').style.display = 'block';
+
+            } catch (error) {
+                showError(error.message);
+            }
+        });
+
+        function formatPaymentMethod(method) {
+            const methods = {
+                'momo_mtn': 'MTN Mobile Money',
+                'momo_vodafone': 'Vodafone Cash',
+                'momo_airteltigo': 'AirtelTigo Money',
+                'card': 'Card Payment',
+                'bank_transfer': 'Bank Transfer'
+            };
+            return methods[method] || method;
+        }
+
+        async function downloadNow() {
+            try {
+                const result = await window.dbOperations.generateDownloadUrl(questionId);
+                
+                if (result.success) {
+                    window.open(result.url, '_blank');
+                } else {
+                    alert(result.error || 'Failed to generate download link');
+                }
+            } catch (error) {
+                alert('Failed to download: ' + error.message);
+            }
+        }
+
+        function goToHome() {
+            window.location.href = 'past-questions.html';
+        }
+
+        function showError(message) {
+            document.getElementById('loadingState').innerHTML = `
+                <div class="success-icon" style="animation: none;">❌</div>
+                <h2 style="color: #d32f2f; margin: 20px 0;">Error</h2>
+                <p style="color: #666; margin-bottom: 30px;">${message}</p>
+                <button class="btn btn-primary" onclick="goToHome()">Back to Home</button>
+            `;
+        }
+    </script>
+</body>
+</html>

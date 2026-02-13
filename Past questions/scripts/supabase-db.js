@@ -1,5 +1,6 @@
 // ============================================
-// SUPABASE DATABASE OPERATIONS - FIXED VERSION
+// SUPABASE DATABASE OPERATIONS - GUEST ACCESS VERSION
+// No authentication required!
 // ============================================
 
 // Get all past questions with optional filters
@@ -54,15 +55,9 @@ async function getPastQuestionById(questionId) {
     }
 }
 
-// Check if user has access to a past question
-async function checkUserAccess(questionId) {
+// Check if email has access to a past question (guest system)
+async function checkGuestAccess(questionId, email) {
     try {
-        const { data: { user } } = await window.supabaseClient.auth.getUser();
-        
-        if (!user) {
-            return { success: false, hasAccess: false, message: 'Please log in to access this content' };
-        }
-        
         // Get the question details
         const { data: question } = await window.supabaseClient
             .from('past_questions')
@@ -70,18 +65,28 @@ async function checkUserAccess(questionId) {
             .eq('id', questionId)
             .single();
         
-        // If question is free, grant access
+        // If question is free, grant access to everyone
         if (question.is_free) {
             return { success: true, hasAccess: true, isFree: true };
         }
         
-        // Check if user has purchased access
+        // If no email provided, require payment
+        if (!email) {
+            return { 
+                success: true, 
+                hasAccess: false, 
+                message: 'Purchase required',
+                price: question.price 
+            };
+        }
+        
+        // Check if email has purchased access
         const { data: access } = await window.supabaseClient
-            .from('user_access')
-            .select('*, past_questions(*)')
-            .eq('user_id', user.id)
+            .from('guest_downloads')
+            .select('*')
+            .eq('email', email)
             .eq('past_question_id', questionId)
-            .or('expires_at.is.null,expires_at.gt.now()')
+            .gt('expires_at', new Date().toISOString())
             .single();
         
         if (access && access.download_count < access.max_downloads) {
@@ -100,93 +105,118 @@ async function checkUserAccess(questionId) {
     }
 }
 
-// Get user's purchased past questions
-async function getUserPurchases() {
+// Legacy function - kept for compatibility
+async function checkUserAccess(questionId) {
     try {
-        const { data: { user } } = await window.supabaseClient.auth.getUser();
+        const { data: question } = await window.supabaseClient
+            .from('past_questions')
+            .select('is_free, price')
+            .eq('id', questionId)
+            .single();
         
-        if (!user) {
-            throw new Error('User not authenticated');
+        // If question is free, grant access to everyone
+        if (question.is_free) {
+            return { success: true, hasAccess: true, isFree: true };
         }
         
-        const { data, error } = await window.supabaseClient
-            .from('user_access')
-            .select(`
-                *,
-                past_questions (*)
-            `)
-            .eq('user_id', user.id)
-            .or('expires_at.is.null,expires_at.gt.now()');
-        
-        if (error) throw error;
-        return { success: true, data };
+        return { 
+            success: true, 
+            hasAccess: false, 
+            message: 'Purchase required',
+            price: question.price 
+        };
     } catch (error) {
-        console.error('Error fetching user purchases:', error);
-        return { success: false, error: error.message };
+        console.error('Error checking access:', error);
+        return { success: false, hasAccess: false, error: error.message };
     }
 }
 
-// Record a payment
+// Get user's purchased past questions (not used in guest system)
+async function getUserPurchases() {
+    return { success: false, error: 'Guest system - no user accounts' };
+}
+
+// Record a payment (GUEST VERSION - No user_id required)
 async function recordPayment(paymentData) {
     try {
-        const { data: { user } } = await window.supabaseClient.auth.getUser();
-        
-        if (!user) {
-            throw new Error('User not authenticated');
-        }
-        
+        // Prepare payment data (NO user_id - pure guest)
+        const paymentRecord = {
+            user_email: paymentData.email,
+            past_question_id: paymentData.questionId,
+            amount: paymentData.amount,
+            currency: paymentData.currency || 'GHS',
+            payment_method: paymentData.method,
+            payment_reference: paymentData.reference,
+            payment_status: 'pending'
+            // NO user_id field at all!
+        };
+
+        console.log('Recording payment (guest mode):', paymentRecord);
+
+        // Insert payment record
         const { data, error } = await window.supabaseClient
             .from('payments')
-            .insert({
-                user_id: user.id,
-                past_question_id: paymentData.questionId,
-                amount: paymentData.amount,
-                currency: paymentData.currency || 'GHS',
-                payment_method: paymentData.method,
-                payment_reference: paymentData.reference,
-                payment_status: 'pending'
-            })
+            .insert(paymentRecord)
             .select()
             .single();
         
-        if (error) throw error;
+        if (error) {
+            console.error('Supabase error details:', error);
+            throw error;
+        }
+        
+        console.log('Payment recorded successfully:', data);
         return { success: true, data };
     } catch (error) {
         console.error('Error recording payment:', error);
-        return { success: false, error: error.message };
+        return { 
+            success: false, 
+            error: error.message,
+            details: error 
+        };
     }
 }
 
-// Confirm payment and grant access
+// Confirm payment and grant access (GUEST VERSION)
 async function confirmPayment(paymentReference) {
     try {
+        // Get payment details
+        const { data: payment, error: getError } = await window.supabaseClient
+            .from('payments')
+            .select('*')
+            .eq('payment_reference', paymentReference)
+            .single();
+        
+        if (getError) throw getError;
+        
         // Update payment status
-        const { data: payment, error: paymentError } = await window.supabaseClient
+        const { error: paymentError } = await window.supabaseClient
             .from('payments')
             .update({
                 payment_status: 'completed',
                 paid_at: new Date().toISOString()
             })
-            .eq('payment_reference', paymentReference)
-            .select()
-            .single();
+            .eq('payment_reference', paymentReference);
         
         if (paymentError) throw paymentError;
         
-        // Grant access to the user
+        // Grant access using email (guest system)
         const { data: access, error: accessError } = await window.supabaseClient
-            .from('user_access')
+            .from('guest_downloads')
             .insert({
-                user_id: payment.user_id,
+                email: payment.user_email,
                 past_question_id: payment.past_question_id,
-                access_type: 'purchased',
+                payment_reference: paymentReference,
                 download_count: 0,
-                max_downloads: 5 // Allow 5 downloads per purchase
+                max_downloads: 5
             })
             .select()
             .single();
         
-        if (accessError) throw accessError;
+        if (accessError && accessError.code !== '23505') { // Not a duplicate
+            console.error('Access grant error:', accessError);
+            // Don't fail - payment is already confirmed
+        }
         
         return { success: true, data: { payment, access } };
     } catch (error) {
@@ -195,38 +225,64 @@ async function confirmPayment(paymentReference) {
     }
 }
 
-// Generate a temporary download URL
-async function generateDownloadUrl(questionId) {
+// Generate a temporary download URL (GUEST VERSION)
+async function generateDownloadUrl(questionId, email) {
     try {
-        // Check if user has access
-        const accessCheck = await checkUserAccess(questionId);
-        
-        if (!accessCheck.hasAccess) {
-            throw new Error(accessCheck.message || 'Access denied');
-        }
-        
-        // Get the file path
-        const { data: question } = await window.supabaseClient
+        // Get the question
+        const { data: question, error: questionError } = await window.supabaseClient
             .from('past_questions')
-            .select('file_path')
+            .select('*')
             .eq('id', questionId)
             .single();
         
-        // Generate signed URL (expires in 1 hour)
+        if (questionError) throw questionError;
+        
+        // If free, allow download
+        if (question.is_free) {
+            // Generate signed URL
+            const { data, error } = await window.supabaseClient.storage
+                .from(window.PAST_QUESTIONS_BUCKET)
+                .createSignedUrl(question.file_path, 3600);
+            
+            if (error) throw error;
+            
+            // Track download
+            await window.supabaseClient
+                .from('past_questions')
+                .update({ 
+                    download_count: (question.download_count || 0) + 1 
+                })
+                .eq('id', questionId);
+            
+            return { success: true, url: data.signedUrl };
+        }
+        
+        // For paid questions, check guest access
+        if (!email) {
+            throw new Error('Email required for paid downloads');
+        }
+        
+        const accessCheck = await checkGuestAccess(questionId, email);
+        
+        if (!accessCheck.hasAccess) {
+            throw new Error(accessCheck.message || 'Access denied - payment required');
+        }
+        
+        // Generate signed URL
         const { data, error } = await window.supabaseClient.storage
             .from(window.PAST_QUESTIONS_BUCKET)
-            .createSignedUrl(question.file_path, 3600); // 3600 seconds = 1 hour
+            .createSignedUrl(question.file_path, 3600);
         
         if (error) throw error;
         
-        // Record the download
-        const { data: { user } } = await window.supabaseClient.auth.getUser();
-        if (user) {
-            await window.supabaseClient.rpc('record_download', {
-                p_user_id: user.id,
-                p_question_id: questionId
-            });
-        }
+        // Update download count
+        await window.supabaseClient
+            .from('guest_downloads')
+            .update({ 
+                download_count: window.supabaseClient.sql`download_count + 1`
+            })
+            .eq('email', email)
+            .eq('past_question_id', questionId);
         
         return { success: true, url: data.signedUrl };
     } catch (error) {
@@ -235,7 +291,7 @@ async function generateDownloadUrl(questionId) {
     }
 }
 
-// Upload a past question (Admin function)
+// Upload a past question (Admin function - still requires auth)
 async function uploadPastQuestion(file, metadata) {
     try {
         // Check if user is authenticated
@@ -326,10 +382,10 @@ async function getStatistics() {
             .select('*', { count: 'exact', head: true })
             .eq('is_free', true);
         
-        // Get total users
-        const { count: totalUsers } = await window.supabaseClient
-            .from('user_profiles')
-            .select('*', { count: 'exact', head: true });
+        // Get total guests
+        const { count: totalGuests } = await window.supabaseClient
+            .from('guest_downloads')
+            .select('email', { count: 'exact', head: true });
         
         // Get total revenue
         const { data: payments } = await window.supabaseClient
@@ -345,7 +401,7 @@ async function getStatistics() {
                 totalQuestions: totalQuestions || 0,
                 freeQuestions: freeQuestions || 0,
                 paidQuestions: (totalQuestions || 0) - (freeQuestions || 0),
-                totalUsers: totalUsers || 0,
+                totalGuests: totalGuests || 0,
                 totalRevenue: totalRevenue.toFixed(2)
             }
         };
@@ -360,6 +416,7 @@ window.dbOperations = {
     getPastQuestions,
     getPastQuestionById,
     checkUserAccess,
+    checkGuestAccess,
     getUserPurchases,
     recordPayment,
     confirmPayment,

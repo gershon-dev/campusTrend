@@ -3,190 +3,359 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CampusTrend UEW - Connect with Students</title>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <!-- FIXED: Corrected CSS path - removed non-existent profile CSS files -->
+
+    <!-- ===================== SEO META TAGS ===================== -->
+    <title>CampusTrend UEW - Connect with Students | University of Education, Winneba</title>
+    <meta name="description" content="CampusTrend is the social platform for University of Education, Winneba (UEW) students. Share posts, follow classmates, and stay updated on campus trends.">
+    <meta name="keywords" content="UEW, University of Education Winneba, CampusTrend, UEW students, Ghana university, campus social, student network">
+    <meta name="author" content="CampusTrend UEW">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://campustrend-uew.com/index.html">
+
+    <!-- Open Graph (for social sharing previews) -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="CampusTrend UEW - Connect with Students">
+    <meta property="og:description" content="The social platform for University of Education, Winneba students. Share, follow, and stay on trend.">
+    <meta property="og:url" content="https://campustrend-uew.com/">
+    <meta property="og:site_name" content="CampusTrend UEW">
+    <meta property="og:locale" content="en_GH">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="CampusTrend UEW - Connect with Students">
+    <meta name="twitter:description" content="The social platform for University of Education, Winneba students.">
+
+    <!-- ===================== PERFORMANCE ===================== -->
+    <!-- Preconnect to ALL external origins used by the page -->
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <link rel="preconnect" href="https://kkvelbfcwaydxiwzsnpb.supabase.co" crossorigin>
+    <link rel="dns-prefetch" href="https://kkvelbfcwaydxiwzsnpb.supabase.co">
+
+    <!-- Load Font Awesome non-render-blocking (print trick) -->
+    <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></noscript>
+
+    <!-- App Stylesheet -->
     <link rel="stylesheet" href="styles/index.css">
+
+    <!-- Theme color for mobile browsers -->
+    <meta name="theme-color" content="#1877f2">
+
+    <!-- Critical inline CSS: prevents CLS by reserving image space before stylesheet loads -->
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{background:#f0f2f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
+        .header{background:linear-gradient(135deg,#1877f2,#42b72a);padding:12px 20px;position:fixed;top:0;left:0;right:0;z-index:1000;display:flex;justify-content:space-between;align-items:center;min-height:58px}
+        .main-layout{display:flex;max-width:1200px;margin:78px auto 20px;padding:20px;gap:20px}
+        /* Reserve image space to prevent CLS - aspect-ratio trick */
+        .post-image-container{width:100%;background:#e4e6e9;position:relative;overflow:hidden}
+        .post-image{width:100%;aspect-ratio:4/3;object-fit:contain;display:block;background:#e4e6e9}
+        .post-card{background:#fff;border-radius:8px;margin-bottom:16px;box-shadow:0 1px 2px rgba(0,0,0,.1);overflow:hidden}
+        /* font-display: swap for Font Awesome to prevent invisible text */
+        @font-face{font-family:'Font Awesome 6 Free';font-display:swap}
+        @font-face{font-family:'Font Awesome 6 Brands';font-display:swap}
+        /* Skeleton loader */
+        .post-skeleton{background:#fff;border-radius:8px;margin-bottom:16px;padding:16px;box-shadow:0 1px 2px rgba(0,0,0,.1)}
+        .skeleton-line{background:linear-gradient(90deg,#e4e6e9 25%,#f0f2f5 50%,#e4e6e9 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:4px;height:14px;margin-bottom:10px}
+        .skeleton-avatar{width:40px;height:40px;border-radius:50%;background:linear-gradient(90deg,#e4e6e9 25%,#f0f2f5 50%,#e4e6e9 75%);background-size:200% 100%;animation:shimmer 1.5s infinite}
+        .skeleton-image{width:100%;aspect-ratio:4/3;background:linear-gradient(90deg,#e4e6e9 25%,#f0f2f5 50%,#e4e6e9 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:4px}
+        @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+        /* Skip link */
+        .skip-link{position:absolute;top:-100px;left:16px;background:#1877f2;color:#fff;padding:10px 18px;border-radius:0 0 8px 8px;font-size:14px;font-weight:600;text-decoration:none;z-index:9999;transition:top .2s}
+        .skip-link:focus{top:0}
+    </style>
 </head>
 <body>
+    <!-- ===================== SKIP NAVIGATION (Accessibility) ===================== -->
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
     <!-- Header -->
-    <header class="header">
+    <header class="header" role="banner">
         <div class="logo">
-            <i class="fas fa-graduation-cap"></i>
+            <!-- aria-hidden on decorative icon; text provides the label -->
+            <i class="fas fa-graduation-cap" aria-hidden="true"></i>
             <div>
                 <span>CampusTrend</span>
                 <div class="logo-subtitle">University of Education, Winneba</div>
             </div>
         </div>
+
         <div class="header-right">
-            <button class="upload-btn" id="openUploadModal">
-                <i class="fas fa-cloud-upload-alt"></i>
-                <span>Upload</span>
-            </button>
-            
+            <nav aria-label="Primary navigation">UEW pasco</nav>
+
             <!-- Notification Bell -->
-            <div class="notification-bell" id="notificationBell">
-                <i class="fas fa-bell"></i>
-                <span class="notification-badge" id="notificationBadge">0</span>
-                
+            <div
+                class="notification-bell"
+                id="notificationBell"
+                role="button"
+                tabindex="0"
+                aria-label="Notifications"
+                aria-haspopup="true"
+                aria-expanded="false"
+                aria-controls="notificationDropdown"
+            >
+                <i class="fas fa-bell" aria-hidden="true"></i>
+                <span
+                    class="notification-badge"
+                    id="notificationBadge"
+                    aria-live="polite"
+                    aria-label="0 unread notifications"
+                >0</span>
+
                 <!-- Notification Dropdown -->
-                <div class="notification-dropdown" id="notificationDropdown">
+                <div
+                    class="notification-dropdown"
+                    id="notificationDropdown"
+                    role="dialog"
+                    aria-label="Notifications panel"
+                    aria-modal="false"
+                >
                     <div class="notification-header">
-                        <h3>Notifications</h3>
+                        <h3 id="notificationTitle">Notifications</h3>
                         <div class="notification-actions">
-                            <button class="notification-action-btn" id="markAllRead">Mark all read</button>
+                            <button class="notification-action-btn" id="markAllRead" aria-label="Mark all notifications as read">
+                                Mark all read
+                            </button>
                         </div>
                     </div>
-                    <div class="notification-list" id="notificationList">
-                        <!-- Notifications will be rendered here -->
+                    <div
+                        class="notification-list"
+                        id="notificationList"
+                        role="list"
+                        aria-labelledby="notificationTitle"
+                    >
+                        <!-- Notifications rendered by JS -->
                     </div>
                 </div>
             </div>
-            
-            <div class="user-profile" id="userProfile">
-                <div class="user-avatar" id="currentUserAvatar">U</div>
+
+            <!-- User Profile -->
+            <div
+                class="user-profile"
+                id="userProfile"
+                role="button"
+                tabindex="0"
+                aria-label="View your profile"
+            >
+                <div class="user-avatar" id="currentUserAvatar" aria-hidden="true">U</div>
                 <span class="user-name" id="currentUserName">User</span>
             </div>
         </div>
     </header>
 
     <!-- Main Layout -->
-    <main class="main-layout">
+    <main class="main-layout" id="main-content">
+
         <!-- Sidebar - Trends -->
-        <aside class="sidebar">
+        <aside class="sidebar" aria-label="Trending topics and departments">
+
             <div class="trends-card">
                 <h2 class="trends-header">
-                    <i class="fas fa-fire"></i>
+                    <i class="fas fa-fire" aria-hidden="true"></i>
                     Trending at UEW
                 </h2>
-                <div id="trendsList"></div>
+                <div id="trendsList" aria-label="Trending topics"></div>
             </div>
 
             <div class="departments-card">
                 <h3 class="departments-header">
-                    <i class="fas fa-building"></i>
+                    <i class="fas fa-building" aria-hidden="true"></i>
                     Departments
                 </h3>
-                <div id="departmentTags"></div>
+                <div id="departmentTags" role="group" aria-label="Filter by department"></div>
             </div>
-            
+
             <!-- Star Rating Legend -->
             <div class="trends-card" style="margin-top: 15px;">
                 <h3 class="departments-header">
-                    <i class="fas fa-star" style="color: #ffd700;"></i>
+                    <i class="fas fa-star" aria-hidden="true" style="color: #ffd700;"></i>
                     Star Ratings
                 </h3>
-                <div style="font-size: 13px; color: #65676b; line-height: 1.8;">
-                    <div><span class="star-rating-badge stars-1" style="animation: none; margin: 0;"><i class="fas fa-star"></i><span class="star-rating-label">Trending</span></span> 5+ likes</div>
-                    <div style="margin-top: 8px;"><span class="star-rating-badge stars-2" style="animation: none; margin: 0;"><i class="fas fa-star"></i><i class="fas fa-star"></i><span class="star-rating-label">Rising</span></span> 10+ likes</div>
-                    <div style="margin-top: 8px;"><span class="star-rating-badge stars-3" style="animation: none; margin: 0;"><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><span class="star-rating-label">Popular</span></span> 15+ likes</div>
-                    <div style="margin-top: 8px;"><span class="star-rating-badge stars-4" style="animation: none; margin: 0;"><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><span class="star-rating-label">Viral</span></span> 50+ likes</div>
-                    <div style="margin-top: 8px;"><span class="star-rating-badge stars-5" style="animation: none; margin: 0;"><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><span class="star-rating-label">Legendary</span></span> 100+ likes</div>
-                </div>
+                <dl class="star-legend" style="font-size: 13px; color: #65676b; line-height: 1.8;">
+                    <div class="star-legend-row">
+                        <dt>
+                            <span class="star-rating-badge stars-1" style="animation: none; margin: 0;" aria-label="1 star - Trending">
+                                <i class="fas fa-star" aria-hidden="true"></i>
+                                <span class="star-rating-label">Trending</span>
+                            </span>
+                        </dt>
+                        <dd>5+ likes</dd>
+                    </div>
+                    <div class="star-legend-row">
+                        <dt>
+                            <span class="star-rating-badge stars-2" style="animation: none; margin: 0;" aria-label="2 stars - Rising">
+                                <i class="fas fa-star" aria-hidden="true"></i><i class="fas fa-star" aria-hidden="true"></i>
+                                <span class="star-rating-label">Rising</span>
+                            </span>
+                        </dt>
+                        <dd>10+ likes</dd>
+                    </div>
+                    <div class="star-legend-row">
+                        <dt>
+                            <span class="star-rating-badge stars-3" style="animation: none; margin: 0;" aria-label="3 stars - Popular">
+                                <i class="fas fa-star" aria-hidden="true"></i><i class="fas fa-star" aria-hidden="true"></i><i class="fas fa-star" aria-hidden="true"></i>
+                                <span class="star-rating-label">Popular</span>
+                            </span>
+                        </dt>
+                        <dd>15+ likes</dd>
+                    </div>
+                    <div class="star-legend-row">
+                        <dt>
+                            <span class="star-rating-badge stars-4" style="animation: none; margin: 0;" aria-label="4 stars - Viral">
+                                <i class="fas fa-star" aria-hidden="true"></i><i class="fas fa-star" aria-hidden="true"></i><i class="fas fa-star" aria-hidden="true"></i><i class="fas fa-star" aria-hidden="true"></i>
+                                <span class="star-rating-label">Viral</span>
+                            </span>
+                        </dt>
+                        <dd>50+ likes</dd>
+                    </div>
+                    <div class="star-legend-row">
+                        <dt>
+                            <span class="star-rating-badge stars-5" style="animation: none; margin: 0;" aria-label="5 stars - Legendary">
+                                <i class="fas fa-star" aria-hidden="true"></i><i class="fas fa-star" aria-hidden="true"></i><i class="fas fa-star" aria-hidden="true"></i><i class="fas fa-star" aria-hidden="true"></i><i class="fas fa-star" aria-hidden="true"></i>
+                                <span class="star-rating-label">Legendary</span>
+                            </span>
+                        </dt>
+                        <dd>100+ likes</dd>
+                    </div>
+                </dl>
             </div>
         </aside>
 
         <!-- Feed Container -->
-        <div class="feed-container">
+        <section class="feed-container" aria-label="Campus feed">
             <div class="feed-header">
                 <h1 class="feed-title">Campus Feed</h1>
-                <div class="feed-filter">
-                    <button class="filter-btn active" data-filter="all">All Posts</button>
-                    <button class="filter-btn" data-filter="popular">Popular</button>
-                    <button class="filter-btn" data-filter="recent">Recent</button>
+                <button class="upload-btn" id="openUploadModal" aria-label="Upload a new post">
+                    <i class="fas fa-cloud-upload-alt" aria-hidden="true"></i>
+                    <span>Upload</span>
+                </button>
+                <div class="feed-filter" role="group" aria-label="Filter posts">
+                    <button class="filter-btn active" data-filter="all" aria-pressed="true">All Posts</button>
+                    <button class="filter-btn" data-filter="popular" aria-pressed="false">Popular</button>
+                    <button class="filter-btn" data-filter="recent" aria-pressed="false">Recent</button>
                 </div>
             </div>
-            <div id="postsContainer"></div>
-        </div>
+            <div id="postsContainer" aria-live="polite" aria-label="Posts"></div>
+        </section>
     </main>
 
-    <!-- Upload Modal -->
-    <div class="modal-overlay" id="uploadModal">
+    <!-- ===================== UPLOAD MODAL ===================== -->
+    <div
+        class="modal-overlay"
+        id="uploadModal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="uploadModalTitle"
+        aria-hidden="true"
+    >
         <div class="modal">
             <div class="modal-header">
                 <div></div>
-                <h2 class="modal-title">Create Post</h2>
-                <button class="modal-close" id="closeUploadModal">&times;</button>
+                <h2 class="modal-title" id="uploadModalTitle">Create Post</h2>
+                <button class="modal-close" id="closeUploadModal" aria-label="Close create post dialog">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="modal-user">
-                    <div class="user-avatar" id="modalUserAvatar">U</div>
+                    <div class="user-avatar" id="modalUserAvatar" aria-hidden="true">U</div>
                     <div>
                         <div class="post-username" id="modalUserName">User</div>
-                        <div class="post-meta"><i class="fas fa-globe-africa"></i> Public</div>
+                        <div class="post-meta"><i class="fas fa-globe-africa" aria-hidden="true"></i> Public</div>
                     </div>
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label">Department *</label>
-                    <select class="form-select" id="departmentSelect" required>
+                    <label class="form-label" for="departmentSelect">Department <span aria-label="required">*</span></label>
+                    <select class="form-select" id="departmentSelect" required aria-required="true">
                         <option value="">Select your department</option>
                     </select>
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label">Description</label>
-                    <textarea class="form-textarea" id="postDescription" placeholder="Write something about your image..." maxlength="2000"></textarea>
-                    <div class="char-count"><span id="charCount">0</span>/2000</div>
+                    <label class="form-label" for="postDescription">Description</label>
+                    <textarea
+                        class="form-textarea"
+                        id="postDescription"
+                        placeholder="Write something about your image..."
+                        maxlength="2000"
+                        aria-describedby="charCountLabel"
+                    ></textarea>
+                    <div class="char-count" id="charCountLabel" aria-live="polite">
+                        <span id="charCount">0</span>/2000 characters
+                    </div>
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label">Image *</label>
-                    <div class="image-upload-area" id="imageUploadArea">
+                    <label class="form-label" for="imageInput">Image <span aria-label="required">*</span></label>
+                    <div
+                        class="image-upload-area"
+                        id="imageUploadArea"
+                        role="button"
+                        tabindex="0"
+                        aria-label="Click to upload an image"
+                    >
                         <div class="upload-placeholder" id="uploadPlaceholder">
-                            <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                            <i class="fas fa-cloud-upload-alt upload-icon" aria-hidden="true"></i>
                             <div class="upload-text">Click to upload image</div>
                             <div class="upload-subtext">JPG, PNG or GIF (Max 10MB)</div>
                         </div>
                         <div class="image-preview-container" id="imagePreviewContainer">
-                            <img src="" alt="Preview" class="image-preview" id="imagePreview">
-                            <button class="remove-image-btn" id="removeImageBtn">
-                                <i class="fas fa-times"></i>
+                            <img src="" alt="Selected image preview" class="image-preview" id="imagePreview">
+                            <button class="remove-image-btn" id="removeImageBtn" aria-label="Remove selected image">
+                                <i class="fas fa-times" aria-hidden="true"></i>
                             </button>
                         </div>
                     </div>
-                    <input type="file" class="hidden-input" id="imageInput" accept="image/*">
+                    <input type="file" class="hidden-input" id="imageInput" accept="image/*" aria-label="Upload image file">
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="post-submit-btn" id="submitPostBtn" disabled>
+                <button class="post-submit-btn" id="submitPostBtn" disabled aria-disabled="true">
                     <span id="submitBtnText">Post</span>
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- Share Modal -->
-    <div class="modal-overlay" id="shareModal">
+    <!-- ===================== SHARE MODAL ===================== -->
+    <div
+        class="modal-overlay"
+        id="shareModal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="shareModalTitle"
+        aria-hidden="true"
+        style="max-width: 450px;"
+    >
         <div class="modal" style="max-width: 450px;">
             <div class="modal-header">
                 <div></div>
-                <h2 class="modal-title">Share Post</h2>
-                <button class="modal-close" id="closeShareModal">&times;</button>
+                <h2 class="modal-title" id="shareModalTitle">Share Post</h2>
+                <button class="modal-close" id="closeShareModal" aria-label="Close share dialog">&times;</button>
             </div>
             <div class="modal-body">
-                <div class="share-options">
-                    <div class="share-option" id="shareTimeline">
-                        <div class="share-option-icon timeline">
-                            <i class="fas fa-home"></i>
+                <div class="share-options" role="list">
+                    <div class="share-option" id="shareTimeline" role="listitem" tabindex="0" aria-label="Share to your timeline">
+                        <div class="share-option-icon timeline" aria-hidden="true">
+                            <i class="fas fa-home" aria-hidden="true"></i>
                         </div>
                         <div class="share-option-text">
                             <h4>Share to Timeline</h4>
                             <p>Post this to your timeline</p>
                         </div>
                     </div>
-                    <div class="share-option" id="shareMessage">
-                        <div class="share-option-icon message">
-                            <i class="fas fa-paper-plane"></i>
+                    <div class="share-option" id="shareMessage" role="listitem" tabindex="0" aria-label="Send in a private message">
+                        <div class="share-option-icon message" aria-hidden="true">
+                            <i class="fas fa-paper-plane" aria-hidden="true"></i>
                         </div>
                         <div class="share-option-text">
                             <h4>Send in Message</h4>
                             <p>Share with friends privately</p>
                         </div>
                     </div>
-                    <div class="share-option" id="copyLink">
-                        <div class="share-option-icon copy">
-                            <i class="fas fa-link"></i>
+                    <div class="share-option" id="copyLink" role="listitem" tabindex="0" aria-label="Copy post link to clipboard">
+                        <div class="share-option-icon copy" aria-hidden="true">
+                            <i class="fas fa-link" aria-hidden="true"></i>
                         </div>
                         <div class="share-option-text">
                             <h4>Copy Link</h4>
@@ -198,59 +367,78 @@
         </div>
     </div>
 
-    <!-- Profile Modal -->
-    <div class="modal-overlay" id="profileModal">
+    <!-- ===================== PROFILE MODAL ===================== -->
+    <div
+        class="modal-overlay"
+        id="profileModal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="profileModalTitle"
+        aria-hidden="true"
+    >
         <div class="modal profile-modal-large">
             <div class="modal-header">
                 <div></div>
-                <h2 class="modal-title">Profile</h2>
-                <button class="modal-close" id="closeProfileModal">&times;</button>
+                <h2 class="modal-title" id="profileModalTitle">Profile</h2>
+                <button class="modal-close" id="closeProfileModal" aria-label="Close profile dialog">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="profile-modal-content">
-                    <div class="profile-modal-avatar" id="profileModalAvatar"></div>
+                    <div class="profile-modal-avatar" id="profileModalAvatar" role="img" aria-label="User avatar"></div>
                     <div class="profile-modal-name" id="profileModalName"></div>
                     <div class="profile-modal-department" id="profileModalDepartment"></div>
-                    <div class="profile-modal-stats">
+                    <dl class="profile-modal-stats" aria-label="Profile statistics">
                         <div class="profile-stat">
-                            <div class="profile-stat-value" id="profilePostsCount">0</div>
-                            <div class="profile-stat-label">Posts</div>
+                            <dt class="profile-stat-label">Posts</dt>
+                            <dd class="profile-stat-value" id="profilePostsCount">0</dd>
                         </div>
                         <div class="profile-stat">
-                            <div class="profile-stat-value" id="profileFollowersCount">0</div>
-                            <div class="profile-stat-label">Followers</div>
+                            <dt class="profile-stat-label">Followers</dt>
+                            <dd class="profile-stat-value" id="profileFollowersCount">0</dd>
                         </div>
                         <div class="profile-stat">
-                            <div class="profile-stat-value" id="profileFollowingCount">0</div>
-                            <div class="profile-stat-label">Following</div>
+                            <dt class="profile-stat-label">Following</dt>
+                            <dd class="profile-stat-value" id="profileFollowingCount">0</dd>
                         </div>
-                    </div>
-                    <button class="profile-follow-btn" id="profileFollowBtn">Follow</button>
+                    </dl>
+                    <button class="profile-follow-btn" id="profileFollowBtn" aria-label="Follow this user">Follow</button>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Star Milestone Notification -->
-    <div class="star-milestone" id="starMilestone">
-        <div class="star-milestone-stars" id="milestoneStars"></div>
+    <div
+        class="star-milestone"
+        id="starMilestone"
+        role="alert"
+        aria-live="assertive"
+        aria-atomic="true"
+    >
+        <div class="star-milestone-stars" id="milestoneStars" aria-hidden="true"></div>
         <div class="star-milestone-text" id="milestoneText"></div>
     </div>
 
     <!-- Toast Notification -->
-    <div class="toast" id="toast">
-        <i class="fas fa-check-circle"></i>
+    <div
+        class="toast"
+        id="toast"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+    >
+        <i class="fas fa-check-circle" aria-hidden="true"></i>
         <span id="toastMessage">Success!</span>
     </div>
 
-    <!-- FIXED: Corrected script loading order and paths -->
+    <!-- ===================== SCRIPTS ===================== -->
     <!-- Supabase CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
 
     <!-- Shared Config -->
-    <script src="supabase-config.js"></script>
+    <script src="supabase-config.js" defer></script>
 
-    <!-- Main App Script - FIXED PATH -->
-    <script src="scripts/index.js"></script>
+    <!-- Main App Script -->
+    <script src="scripts/index.js" defer></script>
 </body>
 </html>

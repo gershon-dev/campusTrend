@@ -3,9 +3,6 @@ function viewUserProfile(userId) {
     window.location.href = `user-profile.html?userId=${userId}`;
 }
 
-// Make it globally available
-window.viewUserProfile = viewUserProfile;
-
 
 // index.js - Main application logic
 document.addEventListener('DOMContentLoaded', async function() {
@@ -268,12 +265,21 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     function showLoading() {
         if (postsContainer) {
-            postsContainer.innerHTML = `
-                <div class="loading-spinner">
-                    <i class="fas fa-spinner fa-spin"></i>
-                    <p>Loading posts...</p>
-                </div>
-            `;
+            const skeletonCard = () => `
+                <div class="post-skeleton" aria-hidden="true">
+                    <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
+                        <div class="skeleton-avatar"></div>
+                        <div style="flex:1">
+                            <div class="skeleton-line" style="width:40%;margin-bottom:6px"></div>
+                            <div class="skeleton-line" style="width:25%;height:10px"></div>
+                        </div>
+                    </div>
+                    <div class="skeleton-line" style="width:90%"></div>
+                    <div class="skeleton-line" style="width:70%"></div>
+                    <div class="skeleton-image" style="margin:10px 0"></div>
+                    <div class="skeleton-line" style="width:50%;height:10px"></div>
+                </div>`;
+            postsContainer.innerHTML = skeletonCard() + skeletonCard() + skeletonCard();
         }
     }
 
@@ -294,7 +300,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         if (posts.length === 0) {
             postsContainer.innerHTML = `
                 <div class="no-posts">
-                    <i class="fas fa-image"></i>
+                    <i class="fas fa-image" aria-hidden="true"></i>
                     <h3>No posts yet</h3>
                     <p>Be the first to share something!</p>
                 </div>
@@ -302,24 +308,48 @@ document.addEventListener('DOMContentLoaded', async function() {
             return;
         }
 
-        postsContainer.innerHTML = posts.map(post => createPostHTML(post)).join('');
+        postsContainer.innerHTML = posts.map((post, index) => createPostHTML(post, index)).join('');
 
-        // Add event listeners to all posts
-        posts.forEach(post => {
+        // Set up event listeners and lazy comment loading
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const postId = entry.target.dataset.postId;
+                    if (postId && !entry.target.dataset.commentsLoaded) {
+                        entry.target.dataset.commentsLoaded = 'true';
+                        loadComments(postId);
+                    }
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, { rootMargin: '200px' });
+
+        posts.forEach((post, index) => {
             setupPostEventListeners(post.id);
+            // Observe each post card for lazy comment loading (skip first 2 - load immediately)
+            const card = document.querySelector(`[data-post-id="${post.id}"]`);
+            if (card) {
+                if (index < 2) {
+                    loadComments(post.id);
+                    card.dataset.commentsLoaded = 'true';
+                } else {
+                    observer.observe(card);
+                }
+            }
         });
     }
 
-    function createPostHTML(post) {
+    function createPostHTML(post, index = 0) {
         const profile = post.profiles || {};
         const initials = getInitials(profile.full_name || 'User');
         const timeAgo = window.timeAgo(post.created_at);
         const isOwnPost = currentUser && post.user_id === currentUser.id;
         const starRating = window.getStarRating(post.likes_count);
+        const isLCP = index === 0; // First post image is likely the LCP element
 
-        // Avatar display - show image if available, otherwise initials
+        // Avatar display - proper dimensions to prevent CLS
         const avatarHTML = profile.avatar_url 
-            ? `<img src="${profile.avatar_url}" alt="${profile.full_name}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">` 
+            ? `<img src="${profile.avatar_url}" alt="${escapeHTML(profile.full_name || 'User')}" width="40" height="40" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" loading="${isLCP ? 'eager' : 'lazy'}" decoding="async">` 
             : initials;
 
         // Truncate description for "see more" functionality
@@ -329,27 +359,27 @@ document.addEventListener('DOMContentLoaded', async function() {
         const truncatedDescription = needsTruncation ? description.substring(0, maxLength) + '...' : description;
 
         return `
-            <div class="post-card" data-post-id="${post.id}">
+            <article class="post-card" data-post-id="${post.id}" aria-label="Post by ${escapeHTML(profile.full_name || 'Unknown User')}">
                 <div class="post-header">
                     <div class="post-user-info">
-                        <div class="user-avatar" onclick="viewUserProfile('${post.user_id}')" style="cursor: pointer; background: linear-gradient(135deg, #${Math.random().toString(16).substr(-6)}, #${Math.random().toString(16).substr(-6)})">
+                        <div class="user-avatar" onclick="viewUserProfile('${post.user_id}')" style="cursor:pointer;background:${stringToColor(profile.full_name || 'User')}" role="button" tabindex="0" aria-label="View ${escapeHTML(profile.full_name || 'user')}'s profile">
                             ${avatarHTML}
                         </div>
                         <div>
-                            <div class="post-username" onclick="viewUserProfile('${post.user_id}')" style="cursor: pointer;">
+                            <div class="post-username" onclick="viewUserProfile('${post.user_id}')" style="cursor:pointer;" role="button" tabindex="0" aria-label="View ${escapeHTML(profile.full_name || 'user')}'s profile">
                                 ${escapeHTML(profile.full_name || 'Unknown User')}
-                                ${isOwnPost ? '<span class="own-post-badge">You</span>' : ''}
+                                ${isOwnPost ? '<span class="own-post-badge" aria-label="Your post">You</span>' : ''}
                             </div>
                             <div class="post-meta">
-                                <i class="fas fa-graduation-cap"></i>
+                                <i class="fas fa-graduation-cap" aria-hidden="true"></i>
                                 ${escapeHTML(profile.department || 'Unknown')}
-                                <span class="post-time">${timeAgo}</span>
+                                <time class="post-time" datetime="${post.created_at}">${timeAgo}</time>
                             </div>
                         </div>
                     </div>
                     ${!isOwnPost ? `
-                        <button class="follow-btn ${post.isFollowing ? 'following' : ''}" data-user-id="${post.user_id}">
-                            <i class="fas ${post.isFollowing ? 'fa-user-check' : 'fa-user-plus'}"></i>
+                        <button class="follow-btn ${post.isFollowing ? 'following' : ''}" data-user-id="${post.user_id}" aria-label="${post.isFollowing ? 'Unfollow' : 'Follow'} ${escapeHTML(profile.full_name || 'user')}" aria-pressed="${post.isFollowing ? 'true' : 'false'}">
+                            <i class="fas ${post.isFollowing ? 'fa-user-check' : 'fa-user-plus'}" aria-hidden="true"></i>
                             <span>${post.isFollowing ? 'Following' : 'Follow'}</span>
                         </button>
                     ` : ''}
@@ -361,7 +391,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                             ${escapeHTML(truncatedDescription)}
                         </p>
                         ${needsTruncation ? `
-                            <button class="see-more-btn" data-action="expand">
+                            <button class="see-more-btn" data-action="expand" aria-expanded="false">
                                 See more
                             </button>
                         ` : ''}
@@ -370,64 +400,72 @@ document.addEventListener('DOMContentLoaded', async function() {
 
                 ${post.image_url ? `
                     <div class="post-image-container">
-                        <img src="${post.image_url}" alt="Post image" class="post-image">
+                        <img
+                            src="${post.image_url}"
+                            alt="Post by ${escapeHTML(profile.full_name || 'user')}${description ? ': ' + escapeHTML(description.substring(0, 100)) : ''}"
+                            class="post-image"
+                            width="680"
+                            height="510"
+                            ${isLCP ? 'fetchpriority="high" loading="eager"' : 'loading="lazy"'}
+                            decoding="${isLCP ? 'sync' : 'async'}"
+                        >
                         ${starRating.stars > 0 ? `
-                            <div class="star-rating-badge stars-${starRating.stars}">
-                                ${Array(starRating.stars).fill('<i class="fas fa-star"></i>').join('')}
+                            <div class="star-rating-badge stars-${starRating.stars}" aria-label="${starRating.stars} star${starRating.stars > 1 ? 's' : ''} - ${starRating.label}">
+                                ${Array(starRating.stars).fill('<i class="fas fa-star" aria-hidden="true"></i>').join('')}
                                 <span class="star-rating-label">${starRating.label}</span>
                             </div>
                         ` : ''}
                     </div>
                 ` : ''}
 
-                <div class="post-stats">
+                <div class="post-stats" aria-label="Post statistics">
                     <span class="stat-item">
-                        <i class="fas fa-heart"></i>
+                        <i class="fas fa-heart" aria-hidden="true"></i>
                         <span class="likes-count">${post.likes_count || 0}</span> likes
                     </span>
                     <span class="stat-item">
-                        <i class="fas fa-comment"></i>
+                        <i class="fas fa-comment" aria-hidden="true"></i>
                         <span class="comments-count">${post.comments_count || 0}</span> comments
                     </span>
                     <span class="stat-item">
-                        <i class="fas fa-share"></i>
+                        <i class="fas fa-share" aria-hidden="true"></i>
                         ${post.shares_count || 0} shares
                     </span>
                 </div>
 
-                <div class="post-actions">
-                    <button class="action-btn like-btn ${post.isLiked ? 'liked' : ''}" data-action="like">
-                        <i class="fas fa-heart"></i>
+                <div class="post-actions" role="group" aria-label="Post actions">
+                    <button class="action-btn like-btn ${post.isLiked ? 'liked' : ''}" data-action="like" aria-label="${post.isLiked ? 'Unlike post' : 'Like post'}" aria-pressed="${post.isLiked ? 'true' : 'false'}">
+                        <i class="fas fa-heart" aria-hidden="true"></i>
                         <span>Like</span>
                     </button>
-                    <button class="action-btn comment-btn" data-action="comment">
-                        <i class="fas fa-comment"></i>
+                    <button class="action-btn comment-btn" data-action="comment" aria-label="Comment on post">
+                        <i class="fas fa-comment" aria-hidden="true"></i>
                         <span>Comment</span>
                     </button>
-                    <button class="action-btn share-btn" data-action="share">
-                        <i class="fas fa-share"></i>
+                    <button class="action-btn share-btn" data-action="share" aria-label="Share post">
+                        <i class="fas fa-share" aria-hidden="true"></i>
                         <span>Share</span>
                     </button>
                 </div>
 
                 <div class="comments-section" data-post-id="${post.id}">
                     <div class="comment-input-wrapper">
-                        <div class="user-avatar small">${getInitials(currentProfile?.full_name || 'U')}</div>
-                        <input 
-                            type="text" 
-                            class="comment-input" 
+                        <div class="user-avatar small" aria-hidden="true">${getInitials(currentProfile?.full_name || 'U')}</div>
+                        <input
+                            type="text"
+                            class="comment-input"
                             placeholder="Write a comment..."
                             data-post-id="${post.id}"
+                            aria-label="Write a comment"
                         >
-                        <button class="send-comment-btn" data-post-id="${post.id}" disabled>
-                            <i class="fas fa-paper-plane"></i>
+                        <button class="send-comment-btn" data-post-id="${post.id}" disabled aria-label="Send comment" aria-disabled="true">
+                            <i class="fas fa-paper-plane" aria-hidden="true"></i>
                         </button>
                     </div>
-                    <div class="comments-list" data-post-id="${post.id}">
-                        <!-- Comments will be loaded here -->
+                    <div class="comments-list" data-post-id="${post.id}" role="list" aria-label="Comments">
                     </div>
                 </div>
-            </div>
+            </article>
         `;
     }
 
@@ -543,6 +581,8 @@ document.addEventListener('DOMContentLoaded', async function() {
                     
                     if (likeBtn) {
                         likeBtn.classList.toggle('liked', post.isLiked);
+                        likeBtn.setAttribute('aria-pressed', post.isLiked ? 'true' : 'false');
+                        likeBtn.setAttribute('aria-label', post.isLiked ? 'Unlike post' : 'Like post');
                     }
                     
                     if (likesCount) {
@@ -1076,8 +1116,9 @@ document.addEventListener('DOMContentLoaded', async function() {
             { tag: 'SportsDay', posts: 134 }
         ];
 
+        trendsList.setAttribute('role', 'list');
         trendsList.innerHTML = trends.map(trend => `
-            <div class="trend-item">
+            <div class="trend-item" role="listitem">
                 <div class="trend-tag">#${trend.tag}</div>
                 <div class="trend-count">${trend.posts} posts</div>
             </div>
@@ -1161,6 +1202,21 @@ document.addEventListener('DOMContentLoaded', async function() {
                 notificationDropdown.classList.remove('show');
             }
         });
+
+        // Make user profile in header clickable
+        const userProfile = document.getElementById('userProfile');
+        if (userProfile) {
+            userProfile.style.cursor = 'pointer';
+            userProfile.addEventListener('click', function() {
+                window.goToOwnProfile();
+            });
+            userProfile.addEventListener('mouseenter', function() {
+                this.style.opacity = '0.8';
+            });
+            userProfile.addEventListener('mouseleave', function() {
+                this.style.opacity = '1';
+            });
+        }
     }
 
     // ==================== UTILITY FUNCTIONS ====================
@@ -1216,22 +1272,3 @@ document.addEventListener('DOMContentLoaded', async function() {
 window.goToOwnProfile = function() {
     window.location.href = 'user-profile.html';
 };
-
-// Make user profile in header clickable
-document.addEventListener('DOMContentLoaded', function() {
-    const userProfile = document.getElementById('userProfile');
-    if (userProfile) {
-        userProfile.style.cursor = 'pointer';
-        userProfile.addEventListener('click', function() {
-            window.goToOwnProfile();
-        });
-        
-        // Add hover effect
-        userProfile.addEventListener('mouseenter', function() {
-            this.style.opacity = '0.8';
-        });
-        userProfile.addEventListener('mouseleave', function() {
-            this.style.opacity = '1';
-        });
-    }
-});

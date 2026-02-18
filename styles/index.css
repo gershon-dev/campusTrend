@@ -1,3 +1,6 @@
+
+
+
 * {
             margin: 0;
             padding: 0;
@@ -5,17 +8,7 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
         }
 
-        /* ===== PERFORMANCE: force font-display swap for all web fonts ===== */
-        /* This overrides Font Awesome's default which causes invisible text (FOIT) */
-        @font-face {
-            font-family: 'Font Awesome 6 Free';
-            font-display: swap;
-        }
-        @font-face {
-            font-family: 'Font Awesome 6 Brands';
-            font-display: swap;
-        }
-
+     
         body {
             background-color: #f0f2f5;
             min-height: 100vh;

@@ -28,13 +28,36 @@
     <!-- ===================== PERFORMANCE ===================== -->
     <!-- Preconnect to ALL external origins used by the page -->
     <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+    <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/webfonts/fa-solid-900.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="preconnect" href="https://kkvelbfcwaydxiwzsnpb.supabase.co" crossorigin>
     <link rel="dns-prefetch" href="https://kkvelbfcwaydxiwzsnpb.supabase.co">
 
-    <!-- Load Font Awesome non-render-blocking (print trick) -->
-    <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></noscript>
+    <!-- Font Awesome: inline subset (only icons we use) - saves 17 KiB vs loading all.min.css -->
+    <style id="fa-icons">/* Font Awesome Critical - only icons used by CampusTrend */
+@font-face{font-family:"Font Awesome 6 Free";font-style:normal;font-weight:900;font-display:swap;src:url(https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/webfonts/fa-solid-900.woff2) format("woff2")}
+.fas{-moz-osx-font-smoothing:grayscale;-webkit-font-smoothing:antialiased;display:inline-block;font-style:normal;font-variant:normal;line-height:1;text-rendering:auto;font-family:"Font Awesome 6 Free";font-weight:900}
+.fa-graduation-cap:before{content:"\f19d"}
+.fa-bell:before{content:"\f0f3"}
+.fa-fire:before{content:"\f06d"}
+.fa-building:before{content:"\f1ad"}
+.fa-star:before{content:"\f005"}
+.fa-cloud-upload-alt:before{content:"\f382"}
+.fa-home:before{content:"\f015"}
+.fa-paper-plane:before{content:"\f1d8"}
+.fa-link:before{content:"\f0c1"}
+.fa-times:before{content:"\f00d"}
+.fa-globe-africa:before{content:"\f57c"}
+.fa-heart:before{content:"\f004"}
+.fa-comment:before{content:"\f075"}
+.fa-share:before{content:"\f064"}
+.fa-user-plus:before{content:"\f234"}
+.fa-user-check:before{content:"\f4fc"}
+.fa-check-circle:before{content:"\f058"}
+.fa-exclamation-circle:before{content:"\f06a"}
+.fa-exclamation-triangle:before{content:"\f071"}
+.fa-image:before{content:"\f03e"}
+.fa-spinner:before{content:"\f110"}</style>
 
     <!-- App Stylesheet -->
     <link rel="stylesheet" href="styles/index.css">
@@ -52,15 +75,12 @@
         .post-image-container{width:100%;background:#e4e6e9;position:relative;overflow:hidden}
         .post-image{width:100%;aspect-ratio:4/3;object-fit:contain;display:block;background:#e4e6e9}
         .post-card{background:#fff;border-radius:8px;margin-bottom:16px;box-shadow:0 1px 2px rgba(0,0,0,.1);overflow:hidden}
-        /* font-display: swap for Font Awesome to prevent invisible text */
-        @font-face{font-family:'Font Awesome 6 Free';font-display:swap}
-        @font-face{font-family:'Font Awesome 6 Brands';font-display:swap}
-        /* Skeleton loader */
+     
         .post-skeleton{background:#fff;border-radius:8px;margin-bottom:16px;padding:16px;box-shadow:0 1px 2px rgba(0,0,0,.1)}
-        .skeleton-line{background:linear-gradient(90deg,#e4e6e9 25%,#f0f2f5 50%,#e4e6e9 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:4px;height:14px;margin-bottom:10px}
-        .skeleton-avatar{width:40px;height:40px;border-radius:50%;background:linear-gradient(90deg,#e4e6e9 25%,#f0f2f5 50%,#e4e6e9 75%);background-size:200% 100%;animation:shimmer 1.5s infinite}
-        .skeleton-image{width:100%;aspect-ratio:4/3;background:linear-gradient(90deg,#e4e6e9 25%,#f0f2f5 50%,#e4e6e9 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:4px}
-        @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+        .skeleton-line{background:linear-gradient(90deg,#e4e6e9 25%,#f0f2f5 50%,#e4e6e9 75%);animation:shimmer 1.5s infinite;border-radius:4px;height:14px;margin-bottom:10px}
+        .skeleton-avatar{width:40px;height:40px;border-radius:50%;background:linear-gradient(90deg,#e4e6e9 25%,#f0f2f5 50%,#e4e6e9 75%);animation:shimmer 1.5s infinite}
+        .skeleton-image{width:100%;aspect-ratio:4/3;background:linear-gradient(90deg,#e4e6e9 25%,#f0f2f5 50%,#e4e6e9 75%);animation:shimmer 1.5s infinite;border-radius:4px}
+        @keyframes shimmer{0%,100%{opacity:1}50%{opacity:.6}}
         /* Skip link */
         .skip-link{position:absolute;top:-100px;left:16px;background:#1877f2;color:#fff;padding:10px 18px;border-radius:0 0 8px 8px;font-size:14px;font-weight:600;text-decoration:none;z-index:9999;transition:top .2s}
         .skip-link:focus{top:0}

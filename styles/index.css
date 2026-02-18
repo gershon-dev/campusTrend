@@ -1,6 +1,3 @@
-
-
-
 * {
             margin: 0;
             padding: 0;
@@ -8,7 +5,6 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
         }
 
-     
         body {
             background-color: #f0f2f5;
             min-height: 100vh;
@@ -535,10 +531,6 @@
             box-shadow: 0 1px 2px rgba(0,0,0,0.1);
             overflow: hidden;
             transition: box-shadow 0.3s;
-            contain: layout style;
-            /* content-visibility speeds up rendering of off-screen posts */
-            content-visibility: auto;
-            contain-intrinsic-size: 0 500px; /* estimated height hint */
         }
 
         .post-header {
@@ -729,26 +721,16 @@
 
         .post-image-container {
             width: 100%;
-            background: #e4e6e9; /* placeholder bg prevents flash */
+            background: #000;
             position: relative;
             overflow: hidden;
-            /* Reserve space before image loads - prevents CLS */
-            min-height: 200px;
         }
 
         .post-image {
             width: 100%;
             max-height: 600px;
-            aspect-ratio: 4/3;
             object-fit: contain;
             display: block;
-            /* Smooth fade-in once loaded */
-            transition: opacity 0.2s ease;
-        }
-
-        .post-image[loading="lazy"] {
-            /* Additional CLS protection for lazy images */
-            min-height: 200px;
         }
 
         .post-image-placeholder {

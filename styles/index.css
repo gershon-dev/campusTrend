@@ -113,11 +113,11 @@
             display: flex;
             align-items: center;
             gap: 7px;
-            padding: 7px 16px;
+            padding: 8px 16px;
             border: none;
             border-bottom: 3px solid transparent;
             background: none;
-            font-size: 13px;
+            font-size: 14px;
             font-weight: 600;
             color: #65676b;
             cursor: pointer;
@@ -168,10 +168,10 @@
         }
 
         .upload-btn {
-            display: inline-flex;
+            display: flex;
             align-items: center;
-            justify-content: center;
-            padding: 8px 20px;
+            gap: 8px;
+            padding: 8px 18px;
             background: #1877f2;
             color: #fff;
             border: none;
@@ -182,6 +182,7 @@
             transition: all 0.3s;
             box-shadow: 0 2px 8px rgba(24,119,242,0.3);
         }
+
         .upload-btn:hover {
             background: #166fe5;
             transform: translateY(-2px);
@@ -436,7 +437,7 @@
         .main-layout {
             display: flex;
             max-width: 1200px;
-            margin: 90px auto 20px;
+            margin: 96px auto 20px;
             padding: 20px;
             gap: 20px;
         }
@@ -1807,6 +1808,11 @@
                 display: inline;
             }
 
+            .upload-btn {
+                padding: 7px 14px;
+                font-size: 13px;
+            }
+
             .user-name {
                 display: none;
             }
@@ -1860,9 +1866,9 @@
 
             .category-btn {
                 color: #65676b !important;
-                padding: 7px 14px !important;
-                font-size: 14px !important;
-                font-weight: 700 !important;
+                padding: 8px 14px !important;
+                font-size: 13px !important;
+                font-weight: 600 !important;
             }
 
             .category-btn.active {
@@ -1894,7 +1900,7 @@
 
             .main-layout {
                 padding: 0 !important;
-                margin-top: 88px !important;
+                margin-top: 108px !important;
                 gap: 0 !important;
                 max-width: 100% !important;
                 width: 100% !important;
@@ -1909,28 +1915,26 @@
 
             .feed-header {
                 border-radius: 0;
-                margin-bottom: 0;
-                padding: 10px 12px 6px;
+                margin-bottom: 8px;
+                padding: 12px 12px 8px;
                 display: flex;
                 flex-wrap: wrap;
                 align-items: center;
-                gap: 6px;
+                gap: 8px;
                 box-shadow: 0 1px 2px rgba(0,0,0,0.06);
             }
 
             .feed-title {
                 flex: 1;
-                font-size: 15px;
-                font-weight: 700;
+                font-size: 16px;
             }
 
             .upload-btn {
-                padding: 6px 14px !important;
+                padding: 7px 14px !important;
                 font-size: 13px !important;
                 min-width: unset !important;
                 min-height: unset !important;
                 border-radius: 20px !important;
-                gap: 5px !important;
             }
 
             .feed-filter {

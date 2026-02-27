@@ -1,11 +1,19 @@
 // Navigation function for faculty selection
 function navigateToFaculty(faculty) {
-    // You can customize the navigation logic here
-    // For now, it will navigate to a page with the faculty name
-    window.location.href = `${faculty}.html`;
-    
-    // Alternative: You could use query parameters
-    // window.location.href = `courses.html?faculty=${faculty}`;
+    // Exact filename map — mobile file systems are case-sensitive
+    const fileMap = {
+        'social-Science': 'social-Science.html',
+        'General':        'General.html',
+        'science':        'science.html',
+        'business':       'business.html'
+    };
+
+    const file = fileMap[faculty];
+    if (file) {
+        window.location.href = file;
+    } else {
+        console.error('Unknown faculty:', faculty);
+    }
 }
 
 // Add keyboard accessibility

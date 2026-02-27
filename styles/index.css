@@ -168,10 +168,10 @@
         }
 
         .upload-btn {
-            display: flex;
+            display: inline-flex;
             align-items: center;
-            gap: 8px;
-            padding: 8px 18px;
+            justify-content: center;
+            padding: 8px 20px;
             background: #1877f2;
             color: #fff;
             border: none;
@@ -182,7 +182,6 @@
             transition: all 0.3s;
             box-shadow: 0 2px 8px rgba(24,119,242,0.3);
         }
-
         .upload-btn:hover {
             background: #166fe5;
             transform: translateY(-2px);
@@ -555,6 +554,7 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
+            margin-top: 50px;
         }
 
         .feed-title {

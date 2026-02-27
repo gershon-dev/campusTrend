@@ -728,7 +728,8 @@
 
         .post-image {
             width: 100%;
-            height: clamp(280px, 45vw, 500px);
+            height: auto;
+            aspect-ratio: 16 / 9;
             object-fit: cover;
             object-position: center;
             display: block;
@@ -1683,7 +1684,8 @@
             }
 
             .post-image {
-                height: 380px;
+                height: auto;
+                aspect-ratio: 16 / 9;
                 object-fit: cover;
                 object-position: center;
             }
@@ -1750,8 +1752,27 @@
             }
 
             .main-layout {
-                padding: 10px;
-                margin-top: 65px;
+                padding: 0;
+                margin-top: 58px;
+                gap: 0;
+            }
+
+            .feed-container {
+                width: 100%;
+                max-width: 100%;
+                padding: 0;
+            }
+
+            .feed-header {
+                border-radius: 0;
+                margin-bottom: 8px;
+                padding: 10px 12px;
+            }
+
+            .post-card {
+                border-radius: 0;
+                margin-bottom: 8px;
+                width: 100%;
             }
 
             /* Show text on action buttons on small screens for accessibility */
@@ -1799,12 +1820,15 @@
             }
 
             .post-image {
-                height: 280px;
+                height: auto;
+                aspect-ratio: 4 / 3;
                 object-fit: cover;
                 object-position: center;
+                width: 100%;
             }
 
             .post-image-container {
+                width: 100%;
                 background: #e4e6e9;
             }
 

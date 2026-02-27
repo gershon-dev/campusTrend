@@ -777,6 +777,7 @@
 
         .description-text.truncated {
             display: -webkit-box;
+           
             -webkit-box-orient: vertical;
             overflow: hidden;
             white-space: normal;
@@ -1804,13 +1805,12 @@
             }
 
             .upload-btn span {
-                display: none;
+                display: inline;
             }
 
             .upload-btn {
-                padding: 10px 14px;
-                min-width: 44px;
-                min-height: 44px;
+                padding: 7px 14px;
+                font-size: 13px;
             }
 
             .user-name {
@@ -1916,7 +1916,46 @@
             .feed-header {
                 border-radius: 0;
                 margin-bottom: 8px;
-                padding: 10px 12px;
+                padding: 12px 12px 8px;
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 8px;
+                box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+            }
+
+            .feed-title {
+                flex: 1;
+                font-size: 16px;
+            }
+
+            .upload-btn {
+                padding: 7px 14px !important;
+                font-size: 13px !important;
+                min-width: unset !important;
+                min-height: unset !important;
+                border-radius: 20px !important;
+            }
+
+            .feed-filter {
+                width: 100%;
+                display: flex;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: none;
+                padding: 4px 0 2px;
+                gap: 8px;
+            }
+
+            .feed-filter::-webkit-scrollbar {
+                display: none;
+            }
+
+            .filter-btn {
+                white-space: nowrap;
+                flex-shrink: 0;
+                padding: 6px 14px;
+                font-size: 13px;
             }
 
             .post-description {
@@ -1946,29 +1985,6 @@
 
             .action-btn span {
                 display: none;
-            }
-
-            /* Feed filter scrollable on mobile instead of hidden */
-            .feed-filter {
-                display: flex;
-                overflow-x: auto;
-                -webkit-overflow-scrolling: touch;
-                scrollbar-width: none;
-                padding-bottom: 2px;
-            }
-
-            .feed-filter::-webkit-scrollbar {
-                display: none;
-            }
-
-            .filter-btn {
-                white-space: nowrap;
-                flex-shrink: 0;
-            }
-
-            .feed-header {
-                flex-wrap: wrap;
-                gap: 10px;
             }
 
             .follow-btn {

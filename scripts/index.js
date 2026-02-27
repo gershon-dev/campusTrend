@@ -314,8 +314,6 @@ document.addEventListener('DOMContentLoaded', async function() {
  src="${post.image_url}"
  alt="Post by ${escapeHTML(profile.full_name || 'user')}${description ? ': ' + escapeHTML(description.substring(0, 100)) : ''}"
  class="post-image"
- width="680"
- height="510"
  ${isLCP ? 'fetchpriority="high" loading="eager"' : 'loading="lazy"'}
  decoding="${isLCP ? 'sync' : 'async'}"
  >

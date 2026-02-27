@@ -729,10 +729,9 @@
         .post-image {
             width: 100%;
             height: auto;
-            max-height: 700px;
+            display: block;
             object-fit: cover;
             object-position: center top;
-            display: block;
         }
 
         .post-image-placeholder {
@@ -1684,8 +1683,8 @@
             }
 
             .post-image {
+                width: 100%;
                 height: auto;
-                max-height: 600px;
                 object-fit: cover;
                 object-position: center top;
             }
@@ -1827,6 +1826,7 @@
                 width: 100% !important;
                 height: auto !important;
                 max-height: none !important;
+                min-height: unset !important;
                 aspect-ratio: unset !important;
                 object-fit: cover !important;
                 object-position: center top !important;
@@ -1839,6 +1839,7 @@
                 margin: 0 !important;
                 padding: 0 !important;
                 background: #000 !important;
+                overflow: hidden !important;
             }
 
             .star-rating-badge {
@@ -2280,7 +2281,10 @@ button:disabled {
 
 /* ===== PERFORMANCE: lazy image loading placeholder ===== */
 .post-image {
-    background-color: #e4e6e9;
+    background-color: #000;
+    width: 100%;
+    height: auto;
+    display: block;
 }
 
 /* ===== ACCESSIBILITY: Notification badge hidden when zero ===== */

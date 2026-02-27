@@ -298,14 +298,7 @@ document.addEventListener('DOMContentLoaded', async function() {
  </div>
  ${description ? `
  <div class="post-description">
- <p class="description-text ${needsTruncation ? 'truncated' : ''}" data-full-text="${escapeHTML(description)}">
- ${escapeHTML(truncatedDescription)}
- </p>
- ${needsTruncation ? `
- <button class="see-more-btn" data-action="expand" aria-expanded="false">
- See more
- </button>
- ` : ''}
+ <p class="description-text ${needsTruncation ? 'truncated' : ''}" data-full-text="${escapeHTML(description)}">${escapeHTML(truncatedDescription)}${needsTruncation ? ` <button class="see-more-btn" data-action="expand" aria-expanded="false">See more</button>` : ''}</p>
  </div>
  ` : ''}
  ${post.image_url ? `
@@ -411,16 +404,21 @@ document.addEventListener('DOMContentLoaded', async function() {
  const descriptionText = postCard.querySelector('.description-text');
  const fullText = descriptionText.dataset.fullText;
  const isExpanded = this.dataset.action === 'collapse';
+ const btn = this;
  if (isExpanded) {
  const maxLength = 200;
- descriptionText.textContent = fullText.substring(0, maxLength) + '...';
- this.textContent = 'See more';
- this.dataset.action = 'expand';
+ descriptionText.innerHTML = '';
+ descriptionText.appendChild(document.createTextNode(fullText.substring(0, maxLength) + '... '));
+ descriptionText.appendChild(btn);
+ btn.textContent = 'See more';
+ btn.dataset.action = 'expand';
  descriptionText.classList.add('truncated');
  } else {
- descriptionText.textContent = fullText;
- this.textContent = 'See less';
- this.dataset.action = 'collapse';
+ descriptionText.innerHTML = '';
+ descriptionText.appendChild(document.createTextNode(fullText + ' '));
+ descriptionText.appendChild(btn);
+ btn.textContent = 'See less';
+ btn.dataset.action = 'collapse';
  descriptionText.classList.remove('truncated');
  }
  });

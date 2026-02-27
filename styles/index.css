@@ -685,7 +685,7 @@
         .post-content {
             padding: 0 16px 12px;
             font-size: 15px;
-            line-height: 1.3333;
+            line-height: 1.5;
             color: #050505;
         }
 
@@ -696,27 +696,47 @@
 
         .post-content-text.collapsed {
             display: -webkit-box;
-          
             -webkit-box-orient: vertical;
             overflow: hidden;
+        }
+
+        .post-description {
+            padding: 8px 16px 12px;
+        }
+
+        .description-text {
+            font-size: 15px;
+            line-height: 1.5;
+            color: #050505;
+            white-space: pre-wrap;
+            word-break: break-word;
+            margin: 0;
+        }
+
+        .description-text.truncated {
+            display: -webkit-box;
+           
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            white-space: normal;
         }
 
         .see-more-btn {
             background: none;
             border: none;
-            color: #0d5cc9; /* darkened from #1877f2 — 4.6:1 contrast on white */
-            font-size: 14px;
+            color: #65676b;
+            font-size: 15px;
             font-weight: 600;
             cursor: pointer;
-            padding: 4px 0;
-            margin-top: 5px;
-            transition: color 0.3s;
-            display: block;
+            padding: 0;
+            margin: 0;
+            display: inline;
+            line-height: 1.5;
         }
 
         .see-more-btn:hover {
-            color: #0a47a1;
             text-decoration: underline;
+            color: #050505;
         }
 
         .post-image-container {
@@ -1771,6 +1791,18 @@
                 padding: 10px 12px;
             }
 
+            .post-description {
+                padding: 8px 12px 10px;
+            }
+
+            .description-text {
+                font-size: 14px;
+            }
+
+            .see-more-btn {
+                font-size: 14px;
+            }
+
             .post-card {
                 border-radius: 0 !important;
                 margin-bottom: 8px !important;
@@ -2046,11 +2078,6 @@
     }
 
 /* .see-more-btn - see definition above */
-
-    .description-text.truncated {
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
 
     /* Comment user clickable */
     .comment-user {

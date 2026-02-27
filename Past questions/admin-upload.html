@@ -168,7 +168,9 @@
 
                     <div class="form-group">
                         <label for="department">Department *</label>
-                        <input type="text" id="department" required placeholder="e.g., Economics">
+                        <select id="department" required>
+                            <option value="">Select Faculty first</option>
+                        </select>
                     </div>
                 </div>
 
@@ -296,6 +298,46 @@
             fileInfo.style.display = 'block';
         }
 
+        // Department options — must exactly match data-course values in the HTML pages
+        const departmentsByFaculty = {
+            'Faculty of Social Science Education': [
+                'History Education',
+                'Political Science Education',
+                'Geography Education',
+                'Social Studies Education',
+                'Economics Education',
+                'Centre for African Studies'
+            ],
+            'General Papers': [
+                'General Papers'
+            ],
+            'Faculty of Science Education': [
+                'Mathematics Education',
+                'Physics Education',
+                'Chemistry Education',
+                'Biology Education'
+            ],
+            'School of Business': [
+                'Department of Accounting',
+                'Department of Applied Finance and Policy Management',
+                'Department of Banking and Finance',
+                'Management Sciences',
+                'Marketing',
+                'Procurement & SCM'
+            ]
+        };
+
+        // When faculty changes, repopulate department dropdown
+        document.getElementById('faculty').addEventListener('change', function () {
+            const dept = document.getElementById('department');
+            const options = departmentsByFaculty[this.value] || [];
+
+            dept.innerHTML = options.length
+                ? '<option value="">Select Department</option>' +
+                  options.map(d => `<option value="${d}">${d}</option>`).join('')
+                : '<option value="">Select Faculty first</option>';
+        });
+
         // Free checkbox handling
         document.getElementById('isFree').addEventListener('change', (e) => {
             const priceInput = document.getElementById('price');
@@ -359,13 +401,9 @@
             }, 5000);
         }
 
-        // Check authentication on load
+        // Enforce login on this page only - guests are redirected to login.html
         window.addEventListener('load', async () => {
-            const result = await window.authFunctions.getCurrentUser();
-            if (!result.success || !result.user) {
-                alert('Please log in to upload past questions');
-                window.location.href = 'login.html';
-            }
+            await window.authFunctions.requireUploadAuth();
         });
     </script>
 </body>

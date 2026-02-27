@@ -1,35 +1,24 @@
 // ============================================
-// SUPABASE DATABASE OPERATIONS - GUEST ACCESS VERSION
-// No authentication required!
+// SUPABASE DATABASE OPERATIONS
+// All read/download functions are guest-accessible.
+// Only uploadPastQuestion requires authentication.
 // ============================================
 
-// Get all past questions with optional filters
+// Get all past questions with optional filters — NO auth required
 async function getPastQuestions(filters = {}) {
     try {
         let query = window.supabaseClient
             .from('past_questions')
             .select('*')
             .order('created_at', { ascending: false });
-        
-        // Apply filters
-        if (filters.faculty) {
-            query = query.eq('faculty', filters.faculty);
-        }
-        if (filters.department) {
-            query = query.eq('department', filters.department);
-        }
-        if (filters.level) {
-            query = query.eq('level', filters.level);
-        }
-        if (filters.semester) {
-            query = query.eq('semester', filters.semester);
-        }
-        if (filters.is_free !== undefined) {
-            query = query.eq('is_free', filters.is_free);
-        }
-        
+
+        if (filters.faculty)               query = query.eq('faculty', filters.faculty);
+        if (filters.department)            query = query.eq('department', filters.department);
+        if (filters.level)                 query = query.eq('level', filters.level);
+        if (filters.semester)              query = query.eq('semester', filters.semester);
+        if (filters.is_free !== undefined) query = query.eq('is_free', filters.is_free);
+
         const { data, error } = await query;
-        
         if (error) throw error;
         return { success: true, data };
     } catch (error) {
@@ -38,7 +27,7 @@ async function getPastQuestions(filters = {}) {
     }
 }
 
-// Get a single past question by ID
+// Get a single past question by ID — NO auth required
 async function getPastQuestionById(questionId) {
     try {
         const { data, error } = await window.supabaseClient
@@ -46,7 +35,7 @@ async function getPastQuestionById(questionId) {
             .select('*')
             .eq('id', questionId)
             .single();
-        
+
         if (error) throw error;
         return { success: true, data };
     } catch (error) {
@@ -55,32 +44,23 @@ async function getPastQuestionById(questionId) {
     }
 }
 
-// Check if email has access to a past question (guest system)
+// Check guest access by email — NO auth required
 async function checkGuestAccess(questionId, email) {
     try {
-        // Get the question details
         const { data: question } = await window.supabaseClient
             .from('past_questions')
             .select('is_free, price')
             .eq('id', questionId)
             .single();
-        
-        // If question is free, grant access to everyone
+
         if (question.is_free) {
             return { success: true, hasAccess: true, isFree: true };
         }
-        
-        // If no email provided, require payment
+
         if (!email) {
-            return { 
-                success: true, 
-                hasAccess: false, 
-                message: 'Purchase required',
-                price: question.price 
-            };
+            return { success: true, hasAccess: false, message: 'Purchase required', price: question.price };
         }
-        
-        // Check if email has purchased access
+
         const { data: access } = await window.supabaseClient
             .from('guest_downloads')
             .select('*')
@@ -88,24 +68,19 @@ async function checkGuestAccess(questionId, email) {
             .eq('past_question_id', questionId)
             .gt('expires_at', new Date().toISOString())
             .single();
-        
+
         if (access && access.download_count < access.max_downloads) {
             return { success: true, hasAccess: true, access };
         }
-        
-        return { 
-            success: true, 
-            hasAccess: false, 
-            message: 'Purchase required',
-            price: question.price 
-        };
+
+        return { success: true, hasAccess: false, message: 'Purchase required', price: question.price };
     } catch (error) {
         console.error('Error checking access:', error);
         return { success: false, hasAccess: false, error: error.message };
     }
 }
 
-// Legacy function - kept for compatibility
+// Legacy alias — NO auth required
 async function checkUserAccess(questionId) {
     try {
         const { data: question } = await window.supabaseClient
@@ -113,33 +88,26 @@ async function checkUserAccess(questionId) {
             .select('is_free, price')
             .eq('id', questionId)
             .single();
-        
-        // If question is free, grant access to everyone
+
         if (question.is_free) {
             return { success: true, hasAccess: true, isFree: true };
         }
-        
-        return { 
-            success: true, 
-            hasAccess: false, 
-            message: 'Purchase required',
-            price: question.price 
-        };
+
+        return { success: true, hasAccess: false, message: 'Purchase required', price: question.price };
     } catch (error) {
         console.error('Error checking access:', error);
         return { success: false, hasAccess: false, error: error.message };
     }
 }
 
-// Get user's purchased past questions (not used in guest system)
+// Not used in guest system
 async function getUserPurchases() {
     return { success: false, error: 'Guest system - no user accounts' };
 }
 
-// Record a payment (GUEST VERSION - No user_id required)
+// Record a payment — NO auth required (guest checkout)
 async function recordPayment(paymentData) {
     try {
-        // Prepare payment data (NO user_id - pure guest)
         const paymentRecord = {
             user_email: paymentData.email,
             past_question_id: paymentData.questionId,
@@ -148,59 +116,47 @@ async function recordPayment(paymentData) {
             payment_method: paymentData.method,
             payment_reference: paymentData.reference,
             payment_status: 'pending'
-            // NO user_id field at all!
         };
 
         console.log('Recording payment (guest mode):', paymentRecord);
 
-        // Insert payment record
         const { data, error } = await window.supabaseClient
             .from('payments')
             .insert(paymentRecord)
             .select()
             .single();
-        
+
         if (error) {
             console.error('Supabase error details:', error);
             throw error;
         }
-        
+
         console.log('Payment recorded successfully:', data);
         return { success: true, data };
     } catch (error) {
         console.error('Error recording payment:', error);
-        return { 
-            success: false, 
-            error: error.message,
-            details: error 
-        };
+        return { success: false, error: error.message, details: error };
     }
 }
 
-// Confirm payment and grant access (GUEST VERSION)
+// Confirm payment and grant access — NO auth required
 async function confirmPayment(paymentReference) {
     try {
-        // Get payment details
         const { data: payment, error: getError } = await window.supabaseClient
             .from('payments')
             .select('*')
             .eq('payment_reference', paymentReference)
             .single();
-        
+
         if (getError) throw getError;
-        
-        // Update payment status
+
         const { error: paymentError } = await window.supabaseClient
             .from('payments')
-            .update({
-                payment_status: 'completed',
-                paid_at: new Date().toISOString()
-            })
+            .update({ payment_status: 'completed', paid_at: new Date().toISOString() })
             .eq('payment_reference', paymentReference);
-        
+
         if (paymentError) throw paymentError;
-        
-        // Grant access using email (guest system)
+
         const { data: access, error: accessError } = await window.supabaseClient
             .from('guest_downloads')
             .insert({
@@ -212,12 +168,11 @@ async function confirmPayment(paymentReference) {
             })
             .select()
             .single();
-        
-        if (accessError && accessError.code !== '23505') { // Not a duplicate
+
+        if (accessError && accessError.code !== '23505') {
             console.error('Access grant error:', accessError);
-            // Don't fail - payment is already confirmed
         }
-        
+
         return { success: true, data: { payment, access } };
     } catch (error) {
         console.error('Error confirming payment:', error);
@@ -225,65 +180,91 @@ async function confirmPayment(paymentReference) {
     }
 }
 
-// Generate a temporary download URL (GUEST VERSION)
+// Generate a temporary signed download URL — NO auth required
 async function generateDownloadUrl(questionId, email) {
     try {
-        // Get the question
         const { data: question, error: questionError } = await window.supabaseClient
             .from('past_questions')
             .select('*')
             .eq('id', questionId)
             .single();
-        
+
         if (questionError) throw questionError;
-        
-        // If free, allow download
+
+        if (!question.file_path) {
+            throw new Error(`No file_path set for question ID "${questionId}". Check the database record.`);
+        }
+
+        const filePath = question.file_path.replace(/^\/+/, '');
+        const bucket = window.PAST_QUESTIONS_BUCKET;
+
+        console.debug(`[generateDownloadUrl] bucket="${bucket}", path="${filePath}"`);
+
+        // Verify file exists in Storage
+        const { data: fileList, error: listError } = await window.supabaseClient.storage
+            .from(bucket)
+            .list(filePath.substring(0, filePath.lastIndexOf('/')), {
+                search: filePath.substring(filePath.lastIndexOf('/') + 1)
+            });
+
+        if (listError) {
+            console.error('[generateDownloadUrl] Storage list error:', listError);
+        } else if (!fileList || fileList.length === 0) {
+            throw new Error(
+                `File not found in Storage. Bucket: "${bucket}", Path: "${filePath}". ` +
+                `Check that the file was uploaded and the path in the database matches exactly.`
+            );
+        }
+
+        // Free questions — anyone can download without login
         if (question.is_free) {
-            // Generate signed URL
             const { data, error } = await window.supabaseClient.storage
-                .from(window.PAST_QUESTIONS_BUCKET)
-                .createSignedUrl(question.file_path, 3600);
-            
+                .from(bucket)
+                .createSignedUrl(filePath, 3600);
+
             if (error) throw error;
-            
-            // Track download
+
             await window.supabaseClient
                 .from('past_questions')
-                .update({ 
-                    download_count: (question.download_count || 0) + 1 
-                })
+                .update({ download_count: (question.download_count || 0) + 1 })
                 .eq('id', questionId);
-            
+
             return { success: true, url: data.signedUrl };
         }
-        
-        // For paid questions, check guest access
+
+        // Paid questions — check guest access by email (no login needed)
         if (!email) {
             throw new Error('Email required for paid downloads');
         }
-        
+
         const accessCheck = await checkGuestAccess(questionId, email);
-        
+
         if (!accessCheck.hasAccess) {
             throw new Error(accessCheck.message || 'Access denied - payment required');
         }
-        
-        // Generate signed URL
+
         const { data, error } = await window.supabaseClient.storage
-            .from(window.PAST_QUESTIONS_BUCKET)
-            .createSignedUrl(question.file_path, 3600);
-        
+            .from(bucket)
+            .createSignedUrl(filePath, 3600);
+
         if (error) throw error;
-        
-        // Update download count
-        await window.supabaseClient
+
+        // Increment download count safely (fix: was incorrectly using sql template literal)
+        const { data: currentAccess } = await window.supabaseClient
             .from('guest_downloads')
-            .update({ 
-                download_count: window.supabaseClient.sql`download_count + 1`
-            })
+            .select('download_count')
             .eq('email', email)
-            .eq('past_question_id', questionId);
-        
+            .eq('past_question_id', questionId)
+            .single();
+
+        if (currentAccess) {
+            await window.supabaseClient
+                .from('guest_downloads')
+                .update({ download_count: (currentAccess.download_count || 0) + 1 })
+                .eq('email', email)
+                .eq('past_question_id', questionId);
+        }
+
         return { success: true, url: data.signedUrl };
     } catch (error) {
         console.error('Error generating download URL:', error);
@@ -291,31 +272,25 @@ async function generateDownloadUrl(questionId, email) {
     }
 }
 
-// Upload a past question (Admin function - still requires auth)
+// Upload a past question — REQUIRES LOGIN (admin/uploader only)
 async function uploadPastQuestion(file, metadata) {
     try {
-        // Check if user is authenticated
+        // This is the ONLY function that enforces auth.
+        // requireUploadAuth() will redirect to login.html if not signed in.
+        const authed = await window.authFunctions.requireUploadAuth();
+        if (!authed) return { success: false, error: 'Authentication required to upload' };
+
         const { data: { user } } = await window.supabaseClient.auth.getUser();
-        
-        if (!user) {
-            throw new Error('User must be authenticated to upload files');
-        }
-        
-        // Create file path: faculty/department/level/semester/filename
+
         const fileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
         const filePath = `${metadata.faculty}/${metadata.department}/${metadata.level}/${metadata.semester}/${fileName}`;
-        
-        // Upload file to storage
-        const { data: uploadData, error: uploadError } = await window.supabaseClient.storage
+
+        const { error: uploadError } = await window.supabaseClient.storage
             .from(window.PAST_QUESTIONS_BUCKET)
-            .upload(filePath, file, {
-                cacheControl: '3600',
-                upsert: false
-            });
-        
+            .upload(filePath, file, { cacheControl: '3600', upsert: false });
+
         if (uploadError) throw uploadError;
-        
-        // Insert record in database
+
         const { data: question, error: dbError } = await window.supabaseClient
             .from('past_questions')
             .insert({
@@ -334,16 +309,15 @@ async function uploadPastQuestion(file, metadata) {
             })
             .select()
             .single();
-        
+
         if (dbError) {
-            // If database insert fails, try to delete the uploaded file
+            // Clean up uploaded file if DB insert fails
             await window.supabaseClient.storage
                 .from(window.PAST_QUESTIONS_BUCKET)
                 .remove([filePath]);
-            
             throw dbError;
         }
-        
+
         return { success: true, data: question };
     } catch (error) {
         console.error('Error uploading past question:', error);
@@ -351,7 +325,7 @@ async function uploadPastQuestion(file, metadata) {
     }
 }
 
-// Search past questions
+// Search past questions — NO auth required
 async function searchPastQuestions(searchTerm) {
     try {
         const { data, error } = await window.supabaseClient
@@ -359,7 +333,7 @@ async function searchPastQuestions(searchTerm) {
             .select('*')
             .or(`title.ilike.%${searchTerm}%,course_name.ilike.%${searchTerm}%,course_code.ilike.%${searchTerm}%`)
             .order('created_at', { ascending: false });
-        
+
         if (error) throw error;
         return { success: true, data };
     } catch (error) {
@@ -368,33 +342,29 @@ async function searchPastQuestions(searchTerm) {
     }
 }
 
-// Get statistics (for admin dashboard)
+// Get statistics — NO auth required
 async function getStatistics() {
     try {
-        // Get total questions
         const { count: totalQuestions } = await window.supabaseClient
             .from('past_questions')
             .select('*', { count: 'exact', head: true });
-        
-        // Get free questions
+
         const { count: freeQuestions } = await window.supabaseClient
             .from('past_questions')
             .select('*', { count: 'exact', head: true })
             .eq('is_free', true);
-        
-        // Get total guests
+
         const { count: totalGuests } = await window.supabaseClient
             .from('guest_downloads')
             .select('email', { count: 'exact', head: true });
-        
-        // Get total revenue
+
         const { data: payments } = await window.supabaseClient
             .from('payments')
             .select('amount')
             .eq('payment_status', 'completed');
-        
+
         const totalRevenue = payments?.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0) || 0;
-        
+
         return {
             success: true,
             data: {
@@ -411,7 +381,7 @@ async function getStatistics() {
     }
 }
 
-// Export functions for use in other files
+// Export all functions
 window.dbOperations = {
     getPastQuestions,
     getPastQuestionById,

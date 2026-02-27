@@ -68,7 +68,7 @@
 
         /* Header Styles */
         .header {
-            background: linear-gradient(135deg, #1877f2, #42b72a);
+            background: #fff;
             padding: 0;
             position: fixed;
             top: 0;
@@ -77,7 +77,7 @@
             z-index: 1000;
             display: flex;
             flex-direction: column;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+            box-shadow: 0 1px 4px rgba(0,0,0,0.12);
         }
 
         .header-top {
@@ -90,8 +90,8 @@
 
         /* ===== CATEGORY NAV BAR (inside header) ===== */
         .category-nav {
-            background: rgba(0, 0, 0, 0.15);
-            border-top: 1px solid rgba(255, 255, 255, 0.15);
+            background: #fff;
+            border-top: 1px solid #e4e6e9;
         }
 
         .category-nav-inner {
@@ -112,14 +112,14 @@
         .category-btn {
             display: flex;
             align-items: center;
-            gap: 6px;
-            padding: 7px 14px;
+            gap: 7px;
+            padding: 10px 20px;
             border: none;
             border-bottom: 3px solid transparent;
             background: none;
-            font-size: 13px;
+            font-size: 14px;
             font-weight: 600;
-            color: rgba(255, 255, 255, 0.8);
+            color: #65676b;
             cursor: pointer;
             white-space: nowrap;
             transition: all 0.2s;
@@ -127,23 +127,23 @@
         }
 
         .category-btn:hover {
-            color: #fff;
-            background: rgba(255, 255, 255, 0.1);
+            color: #1877f2;
+            background: #f0f2f5;
         }
 
         .category-btn.active {
-            color: #fff;
-            border-bottom-color: #fff;
+            color: #1877f2;
+            border-bottom-color: #1877f2;
         }
 
         .category-btn i {
-            font-size: 13px;
+            font-size: 15px;
         }
 
         .logo {
             font-size: 18px;
             font-weight: bold;
-            color: white;
+            color: #1877f2;
             display: flex;
             align-items: center;
             gap: 6px;
@@ -151,12 +151,14 @@
 
         .logo i {
             font-size: 20px;
+            color: #1877f2;
         }
 
         .logo-subtitle {
             font-size: 10px;
             font-weight: normal;
-            opacity: 0.9;
+            color: #65676b;
+            opacity: 1;
         }
 
         .header-right {
@@ -169,21 +171,22 @@
             display: flex;
             align-items: center;
             gap: 8px;
-            padding: 10px 20px;
-            background: white;
-            color: #1877f2;
+            padding: 8px 18px;
+            background: #1877f2;
+            color: #fff;
             border: none;
             border-radius: 25px;
             font-size: 14px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 8px rgba(24,119,242,0.3);
         }
 
         .upload-btn:hover {
+            background: #166fe5;
             transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            box-shadow: 0 4px 12px rgba(24,119,242,0.4);
         }
 
         /* Notification Bell */
@@ -192,17 +195,17 @@
             cursor: pointer;
             padding: 10px;
             border-radius: 50%;
-            background: rgba(255,255,255,0.2);
+            background: #f0f2f5;
             transition: all 0.3s;
         }
 
         .notification-bell:hover {
-            background: rgba(255,255,255,0.3);
+            background: #e4e6e9;
         }
 
         .notification-bell i {
             font-size: 20px;
-            color: white;
+            color: #1877f2;
         }
 
         .notification-badge {
@@ -219,7 +222,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            border: 2px solid #1877f2;
+            border: 2px solid #fff;
         }
 
         .notification-badge.hidden {
@@ -425,7 +428,7 @@
         }
 
         .user-name {
-            color: white;
+            color: #050505;
             font-weight: 600;
             font-size: 14px;
         }
@@ -434,7 +437,7 @@
         .main-layout {
             display: flex;
             max-width: 1200px;
-            margin: 90px auto 20px;
+            margin: 94px auto 20px;
             padding: 20px;
             gap: 20px;
         }
@@ -774,7 +777,6 @@
 
         .description-text.truncated {
             display: -webkit-box;
-        
             -webkit-box-orient: vertical;
             overflow: hidden;
             white-space: normal;
@@ -1829,20 +1831,32 @@
                 min-height: 44px;
             }
 
-            .main-layout {
-                padding: 0 !important;
-                margin-top: 86px !important;
-                gap: 0 !important;
-                max-width: 100% !important;
-                width: 100% !important;
+            .header {
+                background: #fff !important;
+                box-shadow: 0 1px 4px rgba(0,0,0,0.12) !important;
             }
 
             .header-top {
                 padding: 5px 12px;
-                min-height: 40px;
+                min-height: 42px;
+            }
+
+            .logo {
+                color: #1877f2 !important;
+            }
+
+            .logo i {
+                color: #1877f2 !important;
+            }
+
+            .logo-subtitle {
+                color: #555 !important;
             }
 
             .category-nav {
+                background: #fff !important;
+                border-top: 1px solid #e4e6e9 !important;
+                border-bottom: 1px solid #e4e6e9;
                 top: unset;
             }
 
@@ -1851,9 +1865,45 @@
             }
 
             .category-btn {
-                padding: 6px 11px;
-                font-size: 12px;
-                gap: 5px;
+                color: #65676b !important;
+                padding: 11px 18px !important;
+                font-size: 14px !important;
+                font-weight: 700 !important;
+            }
+
+            .category-btn.active {
+                color: #1877f2 !important;
+                border-bottom-color: #1877f2 !important;
+            }
+
+            .category-btn i {
+                color: inherit !important;
+                font-size: 15px !important;
+            }
+
+            .notification-bell {
+                color: #1877f2 !important;
+                background: rgba(24,119,242,0.08) !important;
+            }
+
+            .notification-bell i {
+                color: #1877f2 !important;
+            }
+
+            .user-name {
+                color: #050505 !important;
+            }
+
+            .user-avatar {
+                background: #1877f2 !important;
+            }
+
+            .main-layout {
+                padding: 0 !important;
+                margin-top: 90px !important;
+                gap: 0 !important;
+                max-width: 100% !important;
+                width: 100% !important;
             }
 
             .feed-container {

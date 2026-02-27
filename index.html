@@ -52,6 +52,13 @@
         .post-image-container{width:100%;background:#000;position:relative;overflow:hidden}
         .post-image{width:100%;height:auto;max-height:700px;object-fit:cover;object-position:center top;display:block;background:#000}
         .post-card{background:#fff;border-radius:8px;margin-bottom:16px;box-shadow:0 1px 2px rgba(0,0,0,.1);overflow:hidden}
+        @media(max-width:600px){
+            .main-layout{padding:0!important;margin-top:58px!important;gap:0!important;max-width:100%!important;width:100%!important}
+            .feed-container{width:100%!important;max-width:100%!important;padding:0!important;margin:0!important}
+            .post-card{border-radius:0!important;margin-bottom:8px!important;width:100%!important;box-shadow:none!important}
+            .post-image-container{width:100%!important;max-width:100%!important;margin:0!important;padding:0!important;background:#000!important}
+            .post-image{width:100%!important;height:auto!important;max-height:none!important;object-fit:cover!important;object-position:center top!important;display:block!important}
+        }
        
         /* Skeleton loader */
         .post-skeleton{background:#fff;border-radius:8px;margin-bottom:16px;padding:16px;box-shadow:0 1px 2px rgba(0,0,0,.1)}

@@ -46,14 +46,24 @@
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
         body{background:#f0f2f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
-        .header{background:linear-gradient(135deg,#1877f2,#42b72a);padding:12px 20px;position:fixed;top:0;left:0;right:0;z-index:1000;display:flex;justify-content:space-between;align-items:center;min-height:58px}
-        .main-layout{display:flex;max-width:1200px;margin:78px auto 20px;padding:20px;gap:20px}
+        .header{background:linear-gradient(135deg,#1877f2,#42b72a);padding:0;position:fixed;top:0;left:0;right:0;z-index:1000;display:flex;flex-direction:column;box-shadow:0 2px 10px rgba(0,0,0,0.15)}
+        .header-top{display:flex;justify-content:space-between;align-items:center;padding:6px 16px;min-height:44px}
+        .category-nav{background:rgba(0,0,0,0.15);border-top:1px solid rgba(255,255,255,0.15)}
+        .category-nav-inner{display:flex;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding:0 12px;gap:0}
+        .category-nav-inner::-webkit-scrollbar{display:none}
+        .category-btn{display:flex;align-items:center;gap:6px;padding:7px 14px;border:none;border-bottom:3px solid transparent;background:none;font-size:13px;font-weight:600;color:rgba(255,255,255,0.8);cursor:pointer;white-space:nowrap;transition:all .2s;flex-shrink:0}
+        .category-btn.active{color:#fff;border-bottom-color:#fff}
+        .category-btn:hover{color:#fff;background:rgba(255,255,255,0.1)}
+        .category-btn i{font-size:13px}
+        .main-layout{display:flex;max-width:1200px;margin:90px auto 20px;padding:20px;gap:20px}
         /* Reserve image space to prevent CLS */
         .post-image-container{width:100%;background:#000;position:relative;overflow:hidden}
         .post-image{width:100%;height:auto;display:block;object-fit:cover;object-position:center top;background:#000}
         .post-card{background:#fff;border-radius:8px;margin-bottom:16px;box-shadow:0 1px 2px rgba(0,0,0,.1);overflow:hidden}
         @media(max-width:600px){
-            .main-layout{padding:0!important;margin-top:58px!important;gap:0!important;max-width:100%!important;width:100%!important}
+            .main-layout{padding:0!important;margin-top:86px!important;gap:0!important;max-width:100%!important;width:100%!important}
+            .header-top{padding:5px 12px;min-height:40px}
+            .category-btn{padding:6px 11px;font-size:12px}
             .feed-container{width:100%!important;max-width:100%!important;padding:0!important;margin:0!important}
             .post-card{border-radius:0!important;margin-bottom:8px!important;width:100%!important;box-shadow:none!important}
             .post-image-container{width:100%!important;max-width:100%!important;margin:0!important;padding:0!important;background:#000!important;overflow:hidden!important}
@@ -78,17 +88,17 @@
 
     <!-- Header -->
     <header class="header">
-        <div class="logo">
-            <!-- aria-hidden on decorative icon; text provides the label -->
-            <i class="fas fa-graduation-cap" aria-hidden="true"></i>
-            <div>
-                <span>CampusTrend</span>
-                <div class="logo-subtitle">University of Education, Winneba</div>
+        <div class="header-top">
+            <div class="logo">
+                <!-- aria-hidden on decorative icon; text provides the label -->
+                <i class="fas fa-graduation-cap" aria-hidden="true"></i>
+                <div>
+                    <span>CampusTrend</span>
+                    <div class="logo-subtitle">University of Education, Winneba</div>
+                </div>
             </div>
-        </div>
 
-        <div class="header-right">
-            <nav aria-label="Primary navigation">UEW pasco</nav>
+            <div class="header-right">
 
             <!-- Notification Bell -->
             <div
@@ -147,6 +157,29 @@
                 <span class="user-name" id="currentUserName">User</span>
             </div>
         </div>
+        </div><!-- end header-top -->
+
+        <!-- Category Nav inside header -->
+        <nav class="category-nav" aria-label="Content categories">
+            <div class="category-nav-inner">
+                <button class="category-btn active" data-category="feed" aria-pressed="true">
+                    <i class="fas fa-newspaper" aria-hidden="true"></i>
+                    <span>Feed</span>
+                </button>
+                <button class="category-btn" data-category="pasco" aria-pressed="false">
+                    <i class="fas fa-book" aria-hidden="true"></i>
+                    <span>UEW Pasco</span>
+                </button>
+                <button class="category-btn" data-category="radio" aria-pressed="false">
+                    <i class="fas fa-headphones" aria-hidden="true"></i>
+                    <span>Radio Lectures</span>
+                </button>
+                <button class="category-btn" data-category="tutorials" aria-pressed="false">
+                    <i class="fas fa-video" aria-hidden="true"></i>
+                    <span>Video Tutorials</span>
+                </button>
+            </div>
+        </nav>
     </header>
 
     <!-- Main Layout -->
@@ -227,11 +260,6 @@
             </div>
         </aside>
 
-        <section class="filter-container">
-            <nav>UEW PASCO</nav>
-            <nav>Tutorials</nav>
-            
-        </section>
         <!-- Feed Container -->
         <section class="feed-container" aria-label="Campus feed">
             <div class="feed-header">

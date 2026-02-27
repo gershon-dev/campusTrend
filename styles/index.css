@@ -721,15 +721,16 @@
 
         .post-image-container {
             width: 100%;
-            background: #000;
+            background: #e4e6e9;
             position: relative;
             overflow: hidden;
         }
 
         .post-image {
             width: 100%;
-            max-height: 600px;
-            object-fit: contain;
+            height: 500px;
+            object-fit: cover;
+            object-position: center;
             display: block;
         }
 
@@ -755,43 +756,51 @@
             opacity: 0.9;
         }
 
-        /* Star Rating Badge - FIXED AND ENHANCED */
+        /* Star Rating Badge - positioned top-right of image */
         .star-rating-badge {
             display: inline-flex;
             align-items: center;
-            gap: 3px;
-            padding: 4px 10px;
-            border-radius: 15px;
-            margin-left: 8px;
-            box-shadow: 0 2px 8px rgba(255, 193, 7, 0.4);
-            animation: starPulse 2s ease-in-out infinite;
+            gap: 4px;
+            padding: 5px 10px;
+            border-radius: 20px;
+            background: rgba(0, 0, 0, 0.72);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
             vertical-align: middle;
         }
 
+        /* When inside the image container, position absolutely at top-right */
+        .post-image-container .star-rating-badge {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            margin: 0;
+            animation: starPulse 2s ease-in-out infinite;
+            z-index: 2;
+        }
+
         .star-rating-badge i {
-            color: white;
-            font-size: 12px;
-            text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+            color: #ffd700;
+            font-size: 13px;
         }
 
         .star-rating-badge.stars-1 {
-            background: linear-gradient(135deg, #A8E6CF, #7EC8A3);
+            background: rgba(0, 0, 0, 0.72);
         }
 
         .star-rating-badge.stars-2 {
-            background: linear-gradient(135deg, #ffd700, #ffaa00);
+            background: rgba(0, 0, 0, 0.72);
         }
 
         .star-rating-badge.stars-3 {
-            background: linear-gradient(135deg, #ff9800, #f57c00);
+            background: rgba(0, 0, 0, 0.72);
         }
 
         .star-rating-badge.stars-4 {
-            background: linear-gradient(135deg, #e91e63, #c2185b);
+            background: rgba(0, 0, 0, 0.72);
         }
 
         .star-rating-badge.stars-5 {
-            background: linear-gradient(135deg, #9c27b0, #7b1fa2);
+            background: rgba(0, 0, 0, 0.72);
             animation: starGlow 1.5s ease-in-out infinite;
         }
 
@@ -812,10 +821,10 @@
         }
 
         .star-rating-label {
-            font-size: 10px;
-            color: white;
-            font-weight: 600;
-            margin-left: 3px;
+            font-size: 11px;
+            color: #ffffff;
+            font-weight: 700;
+            margin-left: 2px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }

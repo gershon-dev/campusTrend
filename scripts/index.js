@@ -338,7 +338,7 @@ document.addEventListener('DOMContentLoaded', async function() {
  </span>
  <span class="stat-item">
  <i class="fas fa-share" aria-hidden="true"></i>
- ${post.shares_count || 0} shares
+ ${post.shares_count} shares
  </span>
  </div>
  <div class="post-actions" role="group" aria-label="Post actions">

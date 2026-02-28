@@ -2,11 +2,11 @@ const CACHE_NAME = 'campustrend-uew-v1';
 
 // Core files to cache on install
 const CORE_FILES = [
-  '/Big-Project/',
-  '/Big-Project/index.html',
-  '/Big-Project/styles/index.css',
-  '/Big-Project/index.js',
-  '/Big-Project/manifest.json'
+  '/campusTrend/',
+  '/campusTrend/index.html',
+  '/campusTrend/styles/index.css',
+  '/campusTrend/index.js',
+  '/campusTrend/manifest.json'
 ];
 
 // ===== INSTALL: cache core files =====
@@ -63,7 +63,7 @@ self.addEventListener('fetch', event => {
       }).catch(() => {
         // Offline fallback for HTML pages
         if (event.request.headers.get('accept').includes('text/html')) {
-          return caches.match('/Big-Project/index.html');
+          return caches.match('/campusTrend/index.html');
         }
       });
     })

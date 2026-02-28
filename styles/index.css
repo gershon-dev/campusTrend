@@ -8,6 +8,8 @@
         body {
             background-color: #f0f2f5;
             min-height: 100vh;
+            font-family: 'Open Sans', sans-serif;
+
         }
 
         /* ===== SKIP LINK (Accessibility) ===== */
@@ -2426,7 +2428,6 @@ a:focus-visible {
 button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
-    pointer-events: none;
 }
 
 /* ===== PERFORMANCE: contain layout for post cards ===== */

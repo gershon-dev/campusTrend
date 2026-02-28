@@ -85,18 +85,15 @@
     <script src="scripts/sign-in.js"></script>
 
 
-    <!-- PWA Install Banner -->
-    <div id="installBanner" style="display:none; position:fixed; bottom:0; left:0; right:0; background:#1877f2; color:white; padding:14px 16px; z-index:9999; align-items:center; justify-content:space-between; box-shadow:0 -2px 10px rgba(0,0,0,0.2);">
-        <div style="display:flex; align-items:center; gap:10px;">
-            <img src="icons/icon-72.png" style="width:36px; height:36px; border-radius:8px;">
-            <div>
-                <div style="font-weight:700; font-size:14px;">Install CampusTrend</div>
-                <div style="font-size:12px; opacity:0.85;">Add to your home screen</div>
-            </div>
-        </div>
-        <div style="display:flex; gap:8px;">
-            <button id="installBtn" style="background:white; color:#1877f2; border:none; padding:8px 16px; border-radius:20px; font-weight:700; font-size:13px; cursor:pointer;">Install</button>
-            <button id="dismissBtn" style="background:transparent; color:white; border:1px solid rgba(255,255,255,0.5); padding:8px 12px; border-radius:20px; font-size:13px; cursor:pointer;">&#10005;</button>
+    <!-- PWA Install Modal -->
+    <div id="installBanner" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.6); z-index:9999; align-items:center; justify-content:center;">
+        <div style="background:white; border-radius:20px; padding:28px 24px; margin:24px; max-width:340px; width:100%; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+            <img src="icons/icon-192.png" style="width:80px; height:80px; border-radius:18px; margin-bottom:16px; box-shadow:0 4px 15px rgba(24,119,242,0.3);">
+            <h2 style="margin:0 0 8px; font-size:20px; color:#1a1a1a; font-weight:700;">Install CampusTrend</h2>
+            <p style="margin:0 0 6px; color:#555; font-size:14px;">University of Education, Winneba</p>
+            <p style="margin:0 0 24px; color:#888; font-size:13px;">Add to your home screen for the full app experience — no browser bar!</p>
+            <button id="installBtn" style="width:100%; background:#1877f2; color:white; border:none; padding:14px; border-radius:12px; font-weight:700; font-size:16px; cursor:pointer; margin-bottom:10px;">📱 Install App</button>
+            <button id="dismissBtn" style="width:100%; background:transparent; color:#888; border:none; padding:10px; border-radius:12px; font-size:14px; cursor:pointer;">Maybe later</button>
         </div>
     </div>
 

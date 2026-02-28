@@ -89,7 +89,6 @@ document.addEventListener('DOMContentLoaded', async function() {
  return name.substring(0, 2).toUpperCase();
  }
  function loadDepartments() {
- const departmentSelect = document.getElementById('departmentSelect');
  const departmentTags = document.getElementById('departmentTags');
  const departments = window.DEPARTMENTS || [
  'Computer Science',
@@ -105,13 +104,6 @@ document.addEventListener('DOMContentLoaded', async function() {
  'Physical Education',
  'Special Education'
  ];
- if (departmentSelect) {
- departmentSelect.innerHTML = '<option value="">Select your department</option>' +
- departments.map(dept => `<option value="${dept}">${dept}</option>`).join('');
- if (currentProfile?.department) {
- departmentSelect.value = currentProfile.department;
- }
- }
  if (departmentTags) {
  departmentTags.innerHTML = `
  <div class="department-tag active" data-department="">All</div>
@@ -283,8 +275,7 @@ document.addEventListener('DOMContentLoaded', async function() {
  ${isOwnPost ? '<span class="own-post-badge" aria-label="Your post">You</span>' : ''}
  </div>
  <div class="post-meta">
- <i class="fas fa-graduation-cap" aria-hidden="true"></i>
- ${escapeHTML(profile.department || 'Unknown')}
+ <span class="department-badge"><i class="fas fa-graduation-cap" aria-hidden="true"></i> ${escapeHTML(profile.department || 'Unknown')}</span>
  <time class="post-time" datetime="${post.created_at}">${timeAgo}</time>
  </div>
  </div>
@@ -347,8 +338,9 @@ document.addEventListener('DOMContentLoaded', async function() {
  </button>
  </div>
  <div class="comments-section" data-post-id="${post.id}">
+ <div class="comments-list" data-post-id="${post.id}" role="list" aria-label="Comments"></div>
  <div class="comment-input-wrapper">
- <div class="user-avatar small" aria-hidden="true">${getInitials(currentProfile?.full_name || 'U')}</div>
+ <div class="user-avatar small" aria-hidden="true" style="background:${stringToColor(currentProfile?.full_name || 'U')}">${getInitials(currentProfile?.full_name || 'U')}</div>
  <input
  type="text"
  class="comment-input"
@@ -359,8 +351,6 @@ document.addEventListener('DOMContentLoaded', async function() {
  <button class="send-comment-btn" data-post-id="${post.id}" disabled aria-label="Send comment" aria-disabled="true">
  <i class="fas fa-paper-plane" aria-hidden="true"></i>
  </button>
- </div>
- <div class="comments-list" data-post-id="${post.id}" role="list" aria-label="Comments">
  </div>
  </div>
  </article>
@@ -427,20 +417,23 @@ document.addEventListener('DOMContentLoaded', async function() {
  const sendCommentBtn = postCard.querySelector('.send-comment-btn');
  if (commentInput && sendCommentBtn) {
  commentInput.addEventListener('input', () => {
- sendCommentBtn.disabled = !commentInput.value.trim();
+ const hasText = commentInput.value.trim().length > 0;
+ sendCommentBtn.disabled = !hasText;
+ sendCommentBtn.setAttribute('aria-disabled', String(!hasText));
  });
  commentInput.addEventListener('keypress', (e) => {
- if (e.key === 'Enter' && commentInput.value.trim()) {
+ if (e.key === 'Enter' && !e.shiftKey && commentInput.value.trim()) {
+ e.preventDefault();
  handleComment(postId, commentInput.value.trim());
  }
  });
  sendCommentBtn.addEventListener('click', () => {
- if (commentInput.value.trim()) {
- handleComment(postId, commentInput.value.trim());
+ const text = commentInput.value.trim();
+ if (text) {
+ handleComment(postId, text);
  }
  });
  }
- loadComments(postId);
  }
  async function handleLike(postId) {
  try {
@@ -525,27 +518,30 @@ document.addEventListener('DOMContentLoaded', async function() {
  }
  async function handleComment(postId, content) {
  try {
+ const postCard = document.querySelector(`[data-post-id="${postId}"]`);
+ const commentInput = postCard?.querySelector('.comment-input');
+ const sendBtn = postCard?.querySelector('.send-comment-btn');
+ // Optimistically disable while posting
+ if (sendBtn) sendBtn.disabled = true;
  const result = await window.addComment(postId, content);
  if (result.success) {
- const postCard = document.querySelector(`[data-post-id="${postId}"]`);
- if (postCard) {
- const commentInput = postCard.querySelector('.comment-input');
- const sendBtn = postCard.querySelector('.send-comment-btn');
  if (commentInput) commentInput.value = '';
- if (sendBtn) sendBtn.disabled = true;
+ if (sendBtn) {
+ sendBtn.disabled = true;
+ sendBtn.setAttribute('aria-disabled', 'true');
+ }
  const post = posts.find(p => p.id === postId);
  if (post) {
  post.comments_count = (post.comments_count || 0) + 1;
  const commentsCount = postCard.querySelector('.comments-count');
- if (commentsCount) {
- commentsCount.textContent = post.comments_count;
- }
- }
+ if (commentsCount) commentsCount.textContent = post.comments_count;
  }
  await loadComments(postId);
+ if (commentInput) commentInput.focus();
  showToast('Comment added!', 'success');
  } else {
- showToast('Failed to add comment', 'error');
+ showToast(result.error || 'Failed to add comment', 'error');
+ if (sendBtn) sendBtn.disabled = false;
  }
  } catch (error) {
  console.error('Error adding comment:', error);
@@ -749,13 +745,9 @@ document.addEventListener('DOMContentLoaded', async function() {
  const postDescription = document.getElementById('postDescription');
  const charCount = document.getElementById('charCount');
  const submitPostBtn = document.getElementById('submitPostBtn');
- const departmentSelect = document.getElementById('departmentSelect');
  if (openUploadModal) {
  openUploadModal.addEventListener('click', () => {
  uploadModal.classList.add('show');
- if (currentProfile?.department && departmentSelect) {
- departmentSelect.value = currentProfile.department;
- }
  checkFormValidity();
  });
  }
@@ -808,11 +800,6 @@ document.addEventListener('DOMContentLoaded', async function() {
  checkFormValidity();
  });
  }
- if (departmentSelect) {
- departmentSelect.addEventListener('change', () => {
- checkFormValidity();
- });
- }
  if (submitPostBtn) {
  submitPostBtn.addEventListener('click', async () => {
  await handleCreatePost();
@@ -820,18 +807,17 @@ document.addEventListener('DOMContentLoaded', async function() {
  }
  function checkFormValidity() {
  const hasImage = imageInput && imageInput.files.length > 0;
- const hasDepartment = departmentSelect && departmentSelect.value;
  if (submitPostBtn) {
- submitPostBtn.disabled = !(hasImage && hasDepartment);
+ submitPostBtn.disabled = !hasImage;
  }
  }
  async function handleCreatePost() {
  try {
  const description = postDescription?.value.trim() || '';
- const department = departmentSelect?.value;
+ const department = currentProfile?.department || '';
  const imageFile = imageInput?.files[0];
- if (!imageFile || !department) {
- showToast('Please select an image and department', 'error');
+ if (!imageFile) {
+ showToast('Please select an image', 'error');
  return;
  }
  const submitBtnText = document.getElementById('submitBtnText');

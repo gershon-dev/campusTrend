@@ -138,9 +138,11 @@ async function loadOtherUserProfile(userId) {
             // Show follow button for other users
             document.getElementById('editAvatarBtn').style.display = 'none';
             document.getElementById('editProfileBtn').style.display = 'none';
-            document.getElementById('followBtn').style.display = 'inline-flex';
+            const followBtn = document.getElementById('followBtn');
+            followBtn.style.display = 'inline-flex';
+            followBtn.onclick = handleFollowClick;
             
-            // Check if already following
+            // Check if already following and update button state
             await updateFollowButton();
         } else {
             showToast('User not found', 'error');
@@ -288,9 +290,9 @@ async function loadUserPosts() {
         if (postIds.length > 0) {
             const { data: comments, error: commentsError } = await window.supabaseClient
                 .from('comments')
-                .select('id, content, created_at, user_id, post_id')
+                .select('id, content, created_at, user_id, post_id, parent_comment_id')
                 .in('post_id', postIds)
-                .order('created_at', { ascending: false });
+                .order('created_at', { ascending: true });
             
             if (commentsError) {
                 console.error('ERROR loading comments:', commentsError);
@@ -419,18 +421,29 @@ async function renderPosts(posts) {
             isLiked = post.likes.some(like => like.user_id === currentUser.id);
         }
 
-        // Get comments and sort by date (newest first)
-        const comments = (post.comments || []).sort((a, b) => 
-            new Date(b.created_at) - new Date(a.created_at)
-        );
-        
+        // Separate top-level comments and replies
+        const allComments = post.comments || [];
+        const topLevelComments = allComments.filter(c => !c.parent_comment_id);
+        const repliesMap = {};
+        allComments.forEach(c => {
+            if (c.parent_comment_id) {
+                if (!repliesMap[c.parent_comment_id]) repliesMap[c.parent_comment_id] = [];
+                repliesMap[c.parent_comment_id].push(c);
+            }
+        });
+
+        const commentsHTML = topLevelComments.length > 0
+            ? topLevelComments.map(comment => buildCommentHTML(comment, repliesMap, post.id)).join('')
+            : '<p class="no-comments-text">No comments yet. Be the first to comment!</p>';
+
+        const isOwnPost = currentUser && post.user_id === currentUser.id;
+
         return `
             <div class="post-card" data-post-id="${post.id}">
-                <!-- Post Header -->
                 <div class="post-header">
                     <div class="post-avatar">
                         ${post.profiles?.avatar_url ? 
-                            `<img src="${post.profiles.avatar_url}" alt="${post.profiles.full_name}">` :
+                            `<img src="${post.profiles.avatar_url}" alt="${escapeHtml(post.profiles.full_name)}">` :
                             `<span>${userInitials}</span>`
                         }
                     </div>
@@ -441,13 +454,25 @@ async function renderPosts(posts) {
                             <span>${timeAgo}</span>
                         </div>
                     </div>
+                    ${isOwnPost ? `
+                    <div class="post-menu-wrapper">
+                        <button class="post-menu-btn" data-post-id="${post.id}" aria-label="Post options">
+                            <i class="fas fa-ellipsis-h"></i>
+                        </button>
+                        <div class="post-menu-dropdown" id="menu-${post.id}">
+                            <button class="post-menu-item delete" data-post-id="${post.id}">
+                                <i class="fas fa-trash-alt"></i>
+                                <span>Delete Post</span>
+                            </button>
+                        </div>
+                    </div>
+                    ` : ''}
                 </div>
 
-                <!-- Post Image -->
                 <div class="post-image-container">
                     ${post.image_url ? 
-                        `<img src="${post.image_url}" alt="Post image" class="post-image">` :
-                        '<div style="padding: 60px; text-align: center; color: #65676b;"><i class="fas fa-image" style="font-size: 48px;"></i></div>'
+                        `<img src="${post.image_url}" alt="Post image" class="post-image" loading="lazy">` :
+                        '<div style="padding:60px;text-align:center;color:#65676b"><i class="fas fa-image" style="font-size:48px"></i></div>'
                     }
                     ${rating.stars > 0 ? `
                         <div class="post-star-badge">
@@ -457,26 +482,21 @@ async function renderPosts(posts) {
                     ` : ''}
                 </div>
 
-                <!-- Post Content -->
                 <div class="post-content">
-                    ${post.description ? `
-                        <div class="post-description">${escapeHtml(post.description)}</div>
-                    ` : ''}
-                    
+                    ${post.description ? `<div class="post-description">${escapeHtml(post.description)}</div>` : ''}
                     <div class="post-department-tag">
                         <i class="fas fa-building"></i>
                         ${escapeHtml(post.department || 'General')}
                     </div>
 
-                    <!-- Post Actions -->
                     <div class="post-actions">
-                        <button class="post-action-btn ${isLiked ? 'liked' : ''}" onclick="toggleLike('${post.id}', this)">
+                        <button class="post-action-btn like-btn ${isLiked ? 'liked' : ''}" data-post-id="${post.id}" aria-pressed="${isLiked}">
                             <i class="fas fa-heart"></i>
                             <span class="likes-count">${post.likes_count || 0}</span>
                         </button>
-                        <button class="post-action-btn" onclick="toggleComments('${post.id}')">
+                        <button class="post-action-btn comment-toggle-btn" data-post-id="${post.id}">
                             <i class="fas fa-comment"></i>
-                            <span>${comments.length}</span>
+                            <span class="comments-count">${allComments.filter(c => !c.parent_comment_id).length}</span>
                         </button>
                         <button class="post-action-btn" onclick="sharePost('${post.id}')">
                             <i class="fas fa-share"></i>
@@ -485,36 +505,18 @@ async function renderPosts(posts) {
                     </div>
                 </div>
 
-                <!-- Comments Section -->
-                <div class="post-comments-section" id="comments-${post.id}" style="display: none;">
-                    <div class="post-comments" id="comments-list-${post.id}">
-                        ${comments.length > 0 ? comments.map(comment => {
-                            const commentInitials = getInitials(comment.profiles?.full_name || 'User');
-                            const commentTimeAgo = window.timeAgo(comment.created_at);
-                            return `
-                                <div class="comment">
-                                    <div class="comment-avatar">${commentInitials}</div>
-                                    <div style="flex: 1;">
-                                        <div class="comment-content">
-                                            <div class="comment-author">${escapeHtml(comment.profiles?.full_name || 'Unknown')}</div>
-                                            <div class="comment-text">${escapeHtml(comment.content)}</div>
-                                        </div>
-                                        <div class="comment-time">${commentTimeAgo}</div>
-                                    </div>
-                                </div>
-                            `;
-                        }).join('') : '<p style="text-align: center; color: #65676b; padding: 16px;">No comments yet. Be the first to comment!</p>'}
+                <div class="post-comments-section" id="comments-${post.id}" style="display:none;">
+                    <div class="comments-list" id="comments-list-${post.id}">
+                        ${commentsHTML}
                     </div>
-                    
-                    <!-- Comment Input -->
                     <div class="comment-input-section">
                         <div class="comment-input-wrapper">
-                            <input type="text" 
-                                   class="comment-input" 
+                            <input type="text"
+                                   class="comment-input"
                                    id="comment-input-${post.id}"
-                                   placeholder="Write a comment..." 
+                                   placeholder="Write a comment..."
                                    maxlength="500">
-                            <button class="comment-submit-btn" onclick="submitComment('${post.id}')">
+                            <button class="comment-submit-btn" data-post-id="${post.id}" disabled>
                                 <i class="fas fa-paper-plane"></i>
                             </button>
                         </div>
@@ -525,124 +527,384 @@ async function renderPosts(posts) {
     });
 
     container.innerHTML = postCards.join('');
+
+    // Attach all event listeners after DOM is ready
+    sortedPosts.forEach(post => {
+        setupPostListeners(post.id);
+    });
+}
+
+// Build a single comment's HTML (with nested replies)
+function buildCommentHTML(comment, repliesMap, postId) {
+    const initials = getInitials(comment.profiles?.full_name || 'User');
+    const timeAgo = window.timeAgo(comment.created_at);
+    const replies = repliesMap[comment.id] || [];
+
+    const repliesHTML = replies.map(reply => {
+        const replyInitials = getInitials(reply.profiles?.full_name || 'User');
+        const replyTimeAgo = window.timeAgo(reply.created_at);
+        return `
+            <div class="comment reply-comment" data-comment-id="${reply.id}">
+                <div class="comment-avatar">${replyInitials}</div>
+                <div class="comment-body">
+                    <div class="comment-content">
+                        <div class="comment-author">${escapeHtml(reply.profiles?.full_name || 'Unknown')}</div>
+                        <div class="comment-text">${escapeHtml(reply.content)}</div>
+                    </div>
+                    <div class="comment-meta">${replyTimeAgo}</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    return `
+        <div class="comment" data-comment-id="${comment.id}">
+            <div class="comment-avatar">${initials}</div>
+            <div class="comment-body">
+                <div class="comment-content">
+                    <div class="comment-author">${escapeHtml(comment.profiles?.full_name || 'Unknown')}</div>
+                    <div class="comment-text">${escapeHtml(comment.content)}</div>
+                </div>
+                <div class="comment-meta">
+                    <span>${timeAgo}</span>
+                    <button class="reply-toggle-btn" data-comment-id="${comment.id}" data-post-id="${postId}">Reply</button>
+                </div>
+                ${replies.length > 0 ? `<div class="replies-container">${repliesHTML}</div>` : ''}
+                <div class="reply-input-container" id="reply-input-${comment.id}" style="display:none;">
+                    <input type="text" class="reply-input" placeholder="Write a reply..." maxlength="500" data-comment-id="${comment.id}" data-post-id="${postId}">
+                    <button class="reply-submit-btn" data-comment-id="${comment.id}" data-post-id="${postId}" disabled>
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Setup all event listeners for a post card
+function setupPostListeners(postId) {
+    const card = document.querySelector(`.post-card[data-post-id="${postId}"]`);
+    if (!card) return;
+
+    // Like button
+    const likeBtn = card.querySelector('.like-btn');
+    if (likeBtn) {
+        likeBtn.addEventListener('click', () => handleLikeClick(postId, likeBtn));
+    }
+
+    // Comment toggle
+    const commentToggle = card.querySelector('.comment-toggle-btn');
+    if (commentToggle) {
+        commentToggle.addEventListener('click', () => toggleComments(postId));
+    }
+
+    // Comment input + submit
+    const commentInput = card.querySelector(`#comment-input-${postId}`);
+    const commentSubmit = card.querySelector(`.comment-submit-btn[data-post-id="${postId}"]`);
+    if (commentInput && commentSubmit) {
+        commentInput.addEventListener('input', () => {
+            commentSubmit.disabled = !commentInput.value.trim();
+        });
+        commentInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey && commentInput.value.trim()) {
+                e.preventDefault();
+                submitComment(postId, commentInput);
+            }
+        });
+        commentSubmit.addEventListener('click', () => submitComment(postId, commentInput));
+    }
+
+    // Reply toggle buttons (event delegation on comments list)
+    const commentsList = card.querySelector(`#comments-list-${postId}`);
+    if (commentsList) {
+        commentsList.addEventListener('click', (e) => {
+            const replyToggle = e.target.closest('.reply-toggle-btn');
+            if (replyToggle) {
+                const commentId = replyToggle.dataset.commentId;
+                toggleReplyInput(commentId);
+            }
+        });
+        commentsList.addEventListener('input', (e) => {
+            if (e.target.classList.contains('reply-input')) {
+                const submitBtn = e.target.closest('.reply-input-container')
+                    ?.querySelector('.reply-submit-btn');
+                if (submitBtn) submitBtn.disabled = !e.target.value.trim();
+            }
+        });
+        commentsList.addEventListener('keypress', (e) => {
+            if (e.target.classList.contains('reply-input') && e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                const commentId = e.target.dataset.commentId;
+                const replyPostId = e.target.dataset.postId;
+                if (e.target.value.trim()) submitReply(replyPostId, commentId, e.target);
+            }
+        });
+        commentsList.addEventListener('click', (e) => {
+            const replySubmit = e.target.closest('.reply-submit-btn');
+            if (replySubmit) {
+                const commentId = replySubmit.dataset.commentId;
+                const replyPostId = replySubmit.dataset.postId;
+                const input = document.querySelector(`.reply-input[data-comment-id="${commentId}"]`);
+                if (input && input.value.trim()) submitReply(replyPostId, commentId, input);
+            }
+        });
+    }
+
+    // 3-dot menu toggle
+    const menuBtn = card.querySelector('.post-menu-btn');
+    const menuDropdown = card.querySelector('.post-menu-dropdown');
+    if (menuBtn && menuDropdown) {
+        menuBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            document.querySelectorAll('.post-menu-dropdown.open').forEach(m => {
+                if (m !== menuDropdown) m.classList.remove('open');
+            });
+            menuDropdown.classList.toggle('open');
+        });
+    }
+
+    // Delete button
+    const deleteBtn = card.querySelector('.post-menu-item.delete');
+    if (deleteBtn) {
+        deleteBtn.addEventListener('click', () => handleDeletePost(postId, card));
+    }
 }
 
 // ============================================
 // COMMENT FUNCTIONALITY
 // ============================================
 
-// Toggle comments section visibility
-function toggleComments(postId) {
-    const commentsSection = document.getElementById(`comments-${postId}`);
-    if (commentsSection) {
-        if (commentsSection.style.display === 'none') {
-            commentsSection.style.display = 'block';
-            // Focus on comment input
-            const commentInput = document.getElementById(`comment-input-${postId}`);
-            if (commentInput) {
-                setTimeout(() => commentInput.focus(), 100);
-            }
+async function handleDeletePost(postId, card) {
+    const menu = card.querySelector('.post-menu-dropdown');
+    if (menu) menu.classList.remove('open');
+    if (!confirm('Delete this post? This cannot be undone.')) return;
+    try {
+        const result = await window.deletePost(postId);
+        if (result.success) {
+            card.style.transition = 'opacity 0.3s, transform 0.3s';
+            card.style.opacity = '0';
+            card.style.transform = 'scale(0.97)';
+            setTimeout(() => {
+                card.remove();
+                // Update posts count display
+                const countEl = document.getElementById('postsCountDisplay');
+                if (countEl) {
+                    const current = parseInt(countEl.textContent) || 1;
+                    const newCount = Math.max(0, current - 1);
+                    countEl.textContent = `${newCount} post${newCount !== 1 ? 's' : ''}`;
+                }
+                showToast('Post deleted', 'success');
+            }, 300);
         } else {
-            commentsSection.style.display = 'none';
+            showToast(result.error || 'Failed to delete post', 'error');
         }
+    } catch (error) {
+        console.error('Error deleting post:', error);
+        showToast('Failed to delete post', 'error');
     }
 }
 
-// Submit a comment
-async function submitComment(postId) {
-    const commentInput = document.getElementById(`comment-input-${postId}`);
-    if (!commentInput) return;
+// Close all menus when clicking outside
+document.addEventListener('click', () => {
+    document.querySelectorAll('.post-menu-dropdown.open').forEach(m => m.classList.remove('open'));
+});
 
-    const commentText = commentInput.value.trim();
-    if (!commentText) {
-        showToast('Please enter a comment', 'error');
-        return;
+function toggleComments(postId) {
+    const section = document.getElementById(`comments-${postId}`);
+    if (!section) return;
+    const isHidden = section.style.display === 'none';
+    section.style.display = isHidden ? 'block' : 'none';
+    if (isHidden) {
+        const input = document.getElementById(`comment-input-${postId}`);
+        if (input) setTimeout(() => input.focus(), 100);
     }
+}
+
+function toggleReplyInput(commentId) {
+    const container = document.getElementById(`reply-input-${commentId}`);
+    if (!container) return;
+    const isHidden = container.style.display === 'none';
+    // Close all other open reply inputs first
+    document.querySelectorAll('.reply-input-container').forEach(c => c.style.display = 'none');
+    container.style.display = isHidden ? 'flex' : 'none';
+    if (isHidden) {
+        const input = container.querySelector('.reply-input');
+        if (input) setTimeout(() => input.focus(), 100);
+    }
+}
+
+async function submitComment(postId, inputEl) {
+    const text = inputEl.value.trim();
+    if (!text) return;
+
+    const submitBtn = inputEl.closest('.comment-input-wrapper')?.querySelector('.comment-submit-btn');
+    if (submitBtn) submitBtn.disabled = true;
 
     try {
-        const result = await window.addComment(postId, commentText);
-        
+        const result = await window.addComment(postId, text);
         if (result.success) {
-            commentInput.value = '';
+            inputEl.value = '';
             showToast('Comment added!', 'success');
-            
-            // Reload posts to show new comment
-            await loadUserPosts();
+            await refreshComments(postId);
+            inputEl.focus();
         } else {
-            showToast('Error adding comment', 'error');
+            showToast(result.error || 'Error adding comment', 'error');
+            if (submitBtn) submitBtn.disabled = false;
         }
     } catch (error) {
         console.error('Error submitting comment:', error);
         showToast('Error adding comment', 'error');
+        if (submitBtn) submitBtn.disabled = false;
     }
 }
 
-// Handle enter key in comment input
-document.addEventListener('keydown', function(e) {
-    if (e.target.classList.contains('comment-input') && e.key === 'Enter') {
-        e.preventDefault();
-        const postId = e.target.id.replace('comment-input-', '');
-        submitComment(postId);
+async function submitReply(postId, commentId, inputEl) {
+    const text = inputEl.value.trim();
+    if (!text) return;
+
+    const submitBtn = inputEl.closest('.reply-input-container')?.querySelector('.reply-submit-btn');
+    if (submitBtn) submitBtn.disabled = true;
+
+    try {
+        const result = await window.addComment(postId, text, commentId);
+        if (result.success) {
+            inputEl.value = '';
+            showToast('Reply added!', 'success');
+            // Close the reply input
+            const container = document.getElementById(`reply-input-${commentId}`);
+            if (container) container.style.display = 'none';
+            await refreshComments(postId);
+        } else {
+            showToast(result.error || 'Error adding reply', 'error');
+            if (submitBtn) submitBtn.disabled = false;
+        }
+    } catch (error) {
+        console.error('Error submitting reply:', error);
+        showToast('Error adding reply', 'error');
+        if (submitBtn) submitBtn.disabled = false;
     }
-});
+}
+
+// Refresh only the comments list for a post (no full re-render)
+async function refreshComments(postId) {
+    try {
+        const result = await window.getComments(postId);
+        if (!result.success) return;
+
+        const allComments = result.comments || [];
+        const topLevel = allComments.filter(c => !c.parent_comment_id);
+        const repliesMap = {};
+        allComments.forEach(c => {
+            if (c.parent_comment_id) {
+                if (!repliesMap[c.parent_comment_id]) repliesMap[c.parent_comment_id] = [];
+                repliesMap[c.parent_comment_id].push(c);
+            }
+        });
+
+        const commentsList = document.getElementById(`comments-list-${postId}`);
+        if (!commentsList) return;
+
+        if (topLevel.length === 0) {
+            commentsList.innerHTML = '<p class="no-comments-text">No comments yet. Be the first to comment!</p>';
+        } else {
+            commentsList.innerHTML = topLevel.map(c => buildCommentHTML(c, repliesMap, postId)).join('');
+        }
+
+        // Update comment count badge
+        const card = document.querySelector(`.post-card[data-post-id="${postId}"]`);
+        const countEl = card?.querySelector('.comments-count');
+        if (countEl) countEl.textContent = topLevel.length;
+
+        // Re-attach reply listeners (since innerHTML was replaced)
+        const commentsListEl = document.getElementById(`comments-list-${postId}`);
+        if (commentsListEl) {
+            commentsListEl.addEventListener('click', (e) => {
+                const replyToggle = e.target.closest('.reply-toggle-btn');
+                if (replyToggle) toggleReplyInput(replyToggle.dataset.commentId);
+                const replySubmit = e.target.closest('.reply-submit-btn');
+                if (replySubmit) {
+                    const input = document.querySelector(`.reply-input[data-comment-id="${replySubmit.dataset.commentId}"]`);
+                    if (input?.value.trim()) submitReply(replySubmit.dataset.postId, replySubmit.dataset.commentId, input);
+                }
+            });
+            commentsListEl.addEventListener('input', (e) => {
+                if (e.target.classList.contains('reply-input')) {
+                    const btn = e.target.closest('.reply-input-container')?.querySelector('.reply-submit-btn');
+                    if (btn) btn.disabled = !e.target.value.trim();
+                }
+            });
+            commentsListEl.addEventListener('keypress', (e) => {
+                if (e.target.classList.contains('reply-input') && e.key === 'Enter' && !e.shiftKey && e.target.value.trim()) {
+                    e.preventDefault();
+                    submitReply(e.target.dataset.postId, e.target.dataset.commentId, e.target);
+                }
+            });
+        }
+    } catch (error) {
+        console.error('Error refreshing comments:', error);
+    }
+}
 
 // ============================================
 // FOLLOW FUNCTIONALITY
 // ============================================
 
 // Update follow button state
-async function updateFollowButton() {
+async function updateFollowButton(isFollowing) {
     if (isOwnProfile) return;
 
     const followBtn = document.getElementById('followBtn');
     if (!followBtn) return;
 
-    const isFollowingUser = await window.isFollowing(currentProfileUserId);
-    
-    if (isFollowingUser) {
+    // If state not passed in, fetch it
+    if (isFollowing === undefined) {
+        isFollowing = await window.isFollowing(currentProfileUserId);
+    }
+
+    if (isFollowing) {
         followBtn.classList.add('following');
-        followBtn.innerHTML = '<i class="fas fa-user-check"></i><span id="followBtnText">Following</span>';
+        followBtn.innerHTML = '<i class="fas fa-user-check"></i><span>Following</span>';
     } else {
         followBtn.classList.remove('following');
-        followBtn.innerHTML = '<i class="fas fa-user-plus"></i><span id="followBtnText">Follow</span>';
+        followBtn.innerHTML = '<i class="fas fa-user-plus"></i><span>Follow</span>';
     }
-    
-    // Add click handler
-    followBtn.onclick = toggleFollow;
 }
 
 // Toggle follow
-async function toggleFollow() {
+async function handleFollowClick() {
     if (isOwnProfile) return;
 
     const followBtn = document.getElementById('followBtn');
     if (!followBtn) return;
 
+    // Disable button while request is in-flight
+    followBtn.disabled = true;
+
     try {
-        const isFollowingUser = await window.isFollowing(currentProfileUserId);
-        
-        if (isFollowingUser) {
-            const result = await window.unfollowUser(currentProfileUserId);
-            if (result.success) {
-                showToast('Unfollowed successfully', 'success');
-                await updateFollowButton();
-                
-                // Refresh profile to get updated counts from database
-                await loadOtherUserProfile(currentProfileUserId);
+        const result = await window.toggleFollow(currentProfileUserId);
+
+        if (result.success) {
+            const nowFollowing = result.following;
+
+            // Update button immediately in-place
+            await updateFollowButton(nowFollowing);
+
+            // Update follower count in-place (no full profile reload)
+            const followersEl = document.getElementById('followersCount');
+            if (followersEl) {
+                const current = parseInt(followersEl.textContent) || 0;
+                followersEl.textContent = nowFollowing ? current + 1 : Math.max(0, current - 1);
             }
+
+            showToast(nowFollowing ? 'Followed!' : 'Unfollowed', 'success');
         } else {
-            const result = await window.followUser(currentProfileUserId);
-            if (result.success) {
-                showToast('Followed successfully', 'success');
-                await updateFollowButton();
-                
-                // Refresh profile to get updated counts from database
-                await loadOtherUserProfile(currentProfileUserId);
-            }
+            showToast(result.error || 'Failed to update follow status', 'error');
         }
     } catch (error) {
         console.error('Error toggling follow:', error);
         showToast('Error updating follow status', 'error');
+    } finally {
+        followBtn.disabled = false;
     }
 }
 
@@ -829,32 +1091,56 @@ async function saveProfile() {
 // POST INTERACTIONS
 // ============================================
 
-// Toggle like on a post
-async function toggleLike(postId, button) {
+// Toggle like on a post (in-place update — no full re-render)
+async function handleLikeClick(postId, button) {
     try {
-        const isLiked = button.classList.contains('liked');
-        
-        if (isLiked) {
-            const result = await window.unlikePost(postId);
-            if (result.success) {
-                button.classList.remove('liked');
-                const likesCount = button.querySelector('.likes-count');
-                likesCount.textContent = parseInt(likesCount.textContent) - 1;
+        button.disabled = true;
+        const result = await window.toggleLike(postId);
+
+        if (result.success) {
+            const isLiked = result.liked;
+            button.classList.toggle('liked', isLiked);
+            button.setAttribute('aria-pressed', String(isLiked));
+
+            const likesCountEl = button.querySelector('.likes-count');
+            if (likesCountEl) {
+                const current = parseInt(likesCountEl.textContent) || 0;
+                const newCount = isLiked ? current + 1 : Math.max(0, current - 1);
+                likesCountEl.textContent = newCount;
+
+                // Update star badge in-place
+                const card = button.closest('.post-card');
+                const imageContainer = card?.querySelector('.post-image-container');
+                if (imageContainer) {
+                    const rating = window.getStarRating(newCount);
+                    let starBadge = imageContainer.querySelector('.post-star-badge');
+                    if (rating.stars > 0) {
+                        if (!starBadge) {
+                            starBadge = document.createElement('div');
+                            starBadge.className = 'post-star-badge';
+                            imageContainer.appendChild(starBadge);
+                        }
+                        starBadge.innerHTML = `${'<i class="fas fa-star"></i>'.repeat(rating.stars)}<span>${rating.label}</span>`;
+                    } else if (starBadge) {
+                        starBadge.remove();
+                    }
+                }
+
+                // Update total likes stat
+                const totalLikesEl = document.getElementById('totalLikes');
+                if (totalLikesEl) {
+                    const current = parseInt(totalLikesEl.textContent) || 0;
+                    totalLikesEl.textContent = isLiked ? current + 1 : Math.max(0, current - 1);
+                }
             }
         } else {
-            const result = await window.likePost(postId);
-            if (result.success) {
-                button.classList.add('liked');
-                const likesCount = button.querySelector('.likes-count');
-                likesCount.textContent = parseInt(likesCount.textContent) + 1;
-            }
+            showToast('Error updating like', 'error');
         }
-
-        // Reload posts to update star ratings and total likes
-        await loadUserPosts();
     } catch (error) {
         console.error('Error toggling like:', error);
         showToast('Error updating like', 'error');
+    } finally {
+        button.disabled = false;
     }
 }
 

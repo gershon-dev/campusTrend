@@ -6,6 +6,11 @@
     <title>Sign Up - CampusTrend UEW</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles/sign-up.css">
+    <!-- PWA -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1877f2">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="CampusTrend">
 </head>
 <body>
     <div class="container">
@@ -164,5 +169,12 @@
     
     <!-- 3. Sign-up script last (uses the functions) -->
     <script src="scripts/sign-up.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/Big-Project/sw.js');
+            });
+        }
+    </script>
 </body>
 </html>

@@ -1792,16 +1792,30 @@
 
         @media (max-width: 600px) {
             .header {
-                padding: 10px 15px;
+                background: #fff;
+                box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+                padding: 0;
                 gap: 8px;
+            }
+
+            .header-top {
+                padding: 5px 12px;
+                min-height: 42px;
             }
 
             .logo {
                 font-size: 18px;
+                color: #1877f2;
+            }
+
+            .logo i {
+                color: #1877f2;
             }
 
             .logo-subtitle {
-                display: none;
+                display: block;
+                color: #555;
+                font-size: 10px;
             }
 
             .upload-btn span {
@@ -1817,13 +1831,18 @@
                 display: none;
             }
 
-            /* Ensure touch targets are at least 44×44px */
+            /* Ensure touch targets are at least 44x44px */
             .notification-bell {
                 min-width: 44px;
                 min-height: 44px;
                 display: flex;
                 align-items: center;
                 justify-content: center;
+                background: rgba(24,119,242,0.08);
+            }
+
+            .notification-bell i {
+                color: #1877f2;
             }
 
             .user-profile {
@@ -1831,31 +1850,13 @@
                 min-height: 44px;
             }
 
-            .header {
-                background: #fff !important;
-                box-shadow: 0 1px 4px rgba(0,0,0,0.12) !important;
-            }
-
-            .header-top {
-                padding: 5px 12px;
-                min-height: 42px;
-            }
-
-            .logo {
-                color: #1877f2 !important;
-            }
-
-            .logo i {
-                color: #1877f2 !important;
-            }
-
-            .logo-subtitle {
-                color: #555 !important;
+            .user-avatar {
+                background: #1877f2;
             }
 
             .category-nav {
-                background: #fff !important;
-                border-top: 1px solid #e4e6e9 !important;
+                background: #fff;
+                border-top: 1px solid #e4e6e9;
                 border-bottom: 1px solid #e4e6e9;
                 top: unset;
             }
@@ -1865,37 +1866,20 @@
             }
 
             .category-btn {
-                color: #65676b !important;
-                padding: 8px 14px !important;
-                font-size: 13px !important;
-                font-weight: 600 !important;
+                color: #65676b;
+                padding: 8px 14px;
+                font-size: 13px;
+                font-weight: 600;
             }
 
             .category-btn.active {
-                color: #1877f2 !important;
-                border-bottom-color: #1877f2 !important;
+                color: #1877f2;
+                border-bottom-color: #1877f2;
             }
 
             .category-btn i {
-                color: inherit !important;
-                font-size: 15px !important;
-            }
-
-            .notification-bell {
-                color: #1877f2 !important;
-                background: rgba(24,119,242,0.08) !important;
-            }
-
-            .notification-bell i {
-                color: #1877f2 !important;
-            }
-
-            .user-name {
-                color: #050505 !important;
-            }
-
-            .user-avatar {
-                background: #1877f2 !important;
+                color: inherit;
+                font-size: 15px;
             }
 
             .main-layout {
@@ -2461,4 +2445,60 @@ button:disabled {
 /* ===== ACCESSIBILITY: Notification badge hidden when zero ===== */
 .notification-badge[aria-label="0 unread notifications"] {
     display: none;
+}
+
+/* ===== DEPARTMENT BADGE ===== */
+.department-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #e7f0fd;
+    color: #1877f2;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 20px;
+    border: 1px solid #c5d8f8;
+    white-space: nowrap;
+}
+
+/* ===== SKELETON LOADER ===== */
+.post-skeleton {
+    background: #fff;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    padding: 16px;
+    box-shadow: 0 1px 2px rgba(0,0,0,.1);
+}
+
+.skeleton-line {
+    background: linear-gradient(90deg, #e4e6e9 25%, #f0f2f5 50%, #e4e6e9 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 4px;
+    height: 14px;
+    margin-bottom: 10px;
+}
+
+.skeleton-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(90deg, #e4e6e9 25%, #f0f2f5 50%, #e4e6e9 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+}
+
+.skeleton-image {
+    width: 100%;
+    aspect-ratio: 4/3;
+    background: linear-gradient(90deg, #e4e6e9 25%, #f0f2f5 50%, #e4e6e9 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 4px;
+}
+
+@keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
 }

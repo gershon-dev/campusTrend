@@ -44,6 +44,13 @@
     <!-- Theme color for mobile browsers -->
     <meta name="theme-color" content="#1877f2">
 
+    <!-- ===================== PWA ===================== -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="CampusTrend">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+
     <!-- Critical inline CSS: prevents CLS by reserving image space before stylesheet loads -->
 
 </head>
@@ -127,10 +134,10 @@
         <!-- Category Nav inside header -->
         <nav class="category-nav" aria-label="Content categories">
             <div class="category-nav-inner">
-                <a href="Past%20questions/past-questions.html" class="category-btn active" data-category="pasco" role="button" aria-pressed="true">
+                <button class="category-btn active" data-category="pasco" aria-pressed="true">
                     <i class="fas fa-book" aria-hidden="true"></i>
-                    <span>UEW Pasco</span>
-                </a>
+                    <span><a href="Past questions/past-questions.html">UEW Pasco</a></span>
+                </button>
                 <button class="category-btn" data-category="radio" aria-pressed="false">
                     <i class="fas fa-headphones" aria-hidden="true"></i>
                     <span>Radio Lectures</span>
@@ -443,6 +450,17 @@
         document.addEventListener('DOMContentLoaded', fixLayout);
         window.addEventListener('resize', fixLayout);
         window.addEventListener('load', fixLayout);
+    </script>
+
+    <!-- ===================== PWA SERVICE WORKER ===================== -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/Big-Project/sw.js')
+                    .then(reg => console.log('Service Worker registered:', reg.scope))
+                    .catch(err => console.log('Service Worker failed:', err));
+            });
+        }
     </script>
 </body>
 </html>

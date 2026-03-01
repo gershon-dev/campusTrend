@@ -137,8 +137,14 @@
 </head>
 <body>
     <div class="container">
-        <nav class="breadcrumb">
+        <nav class="breadcrumb" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
             <a href="past-questions.html">← Back to Home</a>
+            <a href="past-questions-list.html" id="viewQuestionsLink"
+               style="color:#fff; text-decoration:none; font-size:0.92rem; padding:8px 18px;
+                      background:rgba(255,255,255,0.2); border-radius:20px; display:inline-flex;
+                      align-items:center; gap:6px; transition:all 0.25s ease;">
+                📄 View Uploaded Questions
+            </a>
         </nav>
 
         <h1>📤 Upload Past Question</h1>
@@ -378,10 +384,27 @@
             const result = await window.dbOperations.uploadPastQuestion(selectedFile, metadata);
 
             if (result.success) {
-                showMessage('Past question uploaded successfully!', 'success');
+                // Build a direct link to see this exact question in the list
+                const params = new URLSearchParams({
+                    faculty:    metadata.faculty,
+                    department: metadata.department,
+                    level:      metadata.level,
+                    semester:   metadata.semester
+                });
+                const listUrl = `past-questions-list.html?${params.toString()}`;
+
+                showMessage(
+                    `✅ Uploaded successfully! <a href="${listUrl}" 
+                     style="color:#155724; font-weight:700; text-decoration:underline;">
+                     👉 Click here to verify it's in the right place</a>`,
+                    'success',
+                    true // allow HTML
+                );
                 document.getElementById('uploadForm').reset();
                 selectedFile = null;
                 fileInfo.style.display = 'none';
+                // Also update the top nav link to point to same filtered view
+                document.getElementById('viewQuestionsLink').href = listUrl;
             } else {
                 showMessage('Upload failed: ' + result.error, 'error');
             }
@@ -390,15 +413,18 @@
             btn.textContent = 'Upload Past Question';
         });
 
-        function showMessage(text, type) {
+        function showMessage(text, type, isHtml = false) {
             const messageDiv = document.getElementById('message');
-            messageDiv.textContent = text;
+            if (isHtml) {
+                messageDiv.innerHTML = text;
+            } else {
+                messageDiv.textContent = text;
+            }
             messageDiv.className = `message ${type}`;
             messageDiv.style.display = 'block';
-            
-            setTimeout(() => {
-                messageDiv.style.display = 'none';
-            }, 5000);
+            if (!isHtml) {
+                setTimeout(() => { messageDiv.style.display = 'none'; }, 5000);
+            }
         }
 
         // Enforce login on this page only - guests are redirected to login.html

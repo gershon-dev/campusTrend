@@ -3,466 +3,629 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Past Questions - Admin | UEW Past Questions</title>
+    <title>Past Questions List - UEW Admin</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&family=Open+Sans:wght@300;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles/courses.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;600;700&family=Open+Sans:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
-        .question-item {
-            background: white;
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Open Sans', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
             padding: 20px;
-            margin-bottom: 15px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .container { max-width: 900px; margin: 0 auto; }
+
+        /* ── Top nav ── */
+        .top-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .nav-btn {
+            color: #fff;
+            text-decoration: none;
+            font-size: 0.9rem;
+            padding: 8px 16px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 20px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border: none;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.25s ease;
+        }
+        .nav-btn:hover { background: rgba(255,255,255,0.32); }
+        .nav-btn.back:hover { transform: translateX(-3px); }
+        .nav-btn.upload { background: rgba(255,255,255,0.9); color: #667eea; font-weight: 700; }
+        .nav-btn.upload:hover { background: #fff; transform: translateY(-1px); }
+
+        /* ── Page title ── */
+        .page-header { text-align: center; margin-bottom: 22px; }
+        .page-header h1 {
+            font-family: 'Roboto', sans-serif;
+            color: #fff;
+            font-size: 2rem;
+            font-weight: 700;
+            text-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            margin-bottom: 6px;
+        }
+
+        /* ── Filter pill ── */
+        .filter-bar {
+            background: rgba(255,255,255,0.18);
+            border-radius: 12px;
+            padding: 14px 18px;
+            margin-bottom: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+        .filter-label { color: rgba(255,255,255,0.75); font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-right: 4px; }
+        .filter-pill {
+            background: rgba(255,255,255,0.22);
+            color: #fff;
+            padding: 5px 14px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .filter-pill span { opacity: 0.75; font-weight: 400; }
+
+        /* ── Stats row ── */
+        .stats-row {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .stat-card {
+            background: rgba(255,255,255,0.18);
+            border-radius: 10px;
+            padding: 12px 20px;
+            flex: 1;
+            min-width: 100px;
+            text-align: center;
+        }
+        .stat-card .num { font-size: 1.8rem; font-weight: 700; color: #fff; line-height: 1; }
+        .stat-card .lbl { font-size: 0.78rem; color: rgba(255,255,255,0.75); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+
+        /* ── Question cards ── */
+        .question-item {
+            background: #fff;
+            border-radius: 12px;
+            padding: 18px 20px;
+            margin-bottom: 12px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            transition: all 0.3s ease;
+            gap: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            animation: fadeUp 0.35s ease both;
+            transition: box-shadow 0.25s, transform 0.25s;
         }
-        .question-item:hover {
-            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-            transform: translateY(-2px);
-        }
-        .question-info h3 { color: #333; margin-bottom: 5px; font-size: 1.1rem; }
-        .question-meta   { color: #666; font-size: 0.9rem; margin-bottom: 5px; }
+        .question-item:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.13); transform: translateY(-2px); }
 
-        .price-badge {
-            background: #667eea; color: white;
-            padding: 5px 15px; border-radius: 20px;
-            font-weight: bold; font-size: 0.9rem;
-        }
-        .free-badge {
-            background: #48bb78; color: white;
-            padding: 5px 15px; border-radius: 20px;
-            font-weight: bold; font-size: 0.9rem;
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(16px); }
+            to   { opacity: 1; transform: translateY(0); }
         }
 
-        .action-buttons { display: flex; gap: 10px; align-items: center; flex-shrink: 0; }
+        .question-info { flex: 1; min-width: 0; }
 
-        .download-btn, .buy-btn {
-            padding: 10px 22px; border: none; border-radius: 25px;
-            cursor: pointer; font-size: 0.95rem; font-weight: 600;
-            transition: all 0.3s ease;
-        }
-        .download-btn { background: #48bb78; color: white; }
-        .download-btn:hover { background: #38a169; transform: scale(1.05); }
-        .buy-btn { background: #667eea; color: white; }
-        .buy-btn:hover { background: #5568d3; transform: scale(1.05); }
-
-        .delete-btn {
-            padding: 10px 18px; border: none; border-radius: 25px;
-            cursor: pointer; font-size: 0.9rem; font-weight: 600;
-            background: #fc5c65; color: white; transition: all 0.3s ease;
-        }
-        .delete-btn:hover { background: #eb3b45; transform: scale(1.05); }
-        .delete-btn:disabled { background: #ccc; cursor: not-allowed; transform: none; }
-
-        .admin-badge {
-            display: inline-block; background: #667eea; color: white;
-            font-size: 0.75rem; font-weight: 700; padding: 4px 12px;
-            border-radius: 20px; margin-left: 10px; vertical-align: middle;
+        .question-info h3 {
+            font-family: 'Roboto', sans-serif;
+            color: #222;
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 5px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
-        /* Modal */
+        .meta-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .meta-chip {
+            background: #f0f2ff;
+            color: #555;
+            font-size: 0.78rem;
+            padding: 3px 10px;
+            border-radius: 12px;
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+        }
+        .meta-chip.year  { background: #fff8e1; color: #795548; }
+        .meta-chip.dls   { background: #e8f5e9; color: #388e3c; }
+
+        .badge-row { display: flex; gap: 6px; flex-wrap: wrap; }
+        .free-badge  { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; padding: 3px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 700; }
+        .price-badge { background: #e8eaff; color: #3949ab; border: 1px solid #9fa8da; padding: 3px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 700; }
+        .level-badge { background: #fce4ec; color: #c62828; border: 1px solid #ef9a9a; padding: 3px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; }
+        .sem-badge   { background: #e3f2fd; color: #1565c0; border: 1px solid #90caf9; padding: 3px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; }
+
+        /* ── Action buttons (right side) ── */
+        .action-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            flex-shrink: 0;
+            align-items: stretch;
+            min-width: 110px;
+        }
+        .download-btn, .buy-btn, .delete-btn {
+            padding: 9px 16px;
+            border: none;
+            border-radius: 22px;
+            cursor: pointer;
+            font-size: 0.84rem;
+            font-weight: 700;
+            transition: all 0.22s ease;
+            text-align: center;
+            white-space: nowrap;
+            font-family: inherit;
+        }
+        .download-btn { background: #43a047; color: #fff; }
+        .download-btn:hover { background: #388e3c; transform: scale(1.03); }
+        .buy-btn { background: #667eea; color: #fff; }
+        .buy-btn:hover { background: #5568d3; transform: scale(1.03); }
+        .delete-btn { background: #fff0f1; color: #e53935; border: 1.5px solid #ffcdd2; }
+        .delete-btn:hover { background: #ffebee; transform: scale(1.03); }
+        .delete-btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+        /* ── Loading / empty ── */
+        .loading-state {
+            text-align: center; padding: 60px 20px; color: #fff;
+        }
+        .spinner {
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top: 4px solid #fff;
+            border-radius: 50%;
+            width: 44px; height: 44px;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 18px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .empty-state {
+            background: rgba(255,255,255,0.18);
+            border-radius: 14px;
+            text-align: center;
+            padding: 50px 20px;
+            color: #fff;
+        }
+        .empty-state .empty-icon { font-size: 3.5rem; margin-bottom: 14px; }
+        .empty-state h3 { font-size: 1.3rem; margin-bottom: 8px; }
+        .empty-state p  { opacity: 0.8; font-size: 0.95rem; }
+
+        /* ── Modals ── */
         .modal-overlay {
             display: none; position: fixed; inset: 0;
             background: rgba(0,0,0,0.55); z-index: 1000;
-            align-items: center; justify-content: center;
+            align-items: center; justify-content: center; padding: 20px;
         }
         .modal-overlay.active { display: flex; }
         .modal-box {
-            background: white; border-radius: 12px; padding: 35px 30px;
-            max-width: 420px; width: 90%; text-align: center;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.25);
+            background: #fff; border-radius: 16px; padding: 36px 28px;
+            max-width: 430px; width: 100%; text-align: center;
+            box-shadow: 0 16px 48px rgba(0,0,0,0.22);
             animation: popIn 0.2s ease;
         }
         @keyframes popIn {
             from { transform: scale(0.9); opacity: 0; }
             to   { transform: scale(1);   opacity: 1; }
         }
-        .modal-box .warn-icon  { font-size: 3rem; margin-bottom: 15px; }
-        .modal-box h3          { color: #333; margin-bottom: 10px; font-size: 1.3rem; }
-        .modal-box p           { color: #666; margin-bottom: 15px; line-height: 1.5; }
-        .modal-box .question-name { font-weight: 700; color: #333; }
-        .modal-box .warn-text  { color: #fc5c65; font-size: 0.88rem; margin-bottom: 25px; }
-        .modal-actions         { display: flex; gap: 12px; justify-content: center; }
-
+        .modal-icon  { font-size: 3rem; margin-bottom: 14px; }
+        .modal-box h3 { color: #222; font-size: 1.25rem; margin-bottom: 10px; }
+        .modal-box p  { color: #666; line-height: 1.6; margin-bottom: 10px; font-size: 0.93rem; }
+        .modal-box .q-name { font-weight: 700; color: #333; }
+        .modal-box .warn-text { color: #e53935; font-size: 0.84rem; margin-bottom: 24px; }
+        .modal-actions { display: flex; gap: 12px; justify-content: center; margin-top: 6px; }
         .btn-cancel {
-            padding: 12px 28px; border: 2px solid #ddd; border-radius: 8px;
-            background: white; color: #555; font-size: 1rem; font-weight: 600;
-            cursor: pointer; transition: background 0.2s;
+            padding: 12px 26px; border: 2px solid #e0e0e0; border-radius: 8px;
+            background: #fff; color: #555; font-size: 0.95rem; font-weight: 600;
+            cursor: pointer; transition: background 0.2s; font-family: inherit;
         }
         .btn-cancel:hover { background: #f5f5f5; }
-
         .btn-confirm-delete {
-            padding: 12px 28px; border: none; border-radius: 8px;
-            background: #fc5c65; color: white; font-size: 1rem; font-weight: 600;
-            cursor: pointer; transition: background 0.2s;
+            padding: 12px 26px; border: none; border-radius: 8px;
+            background: #e53935; color: #fff; font-size: 0.95rem; font-weight: 600;
+            cursor: pointer; transition: background 0.2s; font-family: inherit;
         }
-        .btn-confirm-delete:hover    { background: #eb3b45; }
+        .btn-confirm-delete:hover    { background: #c62828; }
         .btn-confirm-delete:disabled { background: #ccc; cursor: not-allowed; }
 
-        /* Toast */
+        /* Download modal link */
+        .dl-link {
+            display: block; width: 100%; padding: 14px;
+            background: #667eea; color: #fff; border-radius: 10px;
+            font-size: 1rem; font-weight: 700; text-align: center;
+            text-decoration: none; margin-bottom: 14px;
+        }
+        .dl-instructions {
+            background: #f0f4ff; border-left: 4px solid #667eea;
+            border-radius: 8px; padding: 14px; text-align: left;
+            font-size: 0.85rem; color: #444; line-height: 1.8; margin-bottom: 14px;
+        }
+
+        /* ── Toast ── */
         .toast {
-            position: fixed; bottom: 30px; left: 50%;
+            position: fixed; bottom: 26px; left: 50%;
             transform: translateX(-50%) translateY(120px);
-            background: #333; color: white; padding: 14px 28px;
-            border-radius: 8px; font-size: 1rem; font-weight: 600;
-            z-index: 2000; transition: transform 0.35s ease; pointer-events: none;
+            background: #333; color: #fff;
+            padding: 13px 24px; border-radius: 8px;
+            font-size: 0.93rem; font-weight: 600;
+            z-index: 2000; transition: transform 0.32s ease; pointer-events: none;
+            white-space: nowrap;
         }
         .toast.show    { transform: translateX(-50%) translateY(0); }
-        .toast.success { background: #48bb78; }
-        .toast.error   { background: #fc5c65; }
+        .toast.success { background: #43a047; }
+        .toast.error   { background: #e53935; }
 
-        /* Access denied */
-        .access-denied { text-align: center; padding: 70px 20px; color: white; }
-        .access-denied .icon { font-size: 4rem; margin-bottom: 20px; }
-        .access-denied h2    { font-size: 1.8rem; margin-bottom: 12px; }
-        .access-denied p     { font-size: 1.05rem; opacity: 0.9; margin-bottom: 28px; line-height: 1.6; }
-        .access-denied a {
-            display: inline-block; background: white; color: #667eea;
-            padding: 13px 30px; border-radius: 8px; font-weight: 700;
-            text-decoration: none; transition: opacity 0.2s;
-        }
-        .access-denied a:hover { opacity: 0.85; }
-
-        .loading   { text-align: center; padding: 40px; color: white; font-size: 1.2rem; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .no-results {
-            text-align: center; padding: 40px; color: white;
-            background: rgba(255,255,255,0.2); border-radius: 12px; margin-top: 20px;
-        }
-        .filter-info {
-            background: rgba(255,255,255,0.2); color: white;
-            padding: 15px; border-radius: 8px; margin-bottom: 20px;
+        /* ── Responsive ── */
+        @media (max-width: 600px) {
+            .page-header h1 { font-size: 1.6rem; }
+            .stats-row { gap: 8px; }
+            .stat-card .num { font-size: 1.4rem; }
+            .question-item { flex-direction: row; gap: 12px; }
+            .action-buttons { min-width: 90px; }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <nav class="breadcrumb">
-            <a href="#" onclick="goBack()">← Back</a>
-        </nav>
+<div class="container">
 
+    <!-- Top nav -->
+    <div class="top-bar">
+        <button class="nav-btn back" onclick="window.history.back()">← Back</button>
+        <a href="admin-upload.html" class="nav-btn upload">📤 Upload New</a>
+    </div>
+
+    <!-- Title -->
+    <div class="page-header">
         <h1>📄 Past Questions</h1>
-        <div class="filter-info" id="filterInfo" style="display:none;"></div>
+    </div>
 
-        <div id="loadingDiv" class="loading">Loading past questions...</div>
+    <!-- Filter bar (populated by JS) -->
+    <div class="filter-bar" id="filterBar" style="display:none;"></div>
 
-
-        <div id="mainContent" style="display:none;">
-            <div id="questionsContainer"></div>
-            <div id="noResults" class="no-results" style="display:none;">
-                No past questions found for this selection.
-            </div>
+    <!-- Stats -->
+    <div class="stats-row" id="statsRow" style="display:none;">
+        <div class="stat-card">
+            <div class="num" id="statTotal">—</div>
+            <div class="lbl">Total Files</div>
+        </div>
+        <div class="stat-card">
+            <div class="num" id="statFree">—</div>
+            <div class="lbl">Free</div>
+        </div>
+        <div class="stat-card">
+            <div class="num" id="statPaid">—</div>
+            <div class="lbl">Paid</div>
+        </div>
+        <div class="stat-card">
+            <div class="num" id="statDls">—</div>
+            <div class="lbl">Downloads</div>
         </div>
     </div>
 
-    <!-- Download Modal -->
-    <div class="modal-overlay" id="downloadModal">
-        <div class="modal-box">
-            <div class="warn-icon" id="dlIcon">📥</div>
-            <h3 id="dlTitle">Preparing Download…</h3>
-            <p id="dlBody" style="color:#666;line-height:1.6;margin-bottom:20px;"></p>
-            <div id="dlSpinner" class="spinner" style="border:4px solid #eee;border-top-color:#667eea;border-radius:50%;width:36px;height:36px;animation:spin 0.8s linear infinite;margin:0 auto 20px;"></div>
-            <a id="dlLink" href="#" target="_blank" rel="noopener"
-               style="display:none;width:100%;padding:14px;background:#667eea;color:#fff;
-                      border-radius:10px;font-size:1rem;font-weight:700;cursor:pointer;
-                      text-align:center;text-decoration:none;">
-                📥 Tap here to Download
-            </a>
-            <div id="dlInstructions" style="display:none;background:#f0f4ff;border-radius:10px;padding:16px;margin-top:14px;text-align:left;">
-                <p style="font-size:0.88rem;color:#444;line-height:1.7;">
-                    <strong>📱 How to save to your device:</strong><br>
-                    1. Tap <strong>"Tap here to Download"</strong> above<br>
-                    2. The PDF will open in your browser<br>
-                    3. Tap the <strong>⋮ menu</strong> or share icon<br>
-                    4. Choose <strong>"Download"</strong> or <strong>"Save to Files"</strong>
-                </p>
-            </div>
-            <button class="btn-cancel" onclick="closeDownloadModal()" style="margin-top:16px;width:100%;">Close</button>
-        </div>
+    <!-- Loading -->
+    <div class="loading-state" id="loadingState">
+        <div class="spinner"></div>
+        <p>Loading past questions…</p>
     </div>
 
-    <!-- Delete Confirmation Modal -->
-    <div class="modal-overlay" id="deleteModal">
-        <div class="modal-box">
-            <div class="warn-icon">🗑️</div>
-            <h3>Delete Past Question?</h3>
-            <p>You are about to permanently delete:<br>
-                <span class="question-name" id="deleteQuestionName"></span>
-            </p>
-            <p class="warn-text">
-                This will also delete all related payments and download records,
-                and remove the file from storage. This cannot be undone.
-            </p>
-            <div class="modal-actions">
-                <button class="btn-cancel" onclick="closeDeleteModal()">Cancel</button>
-                <button class="btn-confirm-delete" id="confirmDeleteBtn" onclick="confirmDelete()">Delete</button>
-            </div>
-        </div>
+    <!-- List -->
+    <div id="questionsList" style="display:none;"></div>
+
+    <!-- Empty -->
+    <div class="empty-state" id="emptyState" style="display:none;">
+        <div class="empty-icon">📭</div>
+        <h3>No past questions found</h3>
+        <p>No files match the current filter. Try uploading one!</p>
     </div>
 
-    <div class="toast" id="toast"></div>
+</div>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="scripts/supabase-config.js"></script>
-    <script src="scripts/supabase-auth.js"></script>
-    <script src="scripts/supabase-db.js"></script>
+<!-- Download Modal -->
+<div class="modal-overlay" id="downloadModal">
+    <div class="modal-box">
+        <div class="modal-icon" id="dlIcon">📥</div>
+        <h3 id="dlTitle">Preparing Download…</h3>
+        <p id="dlBody" style="margin-bottom:16px;"></p>
+        <div id="dlSpinner" class="spinner" style="border:4px solid #eee;border-top-color:#667eea;width:36px;height:36px;margin:0 auto 16px;"></div>
+        <a id="dlLink" href="#" target="_blank" rel="noopener" class="dl-link" style="display:none;">📥 Save / Open PDF</a>
+        <div id="dlInstructions" class="dl-instructions" style="display:none;">
+            <strong>📱 To save to your phone:</strong><br>
+            1. Tap <strong>"Save / Open PDF"</strong> above<br>
+            2. Tap the <strong>⋮ menu</strong> in your browser<br>
+            3. Choose <strong>"Download"</strong> or <strong>"Save to Files"</strong>
+        </div>
+        <button class="btn-cancel" onclick="closeDownloadModal()" style="width:100%;margin-top:4px;">Close</button>
+    </div>
+</div>
 
-    <script>
-        let pendingDeleteId   = null;
-        let pendingDeletePath = null;
+<!-- Delete Modal -->
+<div class="modal-overlay" id="deleteModal">
+    <div class="modal-box">
+        <div class="modal-icon">🗑️</div>
+        <h3>Delete Past Question?</h3>
+        <p>You are about to permanently delete:<br>
+            <span class="q-name" id="deleteQuestionName"></span>
+        </p>
+        <p class="warn-text">This removes the file and all payment/download records. Cannot be undone.</p>
+        <div class="modal-actions">
+            <button class="btn-cancel" onclick="closeDeleteModal()">Cancel</button>
+            <button class="btn-confirm-delete" id="confirmDeleteBtn" onclick="confirmDelete()">Delete</button>
+        </div>
+    </div>
+</div>
 
-        function getParam(name) {
-            return new URLSearchParams(window.location.search).get(name);
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="scripts/supabase-config.js"></script>
+<script src="scripts/supabase-auth.js"></script>
+<script src="scripts/supabase-db.js"></script>
+
+<script>
+    let isAdmin = false;
+    let pendingDeleteId = null, pendingDeletePath = null;
+    let toastTimer = null;
+
+    function getParam(n) { return new URLSearchParams(window.location.search).get(n); }
+
+    /* ── Boot ── */
+    document.addEventListener('DOMContentLoaded', async () => {
+        const result = await window.authFunctions.getCurrentUser();
+        isAdmin = !!(result.success && result.user);
+        buildFilterBar();
+        await loadQuestions();
+    });
+
+    /* ── Filter bar ── */
+    function buildFilterBar() {
+        const faculty    = getParam('faculty');
+        const department = getParam('department');
+        const level      = getParam('level');
+        const semester   = getParam('semester');
+
+        if (!faculty && !department && !level && !semester) return;
+
+        const bar = document.getElementById('filterBar');
+        bar.innerHTML = `<span class="filter-label">Showing:</span>`;
+        if (faculty)    bar.innerHTML += pill('🎓', faculty);
+        if (department) bar.innerHTML += pill('📚', department);
+        if (level)      bar.innerHTML += pill('📊', `Level ${level}`);
+        if (semester)   bar.innerHTML += pill('📅', semester === 'first' ? 'Semester 1' : 'Semester 2');
+        bar.style.display = 'flex';
+    }
+
+    function pill(icon, text) {
+        return `<span class="filter-pill">${icon} <span>${text}</span></span>`;
+    }
+
+    /* ── Load ── */
+    async function loadQuestions() {
+        document.getElementById('loadingState').style.display  = 'block';
+        document.getElementById('questionsList').style.display = 'none';
+        document.getElementById('emptyState').style.display    = 'none';
+        document.getElementById('statsRow').style.display      = 'none';
+
+        const filters = {};
+        const faculty    = getParam('faculty');
+        const department = getParam('department');
+        const level      = getParam('level');
+        const semester   = getParam('semester');
+
+        if (faculty)    filters.faculty    = faculty;
+        if (department) filters.department = department;
+        if (level)      filters.level      = parseInt(level);
+        if (semester)   filters.semester   = semester;
+
+        const result = await window.dbOperations.getPastQuestions(filters);
+        document.getElementById('loadingState').style.display = 'none';
+
+        if (result.success && result.data && result.data.length > 0) {
+            renderStats(result.data);
+            renderQuestions(result.data);
+        } else {
+            document.getElementById('emptyState').style.display = 'block';
         }
+    }
 
-        function goBack() { window.history.back(); }
+    /* ── Stats ── */
+    function renderStats(data) {
+        const free  = data.filter(q => q.is_free).length;
+        const paid  = data.length - free;
+        const dls   = data.reduce((s, q) => s + (q.download_count || 0), 0);
+        document.getElementById('statTotal').textContent = data.length;
+        document.getElementById('statFree').textContent  = free;
+        document.getElementById('statPaid').textContent  = paid;
+        document.getElementById('statDls').textContent   = dls;
+        document.getElementById('statsRow').style.display = 'flex';
+    }
 
-        function showToast(message, type = 'success') {
-            const t = document.getElementById('toast');
-            t.textContent = message;
-            t.className = `toast ${type} show`;
-            setTimeout(() => t.classList.remove('show'), 3200);
-        }
+    /* ── Render cards ── */
+    function renderQuestions(questions) {
+        const list = document.getElementById('questionsList');
+        list.innerHTML = '';
 
-        // ── Boot: everyone can view, admins also see delete buttons ──
-        let isAdmin = false;
+        questions.forEach((q, i) => {
+            const item = document.createElement('div');
+            item.className = 'question-item';
+            item.id = `question-${q.id}`;
+            item.style.animationDelay = `${i * 0.04}s`;
 
-        document.addEventListener('DOMContentLoaded', async () => {
-            const result = await window.authFunctions.getCurrentUser();
-            isAdmin = !!(result.success && result.user);
+            const safeTitle    = (q.title    || '').replace(/'/g, "\\'");
+            const safeFilePath = (q.file_path || '').replace(/'/g, "\\'");
+            const semLabel     = q.semester === 'first' ? 'Sem 1' : q.semester === 'second' ? 'Sem 2' : (q.semester || '');
 
-            document.getElementById('loadingDiv').style.display = 'none';
-            document.getElementById('filterInfo').style.display = 'block';
-            document.getElementById('mainContent').style.display = 'block';
-            loadPastQuestions();
+            item.innerHTML = `
+                <div class="question-info">
+                    <h3 title="${q.title || ''}">${q.title || 'Untitled'}</h3>
+                    <div class="meta-row">
+                        ${q.course_code ? `<span class="meta-chip">📘 ${q.course_code}</span>` : ''}
+                        ${q.course_name ? `<span class="meta-chip">📖 ${q.course_name}</span>` : ''}
+                        ${q.year        ? `<span class="meta-chip year">📅 ${q.year}</span>` : ''}
+                        <span class="meta-chip dls">⬇ ${q.download_count || 0}</span>
+                    </div>
+                    <div class="badge-row">
+                        ${q.is_free
+                            ? '<span class="free-badge">✓ FREE</span>'
+                            : `<span class="price-badge">GH₵ ${parseFloat(q.price||0).toFixed(2)}</span>`}
+                        ${q.level    ? `<span class="level-badge">L${q.level}</span>` : ''}
+                        ${semLabel   ? `<span class="sem-badge">${semLabel}</span>` : ''}
+                    </div>
+                </div>
+                <div class="action-buttons">
+                    ${q.is_free
+                        ? `<button class="download-btn" onclick="downloadQuestion('${q.id}','${safeTitle}')">⬇ Download</button>`
+                        : `<button class="buy-btn" onclick="goToPayment('${q.id}',${q.price})">💳 Buy</button>`}
+                    ${isAdmin
+                        ? `<button class="delete-btn" onclick="openDeleteModal('${q.id}','${safeTitle}','${safeFilePath}')">🗑 Delete</button>`
+                        : ''}
+                </div>`;
+
+            list.appendChild(item);
         });
 
-        // ── Load questions ───────────────────────────────────────
-        async function loadPastQuestions() {
-            document.getElementById('loadingDiv').style.display = 'block';
-            document.getElementById('loadingDiv').textContent = 'Loading past questions...';
+        list.style.display = 'block';
+    }
 
-            const department = getParam('department');
-            const faculty    = getParam('faculty');
-            const level      = getParam('level');
-            const semester   = getParam('semester');
+    /* ── Download ── */
+    async function downloadQuestion(questionId, fileName) {
+        openDownloadModal('loading');
+        try {
+            const result = await window.dbOperations.generateDownloadUrl(questionId);
+            if (!result.success) { openDownloadModal('error', result.error || 'Failed'); return; }
 
-            document.getElementById('filterInfo').innerHTML = `
-                <strong>Faculty:</strong> ${faculty || 'All'} &nbsp;|&nbsp;
-                <strong>Department:</strong> ${department || 'All'} &nbsp;|&nbsp;
-                <strong>Level:</strong> ${level || 'All'} &nbsp;|&nbsp;
-                <strong>Semester:</strong> ${semester === 'first' ? 'First Semester' : semester === 'second' ? 'Second Semester' : 'All'}
-            `;
+            // Try blob auto-download
+            try {
+                openDownloadModal('fetching');
+                const resp = await fetch(result.url);
+                if (!resp.ok) throw new Error('fetch failed');
+                const blob = await resp.blob();
+                const blobUrl = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = blobUrl; a.download = (fileName || 'past-question') + '.pdf';
+                a.style.display = 'none';
+                document.body.appendChild(a); a.click();
+                setTimeout(() => { URL.revokeObjectURL(blobUrl); a.remove(); }, 2000);
+            } catch(e) { /* fall through to manual */ }
 
-            const filters = {};
-            if (faculty)    filters.faculty    = faculty;
-            if (department) filters.department = department;
-            if (level)      filters.level      = parseInt(level);
-            if (semester)   filters.semester   = semester;
+            openDownloadModal('success', null, result.url, (fileName||'past-question')+'.pdf');
+        } catch(e) { openDownloadModal('error', e.message); }
+    }
 
-            const result = await window.dbOperations.getPastQuestions(filters);
-            document.getElementById('loadingDiv').style.display = 'none';
+    function openDownloadModal(state, errorMsg, url, name) {
+        const dlIcon = document.getElementById('dlIcon');
+        const dlTitle = document.getElementById('dlTitle');
+        const dlBody = document.getElementById('dlBody');
+        const dlSpinner = document.getElementById('dlSpinner');
+        const dlLink = document.getElementById('dlLink');
+        const dlInstr = document.getElementById('dlInstructions');
 
-            if (result.success && result.data && result.data.length > 0) {
-                displayQuestions(result.data);
-            } else {
-                document.getElementById('noResults').style.display = 'block';
+        dlSpinner.style.display = 'block';
+        dlLink.style.display = 'none';
+        dlInstr.style.display = 'none';
+
+        if (state === 'loading')   { dlIcon.textContent = '📥'; dlTitle.textContent = 'Preparing…'; dlBody.textContent = 'Connecting to server…'; }
+        if (state === 'fetching')  { dlIcon.textContent = '⬇️'; dlTitle.textContent = 'Downloading…'; dlBody.textContent = 'Fetching your file…'; }
+        if (state === 'success')   {
+            dlSpinner.style.display = 'none';
+            dlIcon.textContent = '✅'; dlTitle.textContent = 'Ready!';
+            dlBody.textContent = 'File is ready. Tap the button below if it did not save automatically.';
+            dlLink.href = url; dlLink.download = name;
+            dlLink.style.display = 'block'; dlInstr.style.display = 'block';
+        }
+        if (state === 'error') {
+            dlSpinner.style.display = 'none';
+            dlIcon.textContent = '❌'; dlTitle.textContent = 'Failed'; dlBody.textContent = errorMsg;
+        }
+        document.getElementById('downloadModal').classList.add('active');
+    }
+    function closeDownloadModal() { document.getElementById('downloadModal').classList.remove('active'); }
+    document.getElementById('downloadModal').addEventListener('click', e => { if (e.target === e.currentTarget) closeDownloadModal(); });
+
+    function goToPayment(id, price) { window.location.href = `payment.html?questionId=${id}&amount=${price}`; }
+
+    /* ── Delete ── */
+    function openDeleteModal(id, title, filePath) {
+        pendingDeleteId   = id;
+        pendingDeletePath = filePath;
+        document.getElementById('deleteQuestionName').textContent = title;
+        document.getElementById('deleteModal').classList.add('active');
+    }
+    function closeDeleteModal() {
+        pendingDeleteId = pendingDeletePath = null;
+        document.getElementById('deleteModal').classList.remove('active');
+    }
+    document.getElementById('deleteModal').addEventListener('click', e => { if (e.target === e.currentTarget) closeDeleteModal(); });
+
+    async function confirmDelete() {
+        if (!pendingDeleteId) return;
+        const btn = document.getElementById('confirmDeleteBtn');
+        btn.disabled = true; btn.textContent = 'Deleting…';
+
+        try {
+            if (pendingDeletePath) {
+                const clean = pendingDeletePath.replace(/^\/+/, '');
+                await window.supabaseClient.storage.from(window.PAST_QUESTIONS_BUCKET).remove([clean]);
             }
-        }
+            await window.supabaseClient.from('guest_downloads').delete().eq('past_question_id', pendingDeleteId);
+            await window.supabaseClient.from('payments').delete().eq('past_question_id', pendingDeleteId);
+            const { error } = await window.supabaseClient.from('past_questions').delete().eq('id', pendingDeleteId);
+            if (error) throw error;
 
-        // ── Render cards ─────────────────────────────────────────
-        function displayQuestions(questions) {
-            const container = document.getElementById('questionsContainer');
-            container.innerHTML = '';
-
-            questions.forEach(q => {
-                const div = document.createElement('div');
-                div.className = 'question-item';
-                div.id = `question-${q.id}`;
-
-                const safeTitle    = (q.title    || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-                const safeFilePath = (q.file_path || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-
-                div.innerHTML = `
-                    <div class="question-info">
-                        <h3>${q.title || 'Untitled'}</h3>
-                        <div class="question-meta">
-                            ${q.course_code ? q.course_code + ' &mdash; ' : ''}${q.course_name || ''}
-                        </div>
-                        <div class="question-meta">
-                            Year: ${q.year || 'N/A'} &nbsp;|&nbsp; Downloads: ${q.download_count || 0}
-                        </div>
-                        ${q.is_free
-                            ? '<span class="free-badge">FREE</span>'
-                            : `<span class="price-badge">GH&#8373; ${parseFloat(q.price || 0).toFixed(2)}</span>`}
-                    </div>
-                    <div class="action-buttons">
-                        ${q.is_free
-                            ? `<button class="download-btn" onclick="downloadQuestion('${q.id}')">⬇ Download</button>`
-                            : `<button class="buy-btn" onclick="goToPayment('${q.id}', ${q.price})">💳 Buy</button>`}
-                        ${isAdmin ? `
-                        <button class="delete-btn"
-                            onclick="openDeleteModal('${q.id}', '${safeTitle}', '${safeFilePath}')">
-                            🗑 Delete
-                        </button>` : ''}
-                    </div>
-                `;
-
-                container.appendChild(div);
-            });
-        }
-
-        // ── Download ─────────────────────────────────────────────
-        async function downloadQuestion(questionId) {
-            openDownloadModal();
-            try {
-                const result = await window.dbOperations.generateDownloadUrl(questionId);
-                if (!result.success) { showDownloadError(result.error || 'Failed to generate link'); return; }
-
-                document.getElementById('dlSpinner').style.display = 'none';
-                document.getElementById('dlIcon').textContent = '✅';
-                document.getElementById('dlTitle').textContent = 'Ready to Download!';
-                document.getElementById('dlBody').textContent = 'Your file is ready. Tap the button below to download it.';
-
-                const link = document.getElementById('dlLink');
-                link.href = result.url;
-                link.setAttribute('download', '');
-                link.style.display = 'block';
-                document.getElementById('dlInstructions').style.display = 'block';
-
-                // Try programmatic download for desktop / some WebViews
-                try {
-                    const a = document.createElement('a');
-                    a.href = result.url; a.download = 'past-question.pdf';
-                    a.style.display = 'none';
-                    document.body.appendChild(a); a.click();
-                    setTimeout(() => document.body.removeChild(a), 1000);
-                } catch(e) {}
-
-            } catch(e) { showDownloadError(e.message); }
-        }
-
-        function openDownloadModal() {
-            document.getElementById('dlIcon').textContent = '📥';
-            document.getElementById('dlTitle').textContent = 'Preparing Download…';
-            document.getElementById('dlBody').textContent = 'Please wait while we generate your download link.';
-            document.getElementById('dlSpinner').style.display = 'block';
-            document.getElementById('dlLink').style.display = 'none';
-            document.getElementById('dlInstructions').style.display = 'none';
-            document.getElementById('downloadModal').classList.add('active');
-        }
-        function closeDownloadModal() { document.getElementById('downloadModal').classList.remove('active'); }
-        function showDownloadError(msg) {
-            document.getElementById('dlSpinner').style.display = 'none';
-            document.getElementById('dlIcon').textContent = '❌';
-            document.getElementById('dlTitle').textContent = 'Download Failed';
-            document.getElementById('dlBody').textContent = msg;
-        }
-        document.getElementById('downloadModal').addEventListener('click', e => {
-            if (e.target === e.currentTarget) closeDownloadModal();
-        });
-
-        function goToPayment(questionId, price) {
-            window.location.href = `payment.html?questionId=${questionId}&amount=${price}`;
-        }
-
-        // ── Delete flow ──────────────────────────────────────────
-        function openDeleteModal(id, title, filePath) {
-            pendingDeleteId   = id;
-            pendingDeletePath = filePath;
-            document.getElementById('deleteQuestionName').textContent = title;
-            document.getElementById('deleteModal').classList.add('active');
-        }
-
-        function closeDeleteModal() {
-            pendingDeleteId   = null;
-            pendingDeletePath = null;
-            document.getElementById('deleteModal').classList.remove('active');
-        }
-
-        async function confirmDelete() {
-            if (!pendingDeleteId) return;
-
-            const btn = document.getElementById('confirmDeleteBtn');
-            btn.disabled    = true;
-            btn.textContent = 'Deleting...';
-
-            try {
-                // Step 1 — Remove file from Supabase Storage
-                if (pendingDeletePath) {
-                    const cleanPath = pendingDeletePath.replace(/^\/+/, '');
-                    const { error: storageError } = await window.supabaseClient.storage
-                        .from(window.PAST_QUESTIONS_BUCKET)
-                        .remove([cleanPath]);
-
-                    if (storageError) {
-                        // File may already be missing — log and continue
-                        console.warn('Storage delete warning:', storageError.message);
+            const card = document.getElementById(`question-${pendingDeleteId}`);
+            if (card) {
+                card.style.transition = 'opacity 0.3s, transform 0.3s';
+                card.style.opacity = '0'; card.style.transform = 'scale(0.95)';
+                setTimeout(() => {
+                    card.remove();
+                    if (!document.querySelector('.question-item')) {
+                        document.getElementById('emptyState').style.display = 'block';
+                        document.getElementById('statsRow').style.display = 'none';
                     }
-                }
-
-                // Step 2 — Delete related guest_downloads rows first (foreign key)
-                const { error: gdError } = await window.supabaseClient
-                    .from('guest_downloads')
-                    .delete()
-                    .eq('past_question_id', pendingDeleteId);
-
-                if (gdError) {
-                    console.warn('guest_downloads cleanup warning:', gdError.message);
-                }
-
-                // Step 3 — Delete related payments rows (foreign key)
-                const { error: paymentsError } = await window.supabaseClient
-                    .from('payments')
-                    .delete()
-                    .eq('past_question_id', pendingDeleteId);
-
-                if (paymentsError) {
-                    console.warn('payments cleanup warning:', paymentsError.message);
-                }
-
-                // Step 4 — Now safe to delete the past_questions record
-                const { error: dbError } = await window.supabaseClient
-                    .from('past_questions')
-                    .delete()
-                    .eq('id', pendingDeleteId);
-
-                if (dbError) throw dbError;
-
-                // Step 5 — Animate card out then remove from DOM
-                const card = document.getElementById(`question-${pendingDeleteId}`);
-                if (card) {
-                    card.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
-                    card.style.opacity    = '0';
-                    card.style.transform  = 'scale(0.95)';
-                    setTimeout(() => {
-                        card.remove();
-                        if (!document.querySelector('.question-item')) {
-                            document.getElementById('noResults').style.display = 'block';
-                        }
-                    }, 300);
-                }
-
-                closeDeleteModal();
-                showToast('Past question deleted successfully ✓', 'success');
-
-            } catch (error) {
-                console.error('Delete error:', error);
-                showToast('Failed to delete: ' + error.message, 'error');
-            } finally {
-                btn.disabled    = false;
-                btn.textContent = 'Delete';
+                }, 300);
             }
+            closeDeleteModal();
+            showToast('Deleted successfully ✓', 'success');
+        } catch(err) {
+            showToast('Delete failed: ' + err.message, 'error');
+        } finally {
+            btn.disabled = false; btn.textContent = 'Delete';
         }
+    }
 
-        // Close modal on backdrop click
-        document.getElementById('deleteModal').addEventListener('click', function(e) {
-            if (e.target === this) closeDeleteModal();
-        });
-    </script>
+    /* ── Toast ── */
+    function showToast(msg, type = '') {
+        const t = document.getElementById('toast');
+        t.textContent = msg;
+        t.className = 'toast' + (type ? ' ' + type : '');
+        requestAnimationFrame(() => t.classList.add('show'));
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => t.classList.remove('show'), 3200);
+    }
+</script>
 </body>
 </html>

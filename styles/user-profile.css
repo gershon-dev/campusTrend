@@ -534,16 +534,20 @@ body {
 }
 
 .post-content {
-    padding: 16px;
+    padding: 12px 16px 16px;
     background: white;
 }
 
 .post-description {
     font-size: 15px;
+    font-weight: 400;
     color: #1c1e21;
-    line-height: 1.5;
-    margin-bottom: 12px;
-    word-wrap: break-word;
+    line-height: 1.65;
+    padding: 10px 16px 14px;
+    word-break: break-word;
+    white-space: pre-wrap;
+    letter-spacing: 0.01em;
+    border-bottom: none;
 }
 
 .post-department-tag {

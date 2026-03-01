@@ -12,7 +12,6 @@ let profileData = {
     bio: "",
     location: "",
     avatar_url: null,
-    index_number: "",
     posts_count: 0,
     followers_count: 0,
     following_count: 0,
@@ -88,7 +87,6 @@ async function loadOwnProfile(user) {
                 bio: profile.bio || '',
                 location: profile.location || '',
                 avatar_url: profile.avatar_url,
-                index_number: profile.index_number,
                 posts_count: profile.posts_count || 0,
                 followers_count: profile.followers_count || 0,
                 following_count: profile.following_count || 0,
@@ -125,7 +123,6 @@ async function loadOtherUserProfile(userId) {
                 bio: profile.bio || '',
                 location: profile.location || '',
                 avatar_url: profile.avatar_url,
-                index_number: profile.index_number,
                 posts_count: profile.posts_count || 0,
                 followers_count: profile.followers_count || 0,
                 following_count: profile.following_count || 0,
@@ -176,8 +173,9 @@ function updateProfileUI() {
 
     // Update profile info
     document.getElementById('profileName').textContent = profileData.full_name;
-    document.getElementById('profileUsername').textContent = `@${profileData.index_number || 'student'}`;
-    document.getElementById('profileDepartment').textContent = profileData.department;
+    // Show department as the subtitle instead of index number (index numbers are private)
+    document.getElementById('profileUsername').textContent = profileData.department || 'UEW Student';
+    document.getElementById('profileDepartment').style.display = 'none'; // hide duplicate since it's now in username line
     
     const bioElement = document.getElementById('profileBio');
     if (profileData.bio) {
@@ -241,8 +239,7 @@ async function loadUserPosts() {
                     id,
                     full_name,
                     avatar_url,
-                    department,
-                    index_number
+                    department
                 )
             `)
             .eq('user_id', currentProfileUserId)
@@ -469,6 +466,8 @@ async function renderPosts(posts) {
                     ` : ''}
                 </div>
 
+                ${post.content ? `<div class="post-description">${escapeHtml(post.content)}</div>` : ''}
+
                 <div class="post-image-container">
                     ${post.image_url ? 
                         `<img src="${post.image_url}" alt="Post image" class="post-image" loading="lazy">` :
@@ -483,7 +482,6 @@ async function renderPosts(posts) {
                 </div>
 
                 <div class="post-content">
-                    ${post.description ? `<div class="post-description">${escapeHtml(post.description)}</div>` : ''}
                     <div class="post-department-tag">
                         <i class="fas fa-building"></i>
                         ${escapeHtml(post.department || 'General')}

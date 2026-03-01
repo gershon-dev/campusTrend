@@ -124,6 +124,28 @@
             </div>
         </div>
 
+        <!-- Conversations Section (own profile only) -->
+        <div class="conversations-section" id="conversationsSection" style="display:none;">
+            <div class="posts-header">
+                <h2 class="posts-title">
+                    <i class="fas fa-comments"></i>
+                    Messages
+                </h2>
+                <div class="posts-count" id="convoCountDisplay"></div>
+            </div>
+            <div class="conversations-list" id="conversationsList">
+                <div class="convos-loading" id="convosLoading">
+                    <div class="convo-spinner"></div>
+                    <p>Loading conversations…</p>
+                </div>
+            </div>
+            <div class="no-convos" id="noConvos" style="display:none;">
+                <i class="fas fa-comment-slash"></i>
+                <h3>No conversations yet</h3>
+                <p>Start chatting by visiting someone's profile!</p>
+            </div>
+        </div>
+
         <!-- Posts Section -->
         <div class="posts-section">
             <div class="posts-header">

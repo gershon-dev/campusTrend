@@ -101,6 +101,11 @@ async function loadOwnProfile(user) {
             document.getElementById('editProfileBtn').style.display = 'inline-flex';
             document.getElementById('followBtn').style.display = 'none';
             document.getElementById('messageBtn').style.display = 'none';
+
+            // Show conversations section
+            const convoSection = document.getElementById('conversationsSection');
+            if (convoSection) convoSection.style.display = 'block';
+            loadConversations(user.id);
         }
     } catch (error) {
         console.error('Error loading own profile:', error);
@@ -168,10 +173,20 @@ function updateProfileUI() {
     if (profileData.avatar_url) {
         avatarImage.src = profileData.avatar_url;
         avatarImage.style.display = 'block';
+        avatarImage.style.width = '100%';
+        avatarImage.style.height = '100%';
+        avatarImage.style.objectFit = 'cover';
+        avatarImage.style.borderRadius = '50%';
         avatarInitials.style.display = 'none';
+        // Fallback if image fails to load
+        avatarImage.onerror = function() {
+            avatarImage.style.display = 'none';
+            avatarInitials.style.display = 'flex';
+            avatarInitials.textContent = initials;
+        };
     } else {
         avatarImage.style.display = 'none';
-        avatarInitials.style.display = 'block';
+        avatarInitials.style.display = 'flex';
         avatarInitials.textContent = initials;
     }
 
@@ -899,6 +914,9 @@ async function handleFollowClick() {
             }
 
             showToast(nowFollowing ? 'Followed!' : 'Unfollowed', 'success');
+
+            // Update message button visibility after follow change
+            await updateMessageButton();
         } else {
             showToast(result.error || 'Failed to update follow status', 'error');
         }
@@ -1189,34 +1207,170 @@ function escapeHtml(text) {
 // PRIVATE CHAT
 // ============================================
 
+// Load all conversations for the logged-in user and render them
+async function loadConversations(userId) {
+    const list    = document.getElementById('conversationsList');
+    const loading = document.getElementById('convosLoading');
+    const noConvos = document.getElementById('noConvos');
+    const countEl = document.getElementById('convoCountDisplay');
+
+    if (!list) return;
+
+    try {
+        // Fetch all messages where this user is sender or receiver,
+        // get the latest message per conversation_id
+        const { data: messages, error } = await window.supabaseClient
+            .from('messages')
+            .select('*')
+            .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+            .order('created_at', { ascending: false });
+
+        if (loading) loading.style.display = 'none';
+
+        if (error) {
+            console.error('Error loading conversations:', error);
+            list.innerHTML = '<p style="text-align:center;color:#e53935;padding:16px">Could not load conversations.</p>';
+            return;
+        }
+
+        if (!messages || messages.length === 0) {
+            list.innerHTML = '';
+            if (noConvos) noConvos.style.display = 'block';
+            if (countEl) countEl.textContent = '';
+            return;
+        }
+
+        // Deduplicate — one entry per conversation_id (already sorted newest first)
+        const seen = new Set();
+        const convos = [];
+        for (const msg of messages) {
+            if (!seen.has(msg.conversation_id)) {
+                seen.add(msg.conversation_id);
+                convos.push(msg);
+            }
+        }
+
+        if (countEl) countEl.textContent = `${convos.length} conversation${convos.length !== 1 ? 's' : ''}`;
+
+        // For each conversation, find the other user's id and fetch their profile
+        const otherIds = convos.map(msg =>
+            msg.sender_id === userId ? msg.receiver_id : msg.sender_id
+        );
+
+        const uniqueOtherIds = [...new Set(otherIds)];
+        const { data: profiles } = await window.supabaseClient
+            .from('profiles')
+            .select('id, full_name, avatar_url, department')
+            .in('id', uniqueOtherIds);
+
+        const profileMap = {};
+        (profiles || []).forEach(p => { profileMap[p.id] = p; });
+
+        // Count unread messages per conversation
+        const { data: unreadData } = await window.supabaseClient
+            .from('messages')
+            .select('conversation_id')
+            .eq('receiver_id', userId)
+            .eq('is_read', false);
+
+        const unreadMap = {};
+        (unreadData || []).forEach(m => {
+            unreadMap[m.conversation_id] = (unreadMap[m.conversation_id] || 0) + 1;
+        });
+
+        // Render
+        list.innerHTML = '';
+        convos.forEach(msg => {
+            const otherId   = msg.sender_id === userId ? msg.receiver_id : msg.sender_id;
+            const profile   = profileMap[otherId] || {};
+            const initials  = getInitials(profile.full_name || '?');
+            const unread    = unreadMap[msg.conversation_id] || 0;
+            const preview   = msg.content.length > 55 ? msg.content.substring(0, 55) + '…' : msg.content;
+            const isSentByMe = msg.sender_id === userId;
+            const timeLabel = formatConvoTime(msg.created_at);
+
+            const avatarHtml = profile.avatar_url
+                ? `<img src="${profile.avatar_url}" alt="${escapeHtml(profile.full_name || '')}" class="convo-avatar-img">`
+                : `<span class="convo-avatar-initials">${initials}</span>`;
+
+            const item = document.createElement('div');
+            item.className = 'convo-item';
+            item.innerHTML = `
+                <div class="convo-avatar">${avatarHtml}</div>
+                <div class="convo-info">
+                    <div class="convo-top">
+                        <span class="convo-name">${escapeHtml(profile.full_name || 'Unknown User')}</span>
+                        <span class="convo-time">${timeLabel}</span>
+                    </div>
+                    <div class="convo-bottom">
+                        <span class="convo-preview ${unread > 0 ? 'unread' : ''}">
+                            ${isSentByMe ? '<i class="fas fa-reply convo-sent-icon"></i>' : ''}
+                            ${escapeHtml(preview)}
+                        </span>
+                        ${unread > 0 ? `<span class="convo-unread-badge">${unread}</span>` : ''}
+                    </div>
+                </div>
+            `;
+            item.addEventListener('click', () => {
+                window.location.href = `chat.html?userId=${otherId}`;
+            });
+            list.appendChild(item);
+        });
+
+    } catch (err) {
+        console.error('loadConversations error:', err);
+        if (loading) loading.style.display = 'none';
+        list.innerHTML = '<p style="text-align:center;color:#e53935;padding:16px">Could not load conversations.</p>';
+    }
+}
+
+function formatConvoTime(iso) {
+    const d = new Date(iso);
+    const now = new Date();
+    const diffMs = now - d;
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return 'now';
+    if (diffMins < 60) return `${diffMins}m`;
+    const diffHrs = Math.floor(diffMins / 60);
+    if (diffHrs < 24) return `${diffHrs}h`;
+    const diffDays = Math.floor(diffHrs / 24);
+    if (diffDays < 7) return `${diffDays}d`;
+    return d.toLocaleDateString([], { day: 'numeric', month: 'short' });
+}
+
 // Show the Message button only if a follow relationship exists (either direction)
 async function updateMessageButton() {
     const btn = document.getElementById('messageBtn');
-    if (!btn) return;
+    if (!btn) { console.warn('messageBtn element not found'); return; }
 
     try {
         const currentUser = await window.getCurrentUser();
         if (!currentUser) return;
 
-        // I follow them?
-        const { data: iFollow } = await window.supabaseClient
-            .from('follows')
+        console.log('Checking follow relationship for message button…', {
+            me: currentUser.id, them: currentProfileUserId
+        });
+
+        // Check both directions in one query using OR
+        const { data, error } = await window.supabaseClient
+            .from('followers')
             .select('id')
-            .eq('follower_id', currentUser.id)
-            .eq('following_id', currentProfileUserId)
-            .maybeSingle();
+            .or(
+                `and(follower_id.eq.${currentUser.id},following_id.eq.${currentProfileUserId}),` +
+                `and(follower_id.eq.${currentProfileUserId},following_id.eq.${currentUser.id})`
+            )
+            .limit(1);
 
-        if (iFollow) { btn.style.display = 'inline-flex'; return; }
+        if (error) {
+            console.error('Follow check error:', error);
+            btn.style.display = 'none';
+            return;
+        }
 
-        // They follow me?
-        const { data: theyFollow } = await window.supabaseClient
-            .from('follows')
-            .select('id')
-            .eq('follower_id', currentProfileUserId)
-            .eq('following_id', currentUser.id)
-            .maybeSingle();
+        const canChat = data && data.length > 0;
+        console.log('Can chat:', canChat, '| Follow record found:', data);
+        btn.style.display = canChat ? 'inline-flex' : 'none';
 
-        btn.style.display = theyFollow ? 'inline-flex' : 'none';
     } catch (err) {
         console.error('updateMessageButton error:', err);
         btn.style.display = 'none';

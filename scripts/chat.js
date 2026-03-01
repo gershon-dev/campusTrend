@@ -77,7 +77,7 @@ async function checkCanChat() {
     try {
         // Check if I follow them
         const { data: iFollow } = await window.supabaseClient
-            .from('follows')
+            .from('followers')
             .select('id')
             .eq('follower_id', currentUser.id)
             .eq('following_id', otherUserId)
@@ -87,7 +87,7 @@ async function checkCanChat() {
 
         // Check if they follow me
         const { data: theyFollow } = await window.supabaseClient
-            .from('follows')
+            .from('followers')
             .select('id')
             .eq('follower_id', otherUserId)
             .eq('following_id', currentUser.id)
@@ -182,11 +182,9 @@ function renderMessages(messages) {
 
         row.innerHTML = `
             ${avatarHtml}
-            <div>
-                <div class="message-bubble">
-                    ${escapeHtml(msg.content)}
-                    <span class="msg-time">${timeStr}${statusHtml}</span>
-                </div>
+            <div class="msg-content">
+                <div class="message-bubble">${escapeHtml(msg.content)}</div>
+                <div class="msg-time">${statusHtml}${timeStr}</div>
             </div>`;
 
         list.appendChild(row);
@@ -279,11 +277,9 @@ function appendMessage(msg) {
 
     row.innerHTML = `
         ${avatarHtml}
-        <div>
-            <div class="message-bubble">
-                ${escapeHtml(msg.content)}
-                <span class="msg-time">${timeStr}${statusHtml}</span>
-            </div>
+        <div class="msg-content">
+            <div class="message-bubble">${escapeHtml(msg.content)}</div>
+            <div class="msg-time">${statusHtml}${timeStr}</div>
         </div>`;
 
     list.appendChild(row);

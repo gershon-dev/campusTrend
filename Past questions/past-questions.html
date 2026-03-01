@@ -375,24 +375,28 @@
     <div class="modal-box">
         <div class="warn-icon" id="downloadModalIcon">📥</div>
         <h3 id="downloadModalTitle">Preparing Download…</h3>
-        <p id="downloadModalBody" style="color:#666;line-height:1.6;margin-bottom:20px;"></p>
-        <div id="downloadSpinner" class="spinner" style="border-top-color:#667eea;border-color:#e0e0e0;border-top-color:#667eea;width:36px;height:36px;margin:0 auto 20px;"></div>
-        <a id="downloadLink" href="#" target="_blank" rel="noopener"
-           style="display:none;width:100%;padding:14px;background:#667eea;color:#fff;border:none;
-                  border-radius:10px;font-size:1rem;font-weight:700;cursor:pointer;
-                  text-align:center;text-decoration:none;border-radius:10px;">
-            📥 Tap here to Download
-        </a>
-        <div id="downloadInstructions" style="display:none;background:#f0f4ff;border-radius:10px;padding:16px;margin-top:14px;text-align:left;">
-            <p style="font-size:0.88rem;color:#444;line-height:1.7;">
-                <strong>📱 How to save to your device:</strong><br>
-                1. Tap <strong>"Tap here to Download"</strong> above<br>
-                2. The PDF will open in your browser<br>
-                3. Tap the <strong>⋮ menu</strong> or share icon<br>
-                4. Choose <strong>"Download"</strong> or <strong>"Save to Files"</strong>
+        <p id="downloadModalBody" style="color:#666;line-height:1.6;margin-bottom:16px;font-size:0.95rem;"></p>
+        <div id="downloadSpinner" class="spinner" style="border:4px solid #eee;border-top-color:#667eea;border-radius:50%;width:38px;height:38px;animation:spin 0.8s linear infinite;margin:0 auto 16px;"></div>
+        <div id="downloadLinkWrap" style="display:none;">
+            <a id="downloadLink" href="#" target="_blank" rel="noopener"
+               style="display:block;width:100%;padding:15px;background:#667eea;color:#fff;
+                      border-radius:10px;font-size:1.05rem;font-weight:700;
+                      text-align:center;text-decoration:none;margin-bottom:14px;">
+                📥 Save / Open PDF
+            </a>
+        </div>
+        <div id="downloadInstructions" style="display:none;background:#f0f4ff;border-left:4px solid #667eea;border-radius:8px;padding:14px;text-align:left;margin-bottom:14px;">
+            <p style="font-size:0.87rem;color:#444;line-height:1.8;margin:0;">
+                <strong>📱 To save the PDF to your phone:</strong><br>
+                1. Tap <strong>"Save / Open PDF"</strong> above<br>
+                2. In the browser, tap the <strong>⋮ menu</strong> (top right)<br>
+                3. Tap <strong>"Download"</strong> or <strong>"Share → Save to Files"</strong><br><br>
+                <strong>💡 Or:</strong> Long-press the button → <em>Open in new tab</em>, then download from there.
             </p>
         </div>
-        <button class="btn-cancel" onclick="closeDownloadModal()" style="margin-top:16px;width:100%;">Close</button>
+        <button class="btn-cancel" onclick="closeDownloadModal()" style="width:100%;padding:12px;border:2px solid #ddd;border-radius:8px;background:#fff;color:#555;font-size:0.95rem;font-weight:600;cursor:pointer;">
+            Close
+        </button>
     </div>
 </div>
 
@@ -713,7 +717,7 @@ function renderQuestions(questions) {
             </div>
             <div class="action-buttons">
                 ${q.is_free
-                    ? `<button class="download-btn" onclick="downloadQuestion('${q.id}')">⬇ Download</button>`
+                    ? `<button class="download-btn" onclick="downloadQuestion('${q.id}', '${(q.title||'past-question').replace(/'/g,"\\'")}')">⬇ Download</button>`
                     : `<button class="buy-btn" onclick="goToPayment('${q.id}', ${q.price})">💳 Buy</button>`}
                 ${isAdmin ? `<button class="delete-btn"
                     onclick="openDeleteModal('${q.id}', '${safeTitle}', '${safeFilePath}')">
@@ -728,79 +732,94 @@ function renderQuestions(questions) {
 /* ═══════════════════════════════════════════════════════════
    ACTIONS
 ═══════════════════════════════════════════════════════════ */
-async function downloadQuestion(questionId) {
-    // Show modal in "loading" state
-    openDownloadModal();
+async function downloadQuestion(questionId, fileName) {
+    openDownloadModal('loading');
 
     try {
         const result = await window.dbOperations.generateDownloadUrl(questionId);
-
-        if (!result.success) {
-            showDownloadError(result.error || 'Failed to generate download link');
-            return;
-        }
+        if (!result.success) { openDownloadModal('error', result.error || 'Failed to get download link'); return; }
 
         const url = result.url;
+        const pdfName = (fileName || 'past-question') + '.pdf';
 
-        // Hide spinner, show link + instructions
-        document.getElementById('downloadSpinner').style.display = 'none';
-        document.getElementById('downloadModalIcon').textContent = '✅';
-        document.getElementById('downloadModalTitle').textContent = 'Ready to Download!';
-        document.getElementById('downloadModalBody').textContent = 'Your file is ready. Tap the button below to download it.';
+        // ── Strategy 1: Fetch as blob → createObjectURL (works in most WebViews) ──
+        try {
+            openDownloadModal('fetching');
+            const response = await fetch(url);
+            if (!response.ok) throw new Error('Fetch failed');
+            const blob = await response.blob();
+            const blobUrl = URL.createObjectURL(blob);
 
-        // Set up the download link
-        const link = document.getElementById('downloadLink');
-        link.href = url;
-        link.setAttribute('download', '');   // hint browser to download
-        link.style.display = 'block';
-        document.getElementById('downloadInstructions').style.display = 'block';
+            const a = document.createElement('a');
+            a.href = blobUrl;
+            a.download = pdfName;
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => { URL.revokeObjectURL(blobUrl); document.body.removeChild(a); }, 2000);
 
-        // Also try the programmatic download for browsers/WebViews that support it
-        tryProgrammaticDownload(url);
+            // Show success with fallback link in case blob download was silently blocked
+            openDownloadModal('success', null, url, pdfName);
+            return;
+        } catch(blobErr) {
+            console.warn('Blob download failed, falling back to link modal:', blobErr);
+        }
+
+        // ── Strategy 2: Show manual download modal with clear instructions ──
+        openDownloadModal('success', null, url, pdfName);
 
     } catch(e) {
-        showDownloadError(e.message);
+        openDownloadModal('error', e.message);
     }
 }
 
-function tryProgrammaticDownload(url) {
-    // Works in desktop browsers and some Android WebViews
-    try {
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'past-question.pdf';
-        a.style.display = 'none';
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => document.body.removeChild(a), 1000);
-    } catch(e) {
-        // Silent fail — user still has the manual button in the modal
-    }
-}
+function openDownloadModal(state, errorMsg, url, pdfName) {
+    const modal    = document.getElementById('downloadModal');
+    const icon     = document.getElementById('downloadModalIcon');
+    const title    = document.getElementById('downloadModalTitle');
+    const body     = document.getElementById('downloadModalBody');
+    const spinner  = document.getElementById('downloadSpinner');
+    const linkWrap = document.getElementById('downloadLinkWrap');
+    const link     = document.getElementById('downloadLink');
+    const tips     = document.getElementById('downloadInstructions');
 
-function openDownloadModal() {
-    // Reset to loading state
-    document.getElementById('downloadModalIcon').textContent = '📥';
-    document.getElementById('downloadModalTitle').textContent = 'Preparing Download…';
-    document.getElementById('downloadModalBody').textContent = 'Please wait while we generate your download link.';
-    document.getElementById('downloadSpinner').style.display = 'block';
-    document.getElementById('downloadLink').style.display = 'none';
-    document.getElementById('downloadInstructions').style.display = 'none';
-    document.getElementById('downloadModal').classList.add('active');
+    // Reset
+    spinner.style.display  = 'block';
+    linkWrap.style.display = 'none';
+    tips.style.display     = 'none';
+
+    if (state === 'loading') {
+        icon.textContent  = '📥';
+        title.textContent = 'Preparing Download…';
+        body.textContent  = 'Connecting to server…';
+    } else if (state === 'fetching') {
+        icon.textContent  = '⬇️';
+        title.textContent = 'Downloading…';
+        body.textContent  = 'Fetching your file, please wait.';
+    } else if (state === 'success') {
+        spinner.style.display  = 'none';
+        icon.textContent  = '✅';
+        title.textContent = 'Your File is Ready!';
+        body.textContent  = 'If the file did not save automatically, tap the button below:';
+        link.href         = url;
+        link.download     = pdfName;
+        link.textContent  = '📥 Save / Open PDF';
+        linkWrap.style.display = 'block';
+        tips.style.display     = 'block';
+    } else if (state === 'error') {
+        spinner.style.display = 'none';
+        icon.textContent  = '❌';
+        title.textContent = 'Download Failed';
+        body.textContent  = errorMsg || 'Something went wrong.';
+    }
+
+    modal.classList.add('active');
 }
 
 function closeDownloadModal() {
     document.getElementById('downloadModal').classList.remove('active');
 }
 
-function showDownloadError(msg) {
-    document.getElementById('downloadSpinner').style.display = 'none';
-    document.getElementById('downloadModalIcon').textContent = '❌';
-    document.getElementById('downloadModalTitle').textContent = 'Download Failed';
-    document.getElementById('downloadModalBody').textContent = msg;
-}
-
-// Close download modal on backdrop click
 document.getElementById('downloadModal').addEventListener('click', e => {
     if (e.target === e.currentTarget) closeDownloadModal();
 });

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat - CampusTrend UEW</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="styles/chat.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1877f2">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="CampusTrend">
+</head>
+<body>
+
+    <!-- Chat Header -->
+    <header class="chat-header">
+        <button class="back-btn" onclick="goBack()">
+            <i class="fas fa-arrow-left"></i>
+        </button>
+        <div class="chat-header-info" id="chatHeaderInfo">
+            <div class="chat-header-avatar" id="headerAvatar">
+                <span id="headerInitials">?</span>
+            </div>
+            <div class="chat-header-text">
+                <div class="chat-header-name" id="headerName">Loading...</div>
+                <div class="chat-header-status" id="headerStatus">
+                    <span class="status-dot"></span>
+                    <span>Private Chat</span>
+                </div>
+            </div>
+        </div>
+        <div class="chat-header-actions">
+            <button class="chat-action-btn" onclick="viewProfile()" title="View Profile">
+                <i class="fas fa-user"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Access Denied (shown if not a follower) -->
+    <div class="access-denied" id="accessDenied" style="display:none;">
+        <div class="access-denied-icon">🔒</div>
+        <h2>Private Messages</h2>
+        <p>You can only message people who follow you or people you follow.</p>
+        <button class="btn-follow-first" onclick="goBack()">← Go Back</button>
+    </div>
+
+    <!-- Chat Body -->
+    <div class="chat-body" id="chatBody" style="display:none;">
+
+        <!-- Messages area -->
+        <div class="messages-area" id="messagesArea">
+            <div class="messages-loading" id="messagesLoading">
+                <div class="chat-spinner"></div>
+                <p>Loading messages…</p>
+            </div>
+            <div class="messages-list" id="messagesList"></div>
+            <div class="messages-empty" id="messagesEmpty" style="display:none;">
+                <div class="empty-chat-icon">💬</div>
+                <p>No messages yet.<br>Say hello!</p>
+            </div>
+        </div>
+
+        <!-- Input bar -->
+        <div class="chat-input-bar">
+            <div class="input-wrapper">
+                <textarea
+                    id="messageInput"
+                    class="message-input"
+                    placeholder="Type a message…"
+                    rows="1"
+                    maxlength="1000"></textarea>
+                <button class="send-btn" id="sendBtn" disabled>
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast">
+        <i class="fas fa-check-circle"></i>
+        <span id="toastMessage">Success!</span>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-config.js"></script>
+    <script src="scripts/chat.js"></script>
+</body>
+</html>

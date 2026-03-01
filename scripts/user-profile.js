@@ -100,6 +100,7 @@ async function loadOwnProfile(user) {
             document.getElementById('editAvatarBtn').style.display = 'flex';
             document.getElementById('editProfileBtn').style.display = 'inline-flex';
             document.getElementById('followBtn').style.display = 'none';
+            document.getElementById('messageBtn').style.display = 'none';
         }
     } catch (error) {
         console.error('Error loading own profile:', error);
@@ -141,6 +142,9 @@ async function loadOtherUserProfile(userId) {
             
             // Check if already following and update button state
             await updateFollowButton();
+
+            // Show message button if there's a follow relationship
+            await updateMessageButton();
         } else {
             showToast('User not found', 'error');
             setTimeout(() => {
@@ -1179,6 +1183,49 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// ============================================
+// PRIVATE CHAT
+// ============================================
+
+// Show the Message button only if a follow relationship exists (either direction)
+async function updateMessageButton() {
+    const btn = document.getElementById('messageBtn');
+    if (!btn) return;
+
+    try {
+        const currentUser = await window.getCurrentUser();
+        if (!currentUser) return;
+
+        // I follow them?
+        const { data: iFollow } = await window.supabaseClient
+            .from('follows')
+            .select('id')
+            .eq('follower_id', currentUser.id)
+            .eq('following_id', currentProfileUserId)
+            .maybeSingle();
+
+        if (iFollow) { btn.style.display = 'inline-flex'; return; }
+
+        // They follow me?
+        const { data: theyFollow } = await window.supabaseClient
+            .from('follows')
+            .select('id')
+            .eq('follower_id', currentProfileUserId)
+            .eq('following_id', currentUser.id)
+            .maybeSingle();
+
+        btn.style.display = theyFollow ? 'inline-flex' : 'none';
+    } catch (err) {
+        console.error('updateMessageButton error:', err);
+        btn.style.display = 'none';
+    }
+}
+
+// Open private chat with this user
+function openChat() {
+    window.location.href = `chat.html?userId=${currentProfileUserId}`;
 }
 
 // Navigation functions

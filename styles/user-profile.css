@@ -266,6 +266,32 @@ body {
     background: #d8dadf;
 }
 
+.message-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 24px;
+    background: white;
+    color: #1877f2;
+    border: 2px solid #1877f2;
+    border-radius: 25px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+    margin-left: 10px;
+}
+
+.message-btn:hover {
+    background: #e7f3ff;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(24,119,242,0.2);
+}
+
+.message-btn i {
+    font-size: 14px;
+}
+
 /* ============================================
    STATS SECTION
    ============================================ */

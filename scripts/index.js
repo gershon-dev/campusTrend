@@ -1006,7 +1006,7 @@ document.addEventListener('DOMContentLoaded', async function() {
  setTimeout(() => {
  toast.classList.remove('show');
  }, 3000);
- }
+ } 
  }
  window.showToast = showToast;
 });

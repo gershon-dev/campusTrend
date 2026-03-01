@@ -4,44 +4,823 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>UEW Past Questions - Student Portal</title>
-    <meta name="description" content="Access past examination questions for students in UEW Campuses. Browse by faculty and course.">
-    <meta name="author" content="Mack Jac">
+    <meta name="description" content="Access past examination questions for UEW students. Browse by faculty and course.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&family=Open+Sans:wght@300;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles/past-questions.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Open Sans', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        /* ── Page / view transitions ───────────────────── */
+        .view {
+            display: none;
+            animation: fadeSlideIn 0.3s ease forwards;
+        }
+        .view.active { display: block; }
+
+        @keyframes fadeSlideIn {
+            from { opacity: 0; transform: translateY(18px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ── Container ──────────────────────────────────── */
+        .container { max-width: 1100px; margin: 0 auto; }
+
+        /* ── Breadcrumb ─────────────────────────────────── */
+        .breadcrumb { margin-bottom: 20px; }
+        .breadcrumb a {
+            color: #fff;
+            text-decoration: none;
+            font-size: 0.95rem;
+            padding: 8px 16px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 20px;
+            display: inline-block;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .breadcrumb a:hover {
+            background: rgba(255,255,255,0.35);
+            transform: translateX(-4px);
+        }
+
+        /* ── Headings ───────────────────────────────────── */
+        h1 {
+            font-family: 'Roboto', sans-serif;
+            color: #fff;
+            font-size: 2.4rem;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+        .subtitle {
+            color: rgba(255,255,255,0.9);
+            text-align: center;
+            font-size: 1.1rem;
+            margin-bottom: 30px;
+        }
+
+        /* ── Search ─────────────────────────────────────── */
+        .search-box { max-width: 600px; margin: 0 auto 35px; }
+        .search-box input {
+            width: 100%;
+            padding: 15px 20px;
+            font-size: 1rem;
+            border: none;
+            border-radius: 30px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            outline: none;
+            transition: box-shadow 0.3s ease;
+        }
+        .search-box input:focus { box-shadow: 0 6px 14px rgba(0,0,0,0.18); }
+
+        /* ── Grids ──────────────────────────────────────── */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 20px;
+        }
+
+        /* Faculty home — 2 columns on desktop */
+        #view-home .grid {
+            grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        /* ── Cards ──────────────────────────────────────── */
+        .card {
+            background: #fff;
+            border-radius: 12px;
+            padding: 25px;
+            cursor: pointer;
+            transition: transform 0.25s ease, box-shadow 0.25s ease;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            position: relative;
+            overflow: hidden;
+            -webkit-tap-highlight-color: transparent;
+            animation: fadeSlideIn 0.35s ease both;
+        }
+        .card:nth-child(1)  { animation-delay: 0.05s; }
+        .card:nth-child(2)  { animation-delay: 0.1s;  }
+        .card:nth-child(3)  { animation-delay: 0.15s; }
+        .card:nth-child(4)  { animation-delay: 0.2s;  }
+        .card:nth-child(5)  { animation-delay: 0.25s; }
+        .card:nth-child(6)  { animation-delay: 0.3s;  }
+        .card:nth-child(7)  { animation-delay: 0.35s; }
+        .card:nth-child(8)  { animation-delay: 0.4s;  }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 4px;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            transform: scaleX(0);
+            transition: transform 0.3s ease;
+        }
+        .card:hover::before, .card:focus::before { transform: scaleX(1); }
+        .card:hover, .card:focus {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.15);
+            outline: none;
+        }
+        .card:active { transform: translateY(-2px); }
+
+        .card h2 {
+            font-family: 'Roboto', sans-serif;
+            color: #333;
+            font-size: 1.2rem;
+            margin-bottom: 8px;
+        }
+        .card h3 {
+            font-family: 'Roboto', sans-serif;
+            color: #333;
+            font-size: 1.2rem;
+            margin: 0;
+        }
+        .card p { color: #666; font-size: 0.9rem; line-height: 1.5; }
+
+        .card-icon { font-size: 3rem; margin-bottom: 12px; }
+        .semester-icon { font-size: 2.5rem; margin-bottom: 14px; }
+        .semester-desc { color: #666; font-size: 0.9rem; margin-top: 8px; }
+
+        /* ── Questions list ─────────────────────────────── */
+        .filter-info {
+            background: rgba(255,255,255,0.2);
+            color: #fff;
+            padding: 14px 18px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-size: 0.92rem;
+            line-height: 1.7;
+        }
+
+        .question-item {
+            background: #fff;
+            padding: 20px;
+            margin-bottom: 14px;
+            border-radius: 10px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 14px;
+            animation: fadeSlideIn 0.35s ease both;
+            transition: box-shadow 0.25s ease, transform 0.25s ease;
+        }
+        .question-item:hover {
+            box-shadow: 0 6px 14px rgba(0,0,0,0.13);
+            transform: translateY(-2px);
+        }
+
+        .question-info h3 { color: #333; font-size: 1.05rem; margin-bottom: 5px; }
+        .question-meta   { color: #666; font-size: 0.88rem; margin-bottom: 4px; }
+
+        .price-badge, .free-badge {
+            display: inline-block;
+            padding: 4px 14px;
+            border-radius: 20px;
+            font-weight: 700;
+            font-size: 0.85rem;
+        }
+        .price-badge { background: #667eea; color: #fff; }
+        .free-badge  { background: #48bb78; color: #fff; }
+
+        .action-buttons { display: flex; gap: 10px; flex-shrink: 0; flex-wrap: wrap; }
+
+        .download-btn, .buy-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            transition: all 0.25s ease;
+            white-space: nowrap;
+        }
+        .download-btn { background: #48bb78; color: #fff; }
+        .download-btn:hover { background: #38a169; transform: scale(1.04); }
+        .buy-btn { background: #667eea; color: #fff; }
+        .buy-btn:hover { background: #5568d3; transform: scale(1.04); }
+
+        .delete-btn {
+            padding: 10px 16px;
+            border: none; border-radius: 25px;
+            cursor: pointer; font-size: 0.88rem; font-weight: 600;
+            background: #fc5c65; color: #fff;
+            transition: all 0.25s ease;
+        }
+        .delete-btn:hover { background: #eb3b45; transform: scale(1.04); }
+        .delete-btn:disabled { background: #ccc; cursor: not-allowed; transform: none; }
+
+        /* ── Loading / empty states ─────────────────────── */
+        .loading-state, .empty-state {
+            text-align: center;
+            padding: 50px 20px;
+            color: #fff;
+        }
+        .empty-state {
+            background: rgba(255,255,255,0.18);
+            border-radius: 12px;
+            margin-top: 20px;
+        }
+        .spinner {
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top: 4px solid #fff;
+            border-radius: 50%;
+            width: 44px; height: 44px;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 20px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── Delete modal ────────────────────────────────── */
+        .modal-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.55); z-index: 1000;
+            align-items: center; justify-content: center;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal-box {
+            background: #fff; border-radius: 14px; padding: 36px 30px;
+            max-width: 420px; width: 92%; text-align: center;
+            box-shadow: 0 14px 40px rgba(0,0,0,0.25);
+            animation: popIn 0.2s ease;
+        }
+        @keyframes popIn {
+            from { transform: scale(0.9); opacity: 0; }
+            to   { transform: scale(1);   opacity: 1; }
+        }
+        .modal-box .warn-icon { font-size: 3rem; margin-bottom: 14px; }
+        .modal-box h3 { color: #333; margin-bottom: 10px; font-size: 1.25rem; }
+        .modal-box p  { color: #666; margin-bottom: 12px; line-height: 1.5; }
+        .modal-box .question-name { font-weight: 700; color: #333; }
+        .modal-box .warn-text { color: #fc5c65; font-size: 0.87rem; margin-bottom: 24px; }
+        .modal-actions { display: flex; gap: 12px; justify-content: center; }
+
+        .btn-cancel {
+            padding: 12px 26px; border: 2px solid #ddd; border-radius: 8px;
+            background: #fff; color: #555; font-size: 1rem; font-weight: 600;
+            cursor: pointer; transition: background 0.2s;
+        }
+        .btn-cancel:hover { background: #f5f5f5; }
+        .btn-confirm-delete {
+            padding: 12px 26px; border: none; border-radius: 8px;
+            background: #fc5c65; color: #fff; font-size: 1rem; font-weight: 600;
+            cursor: pointer; transition: background 0.2s;
+        }
+        .btn-confirm-delete:hover    { background: #eb3b45; }
+        .btn-confirm-delete:disabled { background: #ccc; cursor: not-allowed; }
+
+        /* ── Toast ──────────────────────────────────────── */
+        .toast {
+            position: fixed; bottom: 28px; left: 50%;
+            transform: translateX(-50%) translateY(120px);
+            background: #333; color: #fff; padding: 13px 26px;
+            border-radius: 8px; font-size: 0.95rem; font-weight: 600;
+            z-index: 2000; transition: transform 0.35s ease; pointer-events: none;
+        }
+        .toast.show    { transform: translateX(-50%) translateY(0); }
+        .toast.success { background: #48bb78; }
+        .toast.error   { background: #fc5c65; }
+
+        /* ── Responsive ─────────────────────────────────── */
+        @media (max-width: 768px) {
+            h1 { font-size: 1.9rem; }
+            body { padding: 14px; }
+            .question-item { flex-direction: column; align-items: flex-start; }
+            .action-buttons { width: 100%; justify-content: flex-start; }
+        }
+        @media (max-width: 480px) {
+            h1 { font-size: 1.65rem; }
+            .subtitle { font-size: 0.97rem; }
+            .grid { grid-template-columns: 1fr; }
+        }
+    </style>
 </head>
 <body>
-    <div class="container">
+<div class="container">
+
+    <!-- ══════════════════════════════════════════════════════ -->
+    <!--  VIEW 1 — Home (Faculty selection)                     -->
+    <!-- ══════════════════════════════════════════════════════ -->
+    <div class="view active" id="view-home">
         <h1>📚 UEW Past Questions</h1>
-        
-        <div class="faculty-grid">
-            <div class="faculty-card" onclick="navigateToFaculty('social-Science')">
-                <div class="faculty-icon">🎓</div>
-                <h2>Faculty of Social Science Education</h2>
-                <p>Access past questions for all social science programs</p>
-            </div>
-            
-            <div class="faculty-card" onclick="navigateToFaculty('General')">
-                <div class="faculty-icon">📖</div>
-                <h2>General Papers</h2>
-                <p>Common courses and general education papers</p>
-            </div>
-            
-            <div class="faculty-card" onclick="navigateToFaculty('science')">
-                <div class="faculty-icon">🔬</div>
-                <h2>Faculty of Science Education</h2>
-                <p>Science, Mathematics, and Technology programs</p>
-            </div>
-            
-            <div class="faculty-card" onclick="navigateToFaculty('business')">
-                <div class="faculty-icon">💼</div>
-                <h2>School of Business</h2>
-                <p>Business Administration and related courses</p>
-            </div>
+        <div class="grid" id="facultyGrid"></div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ -->
+    <!--  VIEW 2 — Departments / Levels for General Papers      -->
+    <!-- ══════════════════════════════════════════════════════ -->
+    <div class="view" id="view-departments">
+        <nav class="breadcrumb"><a onclick="navigate('home')">← Back to Faculties</a></nav>
+        <h1 id="deptViewTitle">📚 Choose Department</h1>
+        <p class="subtitle" id="deptViewSubtitle"></p>
+        <div class="search-box" id="deptSearchBox">
+            <input type="text" id="deptSearch" placeholder="Search department..." oninput="filterCards('deptGrid', this.value)">
+        </div>
+        <div class="grid" id="deptGrid"></div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ -->
+    <!--  VIEW 3 — Levels                                       -->
+    <!-- ══════════════════════════════════════════════════════ -->
+    <div class="view" id="view-levels">
+        <nav class="breadcrumb"><a onclick="navigate('departments')">← Back</a></nav>
+        <h1>📊 Choose Level</h1>
+        <p class="subtitle" id="levelsSubtitle"></p>
+        <div class="grid" id="levelsGrid"></div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ -->
+    <!--  VIEW 4 — Semesters                                    -->
+    <!-- ══════════════════════════════════════════════════════ -->
+    <div class="view" id="view-semesters">
+        <nav class="breadcrumb"><a onclick="navigate('levels')">← Back</a></nav>
+        <h1>📅 Choose Semester</h1>
+        <p class="subtitle" id="semestersSubtitle"></p>
+        <div class="grid" id="semestersGrid"></div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ -->
+    <!--  VIEW 5 — Past Questions list                          -->
+    <!-- ══════════════════════════════════════════════════════ -->
+    <div class="view" id="view-questions">
+        <nav class="breadcrumb"><a onclick="navigate('semesters')">← Back</a></nav>
+        <h1>📄 Past Questions</h1>
+        <div class="filter-info" id="questionsFilterInfo"></div>
+        <div id="questionsLoading" class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading past questions…</p>
+        </div>
+        <div id="questionsList" style="display:none;"></div>
+        <div id="questionsEmpty" class="empty-state" style="display:none;">
+            <p>No past questions found for this selection.</p>
         </div>
     </div>
 
-    <script src="scripts/past-questions.js"></script>
+</div><!-- /container -->
+
+<!-- Delete Confirmation Modal -->
+<div class="modal-overlay" id="deleteModal">
+    <div class="modal-box">
+        <div class="warn-icon">🗑️</div>
+        <h3>Delete Past Question?</h3>
+        <p>You are about to permanently delete:<br>
+            <span class="question-name" id="deleteQuestionName"></span>
+        </p>
+        <p class="warn-text">
+            This will also remove the file from storage and cannot be undone.
+        </p>
+        <div class="modal-actions">
+            <button class="btn-cancel" onclick="closeDeleteModal()">Cancel</button>
+            <button class="btn-confirm-delete" id="confirmDeleteBtn" onclick="confirmDelete()">Delete</button>
+        </div>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Supabase + app scripts (paths unchanged from your original) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="scripts/supabase-config.js"></script>
+<script src="scripts/supabase-auth.js"></script>
+<script src="scripts/supabase-db.js"></script>
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   APP STATE
+═══════════════════════════════════════════════════════════ */
+const state = {
+    faculty:    null,
+    department: null,
+    level:      null,
+    semester:   null
+};
+
+let currentView = 'home';
+let viewHistory = [];          // for back-navigation
+let isAdmin = false;
+let pendingDeleteId   = null;
+let pendingDeletePath = null;
+
+/* ═══════════════════════════════════════════════════════════
+   FACULTY DATA
+═══════════════════════════════════════════════════════════ */
+const FACULTIES = [
+    {
+        key: 'social-Science',
+        icon: '🎓',
+        title: 'Faculty of Social Science Education',
+        desc: 'Access past questions for all social science programs',
+        departments: [
+            'History Education',
+            'Political Science Education',
+            'Geography Education',
+            'Social Studies Education',
+            'Economics Education',
+            'Centre for African Studies'
+        ],
+        searchable: true
+    },
+    {
+        key: 'General',
+        icon: '📖',
+        title: 'General Papers',
+        desc: 'Common courses and general education papers',
+        departments: null,   // goes straight to levels
+        levels: [100, 200, 300, 400]
+    },
+    {
+        key: 'science',
+        icon: '🔬',
+        title: 'Faculty of Science Education',
+        desc: 'Science, Mathematics, and Technology programs',
+        departments: [
+            'Mathematics Education',
+            'Physics Education',
+            'Chemistry Education',
+            'Biology Education'
+        ]
+    },
+    {
+        key: 'business',
+        icon: '💼',
+        title: 'School of Business',
+        desc: 'Business Administration and related courses',
+        departments: [
+            'Department of Accounting',
+            'Department of Applied Finance and Policy Management',
+            'Department of Banking and Finance',
+            'Management Sciences',
+            'Marketing',
+            'Procurement & SCM'
+        ]
+    }
+];
+
+const ALL_LEVELS    = [100, 200, 300, 400, 500, 600, 700, 800];
+const SEMESTERS     = [
+    { key: 'first',  icon: '📖', label: 'First Semester',  desc: 'September – January' },
+    { key: 'second', icon: '📚', label: 'Second Semester', desc: 'February – June' }
+];
+
+/* ═══════════════════════════════════════════════════════════
+   VIEW ROUTER
+═══════════════════════════════════════════════════════════ */
+function showView(id) {
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.getElementById('view-' + id).classList.add('active');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    currentView = id;
+}
+
+function navigate(target) {
+    if (target === 'home') {
+        renderHome();
+    } else if (target === 'departments') {
+        renderDepartments();
+    } else if (target === 'levels') {
+        renderLevels();
+    } else if (target === 'semesters') {
+        renderSemesters();
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RENDER FUNCTIONS
+═══════════════════════════════════════════════════════════ */
+function renderHome() {
+    const grid = document.getElementById('facultyGrid');
+    grid.innerHTML = '';
+    FACULTIES.forEach(f => {
+        const card = makeCard();
+        card.innerHTML = `<div class="card-icon">${f.icon}</div>
+            <h2>${f.title}</h2>
+            <p>${f.desc}</p>`;
+        card.addEventListener('click', () => {
+            state.faculty = f.key;
+            state.department = null;
+            state.level = null;
+            state.semester = null;
+            if (f.departments === null) {
+                // General papers → straight to level selection
+                renderGeneralLevels(f);
+            } else {
+                renderDepartments();
+            }
+        });
+        grid.appendChild(card);
+    });
+    showView('home');
+}
+
+function renderDepartments() {
+    const faculty = FACULTIES.find(f => f.key === state.faculty);
+    if (!faculty) return renderHome();
+
+    document.getElementById('deptViewTitle').textContent = `📚 Choose Department`;
+    document.getElementById('deptViewSubtitle').textContent = faculty.title;
+
+    const searchBox = document.getElementById('deptSearchBox');
+    searchBox.style.display = faculty.searchable ? 'block' : 'none';
+    document.getElementById('deptSearch').value = '';
+
+    const grid = document.getElementById('deptGrid');
+    grid.innerHTML = '';
+    faculty.departments.forEach(dept => {
+        const card = makeCard();
+        card.innerHTML = `<h3>${dept}</h3>`;
+        card.dataset.searchText = dept.toLowerCase();
+        card.addEventListener('click', () => {
+            state.department = dept;
+            renderLevels();
+        });
+        grid.appendChild(card);
+    });
+    showView('departments');
+}
+
+function renderGeneralLevels(faculty) {
+    // General papers skips departments, goes straight to level selection
+    // Reuse levels view but label it correctly
+    document.getElementById('levelsSubtitle').textContent = faculty.title;
+    const grid = document.getElementById('levelsGrid');
+    grid.innerHTML = '';
+    state.department = 'General Papers';
+
+    (faculty.levels || ALL_LEVELS).forEach(lvl => {
+        const card = makeCard();
+        card.innerHTML = `<h3>Level ${lvl}</h3>`;
+        card.addEventListener('click', () => {
+            state.level = lvl;
+            renderSemesters();
+        });
+        grid.appendChild(card);
+    });
+    showView('levels');
+}
+
+function renderLevels() {
+    const faculty = FACULTIES.find(f => f.key === state.faculty);
+    document.getElementById('levelsSubtitle').textContent = state.department || (faculty && faculty.title) || '';
+    const grid = document.getElementById('levelsGrid');
+    grid.innerHTML = '';
+
+    ALL_LEVELS.forEach(lvl => {
+        const card = makeCard();
+        card.innerHTML = `<h3>Level ${lvl}</h3>`;
+        card.addEventListener('click', () => {
+            state.level = lvl;
+            renderSemesters();
+        });
+        grid.appendChild(card);
+    });
+    showView('levels');
+}
+
+function renderSemesters() {
+    const parts = [state.department, `Level ${state.level}`].filter(Boolean);
+    document.getElementById('semestersSubtitle').textContent = parts.join(' · ');
+    const grid = document.getElementById('semestersGrid');
+    grid.innerHTML = '';
+
+    SEMESTERS.forEach(sem => {
+        const card = makeCard();
+        card.innerHTML = `<div class="semester-icon">${sem.icon}</div>
+            <h3>${sem.label}</h3>
+            <p class="semester-desc">${sem.desc}</p>`;
+        card.addEventListener('click', () => {
+            state.semester = sem.key;
+            loadQuestions();
+        });
+        grid.appendChild(card);
+    });
+    showView('semesters');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   QUESTIONS LOADER
+═══════════════════════════════════════════════════════════ */
+async function loadQuestions() {
+    showView('questions');
+
+    const faculty    = FACULTIES.find(f => f.key === state.faculty);
+    const facultyLabel = faculty ? faculty.title : state.faculty;
+    const semesterLabel = state.semester === 'first' ? 'First Semester' : 'Second Semester';
+
+    document.getElementById('questionsFilterInfo').innerHTML = `
+        <strong>Faculty:</strong> ${facultyLabel} &nbsp;|&nbsp;
+        <strong>Department:</strong> ${state.department || 'All'} &nbsp;|&nbsp;
+        <strong>Level:</strong> ${state.level || 'All'} &nbsp;|&nbsp;
+        <strong>Semester:</strong> ${semesterLabel}
+    `;
+
+    // Reset states
+    document.getElementById('questionsLoading').style.display = 'block';
+    document.getElementById('questionsList').style.display    = 'none';
+    document.getElementById('questionsEmpty').style.display   = 'none';
+    document.getElementById('questionsList').innerHTML = '';
+
+    // Check admin status
+    try {
+        const userResult = await window.authFunctions.getCurrentUser();
+        isAdmin = !!(userResult.success && userResult.user);
+    } catch(e) { isAdmin = false; }
+
+    // Build filters
+    const filters = {};
+    if (facultyLabel)    filters.faculty    = facultyLabel;
+    if (state.department) filters.department = state.department;
+    if (state.level)      filters.level      = parseInt(state.level);
+    if (state.semester)   filters.semester   = state.semester;
+
+    try {
+        const result = await window.dbOperations.getPastQuestions(filters);
+        document.getElementById('questionsLoading').style.display = 'none';
+
+        if (result.success && result.data && result.data.length > 0) {
+            renderQuestions(result.data);
+        } else {
+            document.getElementById('questionsEmpty').style.display = 'block';
+        }
+    } catch(err) {
+        document.getElementById('questionsLoading').innerHTML = `
+            <p>⚠️ Failed to load questions. Please try again.</p>`;
+    }
+}
+
+function renderQuestions(questions) {
+    const list = document.getElementById('questionsList');
+    list.innerHTML = '';
+
+    questions.forEach((q, i) => {
+        const item = document.createElement('div');
+        item.className = 'question-item';
+        item.id = `question-${q.id}`;
+        item.style.animationDelay = `${i * 0.05}s`;
+
+        const safeTitle    = (q.title    || '').replace(/'/g, "\\'");
+        const safeFilePath = (q.file_path || '').replace(/'/g, "\\'");
+
+        item.innerHTML = `
+            <div class="question-info">
+                <h3>${q.title || 'Untitled'}</h3>
+                <div class="question-meta">
+                    ${q.course_code ? q.course_code + ' — ' : ''}${q.course_name || ''}
+                </div>
+                <div class="question-meta">
+                    Year: ${q.year || 'N/A'} &nbsp;|&nbsp; Downloads: ${q.download_count || 0}
+                </div>
+                ${q.is_free
+                    ? '<span class="free-badge">FREE</span>'
+                    : `<span class="price-badge">GH₵ ${parseFloat(q.price || 0).toFixed(2)}</span>`}
+            </div>
+            <div class="action-buttons">
+                ${q.is_free
+                    ? `<button class="download-btn" onclick="downloadQuestion('${q.id}')">⬇ Download</button>`
+                    : `<button class="buy-btn" onclick="goToPayment('${q.id}', ${q.price})">💳 Buy</button>`}
+                ${isAdmin ? `<button class="delete-btn"
+                    onclick="openDeleteModal('${q.id}', '${safeTitle}', '${safeFilePath}')">
+                    🗑 Delete</button>` : ''}
+            </div>`;
+
+        list.appendChild(item);
+    });
+    list.style.display = 'block';
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ACTIONS
+═══════════════════════════════════════════════════════════ */
+async function downloadQuestion(questionId) {
+    try {
+        const result = await window.dbOperations.generateDownloadUrl(questionId);
+        if (result.success) {
+            window.open(result.url, '_blank');
+        } else {
+            showToast(result.error || 'Failed to generate download link', 'error');
+        }
+    } catch(e) {
+        showToast('Download error: ' + e.message, 'error');
+    }
+}
+
+function goToPayment(questionId, price) {
+    window.location.href = `payment.html?questionId=${questionId}&amount=${price}`;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SEARCH / FILTER CARDS
+═══════════════════════════════════════════════════════════ */
+function filterCards(gridId, query) {
+    const q = query.toLowerCase();
+    document.querySelectorAll(`#${gridId} .card`).forEach(card => {
+        const text = card.dataset.searchText || card.textContent.toLowerCase();
+        card.style.display = text.includes(q) ? '' : 'none';
+    });
+}
+
+/* ═══════════════════════════════════════════════════════════
+   DELETE MODAL
+═══════════════════════════════════════════════════════════ */
+function openDeleteModal(id, title, filePath) {
+    pendingDeleteId   = id;
+    pendingDeletePath = filePath;
+    document.getElementById('deleteQuestionName').textContent = title;
+    document.getElementById('deleteModal').classList.add('active');
+}
+function closeDeleteModal() {
+    pendingDeleteId = pendingDeletePath = null;
+    document.getElementById('deleteModal').classList.remove('active');
+}
+document.getElementById('deleteModal').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeDeleteModal();
+});
+
+async function confirmDelete() {
+    if (!pendingDeleteId) return;
+    const btn = document.getElementById('confirmDeleteBtn');
+    btn.disabled = true; btn.textContent = 'Deleting…';
+
+    try {
+        if (pendingDeletePath) {
+            const cleanPath = pendingDeletePath.replace(/^\/+/, '');
+            await window.supabaseClient.storage
+                .from(window.PAST_QUESTIONS_BUCKET)
+                .remove([cleanPath]);
+        }
+
+        await window.supabaseClient.from('guest_downloads').delete().eq('past_question_id', pendingDeleteId);
+        await window.supabaseClient.from('payments').delete().eq('past_question_id', pendingDeleteId);
+
+        const { error } = await window.supabaseClient.from('past_questions').delete().eq('id', pendingDeleteId);
+        if (error) throw error;
+
+        const card = document.getElementById(`question-${pendingDeleteId}`);
+        if (card) {
+            card.style.transition = 'opacity 0.3s, transform 0.3s';
+            card.style.opacity    = '0';
+            card.style.transform  = 'scale(0.95)';
+            setTimeout(() => {
+                card.remove();
+                if (!document.querySelector('.question-item')) {
+                    document.getElementById('questionsEmpty').style.display = 'block';
+                }
+            }, 300);
+        }
+
+        closeDeleteModal();
+        showToast('Past question deleted ✓', 'success');
+    } catch(err) {
+        showToast('Delete failed: ' + err.message, 'error');
+    } finally {
+        btn.disabled = false; btn.textContent = 'Delete';
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TOAST
+═══════════════════════════════════════════════════════════ */
+let toastTimer = null;
+function showToast(msg, type = '') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className   = 'toast' + (type ? ' ' + type : '');
+    requestAnimationFrame(() => t.classList.add('show'));
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   HELPERS
+═══════════════════════════════════════════════════════════ */
+function makeCard() {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.setAttribute('tabindex', '0');
+    card.setAttribute('role', 'button');
+    card.addEventListener('keypress', e => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); card.click(); }
+    });
+    return card;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   BOOT
+═══════════════════════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', () => {
+    renderHome();
+});
+</script>
 </body>
 </html>

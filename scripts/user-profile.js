@@ -254,7 +254,7 @@ async function loadUserPosts() {
             .from('posts')
             .select(`
                 *,
-                profiles!posts_user_id_fkey (
+                profiles:user_id (
                     id,
                     full_name,
                     avatar_url,

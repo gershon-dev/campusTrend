@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin — CampusTrend</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0a0a0f; --surface: #12121a; --surface2: #1a1a26; --border: #2a2a3d;
+            --accent: #4f8cff; --accent2: #ff4f7b; --accent3: #4fffb0;
+            --text: #e8e8f0; --text2: #888899;
+            --danger: #ff3b5c; --warning: #ffb347; --success: #3bff8a; --blocked-color: #ff6b35;
+            --mono: 'Space Mono', monospace; --sans: 'DM Sans', sans-serif;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; overflow-x: hidden; }
+        body::before { content: ''; position: fixed; inset: 0; background-image: linear-gradient(rgba(79,140,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(79,140,255,0.03) 1px, transparent 1px); background-size: 40px 40px; pointer-events: none; z-index: 0; }
+
+        #loginScreen { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 100; background: var(--bg); }
+        .login-box { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 48px 40px; width: 100%; max-width: 400px; text-align: center; }
+        .login-logo { font-family: var(--mono); font-size: 13px; color: var(--accent); letter-spacing: 3px; text-transform: uppercase; margin-bottom: 8px; }
+        .login-title { font-size: 28px; font-weight: 700; margin-bottom: 6px; }
+        .login-subtitle { color: var(--text2); font-size: 14px; margin-bottom: 36px; }
+        .login-input { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; color: var(--text); font-family: var(--sans); font-size: 14px; margin-bottom: 12px; transition: border-color 0.2s; outline: none; }
+        .login-input:focus { border-color: var(--accent); }
+        .login-btn { width: 100%; background: var(--accent); color: white; border: none; border-radius: 10px; padding: 14px; font-family: var(--sans); font-weight: 600; font-size: 15px; cursor: pointer; transition: opacity 0.2s; margin-top: 4px; }
+        .login-btn:hover { opacity: 0.9; }
+        .login-error { color: var(--danger); font-size: 13px; margin-top: 12px; display: none; }
+
+        #adminApp { display: none; position: relative; z-index: 1; }
+        .sidebar { position: fixed; left: 0; top: 0; bottom: 0; width: 240px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 24px 0; z-index: 50; }
+        .sidebar-logo { padding: 0 24px 24px; border-bottom: 1px solid var(--border); }
+        .sidebar-logo .logo-tag { font-family: var(--mono); font-size: 10px; color: var(--accent); letter-spacing: 2px; text-transform: uppercase; }
+        .sidebar-logo h1 { font-size: 20px; font-weight: 700; margin-top: 2px; }
+        .sidebar-logo span { font-size: 11px; color: var(--text2); }
+        .sidebar-nav { flex: 1; padding: 16px 12px; display: flex; flex-direction: column; gap: 4px; }
+        .nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; cursor: pointer; color: var(--text2); font-size: 14px; font-weight: 500; transition: all 0.15s; border: none; background: none; width: 100%; text-align: left; }
+        .nav-item:hover { background: var(--surface2); color: var(--text); }
+        .nav-item.active { background: rgba(79,140,255,0.15); color: var(--accent); }
+        .nav-item i { width: 18px; font-size: 15px; }
+        .nav-badge { margin-left: auto; background: var(--accent2); color: white; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 20px; font-family: var(--mono); }
+        .nav-badge.orange { background: var(--blocked-color); }
+        .sidebar-bottom { padding: 16px 12px; border-top: 1px solid var(--border); }
+        .admin-badge { display: flex; align-items: center; gap: 10px; padding: 10px 12px; }
+        .admin-avatar { width: 32px; height: 32px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; color: white; font-family: var(--mono); }
+        .admin-info { flex: 1; }
+        .admin-name { font-size: 13px; font-weight: 600; }
+        .admin-role { font-size: 11px; color: var(--accent); font-family: var(--mono); }
+        .logout-btn { background: none; border: none; color: var(--text2); cursor: pointer; font-size: 14px; padding: 4px; transition: color 0.15s; }
+        .logout-btn:hover { color: var(--danger); }
+
+        .main { margin-left: 240px; padding: 32px; min-height: 100vh; }
+        .page { display: none; }
+        .page.active { display: block; }
+        .page-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 28px; flex-wrap: wrap; gap: 12px; }
+        .page-title { font-size: 26px; font-weight: 700; }
+        .page-subtitle { color: var(--text2); font-size: 13px; margin-top: 3px; font-family: var(--mono); }
+
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px; }
+        .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; position: relative; overflow: hidden; }
+        .stat-card::after { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; }
+        .stat-card.blue::after { background: var(--accent); }
+        .stat-card.pink::after { background: var(--accent2); }
+        .stat-card.green::after { background: var(--accent3); }
+        .stat-card.orange::after { background: var(--blocked-color); }
+        .stat-icon { font-size: 20px; margin-bottom: 12px; }
+        .stat-card.blue .stat-icon { color: var(--accent); }
+        .stat-card.pink .stat-icon { color: var(--accent2); }
+        .stat-card.green .stat-icon { color: var(--accent3); }
+        .stat-card.orange .stat-icon { color: var(--blocked-color); }
+        .stat-value { font-size: 32px; font-weight: 700; font-family: var(--mono); line-height: 1; margin-bottom: 6px; }
+        .stat-label { font-size: 12px; color: var(--text2); text-transform: uppercase; letter-spacing: 1px; }
+
+        .table-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; margin-bottom: 24px; }
+        .table-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; border-bottom: 1px solid var(--border); flex-wrap: wrap; gap: 10px; }
+        .table-title { font-size: 16px; font-weight: 600; }
+        .table-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .search-box { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; color: var(--text); font-family: var(--sans); font-size: 13px; outline: none; width: 200px; transition: border-color 0.2s; }
+        .search-box:focus { border-color: var(--accent); }
+        .search-box::placeholder { color: var(--text2); }
+        .select-box { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; color: var(--text); font-family: var(--sans); font-size: 13px; outline: none; }
+
+        .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 8px; font-family: var(--sans); font-size: 13px; font-weight: 500; cursor: pointer; border: none; transition: all 0.15s; white-space: nowrap; }
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-danger { background: rgba(255,59,92,0.15); color: var(--danger); border: 1px solid rgba(255,59,92,0.3); }
+        .btn-danger:hover { background: rgba(255,59,92,0.25); }
+        .btn-ghost { background: var(--surface2); color: var(--text2); border: 1px solid var(--border); }
+        .btn-ghost:hover { color: var(--text); }
+        .btn-block { background: rgba(255,107,53,0.15); color: var(--blocked-color); border: 1px solid rgba(255,107,53,0.3); }
+        .btn-block:hover { background: rgba(255,107,53,0.25); }
+        .btn-unblock { background: rgba(63,255,176,0.15); color: var(--accent3); border: 1px solid rgba(63,255,176,0.3); }
+        .btn-unblock:hover { background: rgba(63,255,176,0.25); }
+        .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; padding: 12px 24px; font-size: 11px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid var(--border); font-family: var(--mono); }
+        td { padding: 14px 24px; font-size: 14px; border-bottom: 1px solid rgba(42,42,61,0.5); vertical-align: middle; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background: rgba(255,255,255,0.02); }
+        tr.blocked-row td { background: rgba(255,107,53,0.04); }
+
+        .user-cell { display: flex; align-items: center; gap: 12px; }
+        .user-avatar { width: 36px; height: 36px; border-radius: 10px; background: linear-gradient(135deg, var(--accent), var(--accent2)); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; color: white; font-family: var(--mono); flex-shrink: 0; overflow: hidden; }
+        .user-avatar img { width: 100%; height: 100%; object-fit: cover; }
+        .user-name { font-weight: 600; font-size: 14px; }
+        .user-email { font-size: 12px; color: var(--text2); font-family: var(--mono); }
+
+        .badge { display: inline-block; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; font-family: var(--mono); }
+        .badge-dept { background: rgba(79,140,255,0.15); color: var(--accent); }
+        .badge-public { background: rgba(63,255,176,0.15); color: var(--accent3); }
+        .badge-dept-only { background: rgba(255,179,71,0.15); color: var(--warning); }
+        .badge-blocked { background: rgba(255,107,53,0.2); color: var(--blocked-color); }
+        .badge-active { background: rgba(63,255,176,0.15); color: var(--accent3); }
+
+        .actions-cell { display: flex; gap: 6px; flex-wrap: wrap; }
+        .blocked-reason { font-size: 11px; color: var(--blocked-color); margin-top: 3px; font-style: italic; }
+
+        .post-image { width: 42px; height: 42px; border-radius: 8px; object-fit: cover; flex-shrink: 0; }
+        .post-image-placeholder { width: 42px; height: 42px; border-radius: 8px; background: var(--surface2); display: flex; align-items: center; justify-content: center; color: var(--text2); flex-shrink: 0; }
+        .post-text { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 240px; }
+        .post-meta { font-size: 11px; color: var(--text2); margin-top: 2px; font-family: var(--mono); }
+
+        .loading-row td { text-align: center; color: var(--text2); padding: 40px; font-family: var(--mono); font-size: 13px; }
+        .empty-row td { text-align: center; color: var(--text2); padding: 48px; }
+        .empty-icon { font-size: 32px; margin-bottom: 12px; }
+        .empty-text { font-size: 14px; }
+
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 200; backdrop-filter: blur(4px); }
+        .modal-overlay.open { display: flex; }
+        .modal-box { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 32px; max-width: 420px; width: 90%; text-align: center; }
+        .modal-icon { width: 56px; height: 56px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 24px; margin: 0 auto 20px; }
+        .modal-icon.danger { background: rgba(255,59,92,0.15); color: var(--danger); }
+        .modal-icon.block { background: rgba(255,107,53,0.15); color: var(--blocked-color); }
+        .modal-icon.unblock { background: rgba(63,255,176,0.15); color: var(--accent3); }
+        .modal-title { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+        .modal-desc { color: var(--text2); font-size: 14px; line-height: 1.5; margin-bottom: 20px; }
+        .modal-input { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; color: var(--text); font-family: var(--sans); font-size: 14px; outline: none; margin-bottom: 20px; transition: border-color 0.2s; resize: vertical; min-height: 80px; }
+        .modal-input:focus { border-color: var(--blocked-color); }
+        .modal-input::placeholder { color: var(--text2); }
+        .modal-actions { display: flex; gap: 12px; }
+        .modal-actions .btn { flex: 1; justify-content: center; padding: 12px; }
+
+        .danger-zone { background: rgba(255,59,92,0.05); border: 1px solid rgba(255,59,92,0.2); border-radius: 14px; padding: 24px; margin-top: 28px; }
+        .danger-zone-title { font-size: 14px; font-weight: 700; color: var(--danger); margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+        .danger-zone-desc { font-size: 13px; color: var(--text2); margin-bottom: 16px; }
+
+        .toast { position: fixed; bottom: 28px; right: 28px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 20px; display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 500; transform: translateY(100px); opacity: 0; transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); z-index: 300; max-width: 320px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
+        .toast.show { transform: translateY(0); opacity: 1; }
+        .toast.success { border-color: rgba(59,255,138,0.4); }
+        .toast.success i { color: var(--success); }
+        .toast.error { border-color: rgba(255,59,92,0.4); }
+        .toast.error i { color: var(--danger); }
+        .toast.warning { border-color: rgba(255,107,53,0.4); }
+        .toast.warning i { color: var(--blocked-color); }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.7s linear infinite; display: inline-block; }
+        @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.4} }
+        .pulse { animation: pulse 1.5s ease infinite; }
+
+        @media(max-width:900px){.stats-grid{grid-template-columns:repeat(2,1fr)}.sidebar{width:200px}.main{margin-left:200px;padding:20px}}
+        @media(max-width:640px){.sidebar{display:none}.main{margin-left:0}}
+    </style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen">
+    <div class="login-box">
+        <div class="login-logo">CampusTrend</div>
+        <h2 class="login-title">Admin Panel</h2>
+        <p class="login-subtitle">Sign in with your admin credentials</p>
+        <input type="email" class="login-input" id="loginEmail" placeholder="Email address">
+        <input type="password" class="login-input" id="loginPassword" placeholder="Password">
+        <button class="login-btn" onclick="adminLogin()"><span id="loginBtnText">Sign In</span></button>
+        <p class="login-error" id="loginError"></p>
+    </div>
+</div>
+
+<!-- APP -->
+<div id="adminApp">
+    <aside class="sidebar">
+        <div class="sidebar-logo">
+            <div class="logo-tag">Admin</div>
+            <h1>CampusTrend</h1>
+            <span>UEW Platform</span>
+        </div>
+        <nav class="sidebar-nav">
+            <button class="nav-item active" onclick="showPage('dashboard',this)"><i class="fas fa-chart-line"></i>Dashboard</button>
+            <button class="nav-item" onclick="showPage('users',this)"><i class="fas fa-users"></i>Users<span class="nav-badge" id="usersBadge">0</span></button>
+            <button class="nav-item" onclick="showPage('blocked',this)"><i class="fas fa-ban"></i>Blocked<span class="nav-badge orange" id="blockedBadge">0</span></button>
+            <button class="nav-item" onclick="showPage('posts',this)"><i class="fas fa-images"></i>Posts<span class="nav-badge" id="postsBadge">0</span></button>
+            <button class="nav-item" onclick="showPage('comments',this)"><i class="fas fa-comments"></i>Comments<span class="nav-badge" id="commentsBadge">0</span></button>
+        </nav>
+        <div class="sidebar-bottom">
+            <div class="admin-badge">
+                <div class="admin-avatar" id="adminInitials">A</div>
+                <div class="admin-info">
+                    <div class="admin-name" id="adminName">Admin</div>
+                    <div class="admin-role">● ADMIN</div>
+                </div>
+                <button class="logout-btn" onclick="adminLogout()"><i class="fas fa-sign-out-alt"></i></button>
+            </div>
+        </div>
+    </aside>
+
+    <main class="main">
+
+        <!-- Dashboard -->
+        <div class="page active" id="page-dashboard">
+            <div class="page-header">
+                <div><h2 class="page-title">Dashboard</h2><p class="page-subtitle">// CAMPUSTREND_ADMIN v2.0</p></div>
+                <button class="btn btn-ghost" onclick="loadAllData()"><i class="fas fa-sync-alt"></i> Refresh</button>
+            </div>
+            <div class="stats-grid">
+                <div class="stat-card blue"><div class="stat-icon"><i class="fas fa-users"></i></div><div class="stat-value" id="stat-users">—</div><div class="stat-label">Total Users</div></div>
+                <div class="stat-card pink"><div class="stat-icon"><i class="fas fa-images"></i></div><div class="stat-value" id="stat-posts">—</div><div class="stat-label">Total Posts</div></div>
+                <div class="stat-card green"><div class="stat-icon"><i class="fas fa-heart"></i></div><div class="stat-value" id="stat-likes">—</div><div class="stat-label">Total Likes</div></div>
+                <div class="stat-card orange"><div class="stat-icon"><i class="fas fa-ban"></i></div><div class="stat-value" id="stat-blocked">—</div><div class="stat-label">Blocked Users</div></div>
+            </div>
+            <div class="table-card">
+                <div class="table-header"><div class="table-title">Recent Users</div><button class="btn btn-ghost btn-sm" onclick="showPage('users',document.querySelectorAll('.nav-item')[1])">View All</button></div>
+                <table><thead><tr><th>User</th><th>Department</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody id="recentUsersTable"><tr class="loading-row"><td colspan="4"><span class="pulse">Loading...</span></td></tr></tbody></table>
+            </div>
+            <div class="danger-zone">
+                <div class="danger-zone-title"><i class="fas fa-exclamation-triangle"></i> Danger Zone</div>
+                <p class="danger-zone-desc">Permanently deletes all users, posts, comments, and storage files. Cannot be undone.</p>
+                <button class="btn btn-danger" onclick="confirmAction('deleteAll',null,null)"><i class="fas fa-trash"></i> Delete All Users & Data</button>
+            </div>
+        </div>
+
+        <!-- Users -->
+        <div class="page" id="page-users">
+            <div class="page-header">
+                <div><h2 class="page-title">Users</h2><p class="page-subtitle">// MANAGE_ALL_USERS</p></div>
+                <div class="table-actions">
+                    <input type="text" class="search-box" placeholder="Search users..." oninput="filterUsers(this.value)">
+                    <select class="select-box" onchange="filterUsersByStatus(this.value)">
+                        <option value="">All users</option><option value="active">Active only</option><option value="blocked">Blocked only</option>
+                    </select>
+                    <button class="btn btn-danger btn-sm" onclick="confirmAction('deleteAll',null,null)"><i class="fas fa-trash"></i> Delete All</button>
+                </div>
+            </div>
+            <div class="table-card">
+                <table><thead><tr><th>User</th><th>Department</th><th>Index No.</th><th>Posts</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody id="usersTable"><tr class="loading-row"><td colspan="6"><span class="pulse">Loading...</span></td></tr></tbody></table>
+            </div>
+        </div>
+
+        <!-- Blocked -->
+        <div class="page" id="page-blocked">
+            <div class="page-header">
+                <div><h2 class="page-title">Blocked Users</h2><p class="page-subtitle">// BLOCKED_ACCOUNTS</p></div>
+            </div>
+            <div class="table-card">
+                <table><thead><tr><th>User</th><th>Department</th><th>Reason</th><th>Blocked At</th><th>Actions</th></tr></thead>
+                <tbody id="blockedTable"><tr class="loading-row"><td colspan="5"><span class="pulse">Loading...</span></td></tr></tbody></table>
+            </div>
+        </div>
+
+        <!-- Posts -->
+        <div class="page" id="page-posts">
+            <div class="page-header">
+                <div><h2 class="page-title">Posts</h2><p class="page-subtitle">// MANAGE_ALL_POSTS</p></div>
+                <div class="table-actions">
+                    <input type="text" class="search-box" placeholder="Search posts..." oninput="filterPosts(this.value)">
+                    <select class="select-box" onchange="filterPostsByVisibility(this.value)">
+                        <option value="">All</option><option value="public">Public</option><option value="department">Department</option>
+                    </select>
+                </div>
+            </div>
+            <div class="table-card">
+                <table><thead><tr><th>Post</th><th>Author</th><th>Visibility</th><th>Likes</th><th>Date</th><th>Actions</th></tr></thead>
+                <tbody id="postsTable"><tr class="loading-row"><td colspan="6"><span class="pulse">Loading...</span></td></tr></tbody></table>
+            </div>
+        </div>
+
+        <!-- Comments -->
+        <div class="page" id="page-comments">
+            <div class="page-header">
+                <div><h2 class="page-title">Comments</h2><p class="page-subtitle">// MANAGE_ALL_COMMENTS</p></div>
+                <input type="text" class="search-box" placeholder="Search comments..." oninput="filterComments(this.value)">
+            </div>
+            <div class="table-card">
+                <table><thead><tr><th>Comment</th><th>Author</th><th>Date</th><th>Actions</th></tr></thead>
+                <tbody id="commentsTable"><tr class="loading-row"><td colspan="4"><span class="pulse">Loading...</span></td></tr></tbody></table>
+            </div>
+        </div>
+
+    </main>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="confirmModal">
+    <div class="modal-box">
+        <div class="modal-icon danger" id="modalIcon"><i class="fas fa-trash" id="modalIconInner"></i></div>
+        <h3 class="modal-title" id="modalTitle">Confirm</h3>
+        <p class="modal-desc" id="modalDesc">This action cannot be undone.</p>
+        <textarea class="modal-input" id="blockReasonInput" placeholder="Reason for blocking (e.g. Spam, Harassment, Inappropriate content...)" style="display:none;"></textarea>
+        <div class="modal-actions">
+            <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+            <button class="btn btn-danger" id="modalConfirmBtn" onclick="executeAction()"><span id="modalConfirmText">Confirm</span></button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"><i class="fas fa-check-circle"></i><span id="toastMsg">Done!</span></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+<script>
+// =============================================
+// CONFIG — Add your admin email here
+// =============================================
+const ADMIN_EMAILS = [
+    '5251170066@st.uew.edu.gh'
+];
+
+let allUsers = [], allPosts = [], allComments = [], pendingAction = null;
+
+// AUTH
+async function adminLogin() {
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    const btn = document.querySelector('.login-btn');
+    const errEl = document.getElementById('loginError');
+    errEl.style.display = 'none';
+    btn.innerHTML = '<span class="spinner"></span>'; btn.disabled = true;
+    const { data, error } = await window.supabaseClient.auth.signInWithPassword({ email, password });
+    if (error) { errEl.textContent = 'Invalid credentials. Please try again.'; errEl.style.display = 'block'; btn.innerHTML = 'Sign In'; btn.disabled = false; return; }
+    if (ADMIN_EMAILS.length > 0 && !ADMIN_EMAILS.includes(email)) { await window.supabaseClient.auth.signOut(); errEl.textContent = 'Access denied. Admin only.'; errEl.style.display = 'block'; btn.innerHTML = 'Sign In'; btn.disabled = false; return; }
+    initAdmin(email);
+}
+function initAdmin(email) {
+    document.getElementById('adminInitials').textContent = email.substring(0,2).toUpperCase();
+    document.getElementById('adminName').textContent = email.split('@')[0];
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('adminApp').style.display = 'block';
+    loadAllData();
+}
+async function adminLogout() { await window.supabaseClient.auth.signOut(); location.reload(); }
+window.supabaseClient.auth.getSession().then(({ data: { session } }) => {
+    if (session) { const e = session.user.email; if (ADMIN_EMAILS.length > 0 && !ADMIN_EMAILS.includes(e)) return; initAdmin(e); }
+});
+document.addEventListener('keydown', e => { if (e.key === 'Enter' && document.getElementById('loginScreen').style.display !== 'none') adminLogin(); });
+
+// NAV
+function showPage(name, el) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.getElementById('page-' + name).classList.add('active');
+    if (el) el.classList.add('active');
+    if (name === 'users') renderUsers(allUsers);
+    if (name === 'blocked') renderBlocked(allUsers.filter(u => u.is_blocked));
+    if (name === 'posts') renderPosts(allPosts);
+    if (name === 'comments') renderComments(allComments);
+}
+
+// DATA
+async function loadAllData() { await Promise.all([loadUsers(), loadPosts(), loadComments()]); }
+
+async function loadUsers() {
+    const { data } = await window.supabaseClient.from('profiles').select('*').order('created_at', { ascending: false });
+    if (data) {
+        allUsers = data;
+        const blocked = data.filter(u => u.is_blocked).length;
+        document.getElementById('stat-users').textContent = data.length;
+        document.getElementById('usersBadge').textContent = data.length;
+        document.getElementById('stat-blocked').textContent = blocked;
+        document.getElementById('blockedBadge').textContent = blocked;
+        renderRecentUsers(data.slice(0, 5));
+        renderUsers(data);
+        renderBlocked(data.filter(u => u.is_blocked));
+    }
+}
+async function loadPosts() {
+    const { data } = await window.supabaseClient.from('posts').select('*, profiles(full_name, avatar_url, is_blocked)').order('created_at', { ascending: false });
+    if (data) { allPosts = data; const likes = data.reduce((s, p) => s + (p.likes_count || 0), 0); document.getElementById('stat-posts').textContent = data.length; document.getElementById('stat-likes').textContent = likes; document.getElementById('postsBadge').textContent = data.length; renderPosts(data); }
+}
+async function loadComments() {
+    const { data } = await window.supabaseClient.from('comments').select('*, profiles(full_name)').order('created_at', { ascending: false });
+    if (data) { allComments = data; document.getElementById('commentsBadge').textContent = data.length; renderComments(data); }
+}
+
+// HELPERS
+const gi = n => n ? n.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2) : '?';
+function timeAgo(d) { if(!d)return'—'; const s=Date.now()-new Date(d), dd=Math.floor(s/86400000), h=Math.floor(s/3600000), m=Math.floor(s/60000); return dd>0?dd+'d ago':h>0?h+'h ago':m>0?m+'m ago':'Just now'; }
+function fmtDate(d) { return d ? new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—'; }
+function esc(s) { return (s||'').replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
+function emptyRow(c, icon, text) { return `<tr class="empty-row"><td colspan="${c}"><div class="empty-icon">${icon}</div><div class="empty-text">${text}</div></td></tr>`; }
+function avatarHTML(u, extra='') {
+    return `<div class="user-avatar ${extra}">${u.avatar_url?`<img src="${u.avatar_url}" onerror="this.style.display='none'">`:''}<span style="${u.avatar_url?'display:none':''}">${gi(u.full_name)}</span></div>`;
+}
+function statusBadge(u) {
+    return u.is_blocked
+        ? `<div><span class="badge badge-blocked">🚫 Blocked</span>${u.blocked_reason?`<div class="blocked-reason">${u.blocked_reason}</div>`:''}</div>`
+        : `<span class="badge badge-active">✓ Active</span>`;
+}
+function userActions(u) {
+    const block = u.is_blocked
+        ? `<button class="btn btn-unblock btn-sm" onclick="confirmAction('unblock','${u.id}','${esc(u.full_name)}')"><i class="fas fa-unlock"></i> Unblock</button>`
+        : `<button class="btn btn-block btn-sm" onclick="confirmAction('block','${u.id}','${esc(u.full_name)}')"><i class="fas fa-ban"></i> Block</button>`;
+    return `<div class="actions-cell">${block}<button class="btn btn-danger btn-sm" onclick="confirmAction('deleteUser','${u.id}','${esc(u.full_name)}')"><i class="fas fa-trash"></i></button></div>`;
+}
+
+// RENDER
+function renderRecentUsers(users) {
+    const t = document.getElementById('recentUsersTable');
+    if (!users.length) { t.innerHTML = emptyRow(4,'👥','No users yet'); return; }
+    t.innerHTML = users.map(u => `<tr class="${u.is_blocked?'blocked-row':''}"><td><div class="user-cell">${avatarHTML(u)}<div><div class="user-name">${u.full_name||'Unknown'}</div><div class="user-email">${u.email||''}</div></div></div></td><td><span class="badge badge-dept">${u.department||'—'}</span></td><td>${statusBadge(u)}</td><td>${userActions(u)}</td></tr>`).join('');
+}
+function renderUsers(users) {
+    const t = document.getElementById('usersTable');
+    if (!users.length) { t.innerHTML = emptyRow(6,'👥','No users found'); return; }
+    t.innerHTML = users.map(u => `<tr class="${u.is_blocked?'blocked-row':''}"><td><div class="user-cell">${avatarHTML(u)}<div><div class="user-name">${u.full_name||'Unknown'}</div><div class="user-email">${u.email||''}</div></div></div></td><td><span class="badge badge-dept">${u.department||'—'}</span></td><td style="font-family:var(--mono);font-size:12px">${u.index_number||'—'}</td><td style="font-family:var(--mono)">${u.posts_count||0}</td><td>${statusBadge(u)}</td><td>${userActions(u)}</td></tr>`).join('');
+}
+function renderBlocked(users) {
+    const t = document.getElementById('blockedTable');
+    if (!users.length) { t.innerHTML = emptyRow(5,'✅','No blocked users — all clear!'); return; }
+    t.innerHTML = users.map(u => `<tr class="blocked-row"><td><div class="user-cell">${avatarHTML(u)}<div><div class="user-name">${u.full_name||'Unknown'}</div><div class="user-email">${u.email||''}</div></div></div></td><td><span class="badge badge-dept">${u.department||'—'}</span></td><td style="font-size:13px;color:var(--blocked-color)">${u.blocked_reason||'No reason given'}</td><td style="font-size:12px;color:var(--text2);font-family:var(--mono)">${fmtDate(u.blocked_at)}</td><td><div class="actions-cell"><button class="btn btn-unblock btn-sm" onclick="confirmAction('unblock','${u.id}','${esc(u.full_name)}')"><i class="fas fa-unlock"></i> Unblock</button><button class="btn btn-danger btn-sm" onclick="confirmAction('deleteUser','${u.id}','${esc(u.full_name)}')"><i class="fas fa-trash"></i></button></div></td></tr>`).join('');
+}
+function renderPosts(posts) {
+    const t = document.getElementById('postsTable');
+    if (!posts.length) { t.innerHTML = emptyRow(6,'📭','No posts found'); return; }
+    t.innerHTML = posts.map(p => `<tr><td><div class="user-cell">${p.image_url?`<img class="post-image" src="${p.image_url}" onerror="this.style.display='none'">`:'<div class="post-image-placeholder"><i class="fas fa-file-alt"></i></div>'}<div><div class="post-text">${p.content||'(no text)'}</div><div class="post-meta">${p.department||''}</div></div></div></td><td style="font-size:13px">${p.profiles?.full_name||'—'}${p.profiles?.is_blocked?' <span class="badge badge-blocked" style="font-size:9px">blocked</span>':''}</td><td><span class="badge ${p.visibility==='public'?'badge-public':'badge-dept-only'}">${p.visibility||'public'}</span></td><td style="font-family:var(--mono)">${p.likes_count||0}</td><td style="font-size:12px;color:var(--text2);font-family:var(--mono)">${timeAgo(p.created_at)}</td><td><button class="btn btn-danger btn-sm" onclick="confirmAction('deletePost','${p.id}',null)"><i class="fas fa-trash"></i></button></td></tr>`).join('');
+}
+function renderComments(comments) {
+    const t = document.getElementById('commentsTable');
+    if (!comments.length) { t.innerHTML = emptyRow(4,'💬','No comments found'); return; }
+    t.innerHTML = comments.map(c => `<tr><td style="max-width:320px"><div style="font-size:13px">${(c.content||'').substring(0,120)}${(c.content||'').length>120?'...':''}</div></td><td style="font-size:13px">${c.profiles?.full_name||'—'}</td><td style="font-size:12px;color:var(--text2);font-family:var(--mono)">${timeAgo(c.created_at)}</td><td><button class="btn btn-danger btn-sm" onclick="confirmAction('deleteComment','${c.id}',null)"><i class="fas fa-trash"></i></button></td></tr>`).join('');
+}
+
+// FILTER
+function filterUsers(q) { renderUsers(allUsers.filter(u => (u.full_name||'').toLowerCase().includes(q.toLowerCase())||(u.email||'').toLowerCase().includes(q.toLowerCase()))); }
+function filterUsersByStatus(s) { if(!s)renderUsers(allUsers); else if(s==='blocked')renderUsers(allUsers.filter(u=>u.is_blocked)); else renderUsers(allUsers.filter(u=>!u.is_blocked)); }
+function filterPosts(q) { renderPosts(allPosts.filter(p=>(p.content||'').toLowerCase().includes(q.toLowerCase())||(p.profiles?.full_name||'').toLowerCase().includes(q.toLowerCase()))); }
+function filterPostsByVisibility(v) { renderPosts(v?allPosts.filter(p=>p.visibility===v):allPosts); }
+function filterComments(q) { renderComments(allComments.filter(c=>(c.content||'').toLowerCase().includes(q.toLowerCase())||(c.profiles?.full_name||'').toLowerCase().includes(q.toLowerCase()))); }
+
+// MODAL CONFIG
+const modalCfg = {
+    block:     { icon:'block',   iconCls:'fas fa-ban',                btnCls:'btn-block',   title:n=>`Block ${n}`,          desc:()=>'Enter a reason for blocking. The user cannot sign in until unblocked.', showReason:true,  confirmText:'🚫 Block User' },
+    unblock:   { icon:'unblock', iconCls:'fas fa-unlock',             btnCls:'btn-unblock', title:n=>`Unblock ${n}`,        desc:()=>'This user will be able to sign in again immediately.',                  showReason:false, confirmText:'✓ Unblock User' },
+    deleteUser:{ icon:'danger',  iconCls:'fas fa-trash',              btnCls:'btn-danger',  title:n=>`Delete ${n}`,         desc:()=>'Permanently deletes this user and all their posts, comments, and files.',showReason:false, confirmText:'Delete User' },
+    deletePost:{ icon:'danger',  iconCls:'fas fa-trash',              btnCls:'btn-danger',  title:()=>'Delete Post',        desc:()=>'This post and all its comments and likes will be deleted.',              showReason:false, confirmText:'Delete Post' },
+    deleteComment:{icon:'danger',iconCls:'fas fa-trash',              btnCls:'btn-danger',  title:()=>'Delete Comment',     desc:()=>'This comment will be permanently deleted.',                             showReason:false, confirmText:'Delete Comment' },
+    deleteAll: { icon:'danger',  iconCls:'fas fa-exclamation-triangle',btnCls:'btn-danger', title:()=>'⚠️ Delete ALL Data', desc:()=>'Deletes ALL users, posts, comments, likes, messages, and storage. CANNOT be undone.', showReason:false, confirmText:'Delete Everything' },
+};
+
+function confirmAction(type, id, name) {
+    const cfg = modalCfg[type]; pendingAction = { type, id, name };
+    document.getElementById('modalIcon').className = `modal-icon ${cfg.icon}`;
+    document.getElementById('modalIconInner').className = cfg.iconCls;
+    document.getElementById('modalTitle').textContent = cfg.title(name||'');
+    document.getElementById('modalDesc').textContent = cfg.desc();
+    document.getElementById('blockReasonInput').style.display = cfg.showReason ? 'block' : 'none';
+    document.getElementById('blockReasonInput').value = '';
+    const btn = document.getElementById('modalConfirmBtn');
+    btn.className = `btn ${cfg.btnCls}`; btn.disabled = false;
+    document.getElementById('modalConfirmText').textContent = cfg.confirmText;
+    document.getElementById('confirmModal').classList.add('open');
+}
+function closeModal() { document.getElementById('confirmModal').classList.remove('open'); pendingAction = null; }
+
+async function executeAction() {
+    if (!pendingAction) return;
+    const btn = document.getElementById('modalConfirmBtn');
+    btn.innerHTML = '<span class="spinner"></span>'; btn.disabled = true;
+    try {
+        const { type, id } = pendingAction;
+        const reason = document.getElementById('blockReasonInput').value.trim();
+        if (type==='block') await blockUser(id, reason);
+        else if (type==='unblock') await unblockUser(id);
+        else if (type==='deleteUser') await deleteUser(id);
+        else if (type==='deletePost') await deletePost(id);
+        else if (type==='deleteComment') await deleteComment(id);
+        else if (type==='deleteAll') await deleteAllData();
+    } catch(e) { showToast('Error: '+e.message, 'error'); }
+    btn.innerHTML = '<span id="modalConfirmText">Confirm</span>'; btn.disabled = false;
+    closeModal(); await loadAllData();
+}
+
+// ACTIONS
+async function blockUser(userId, reason) {
+    const { error } = await window.supabaseClient.from('profiles').update({ is_blocked: true, blocked_reason: reason || 'Blocked by admin', blocked_at: new Date().toISOString() }).eq('id', userId);
+    if (error) throw new Error(error.message);
+    showToast('User has been blocked 🚫', 'warning');
+}
+async function unblockUser(userId) {
+    const { error } = await window.supabaseClient.from('profiles').update({ is_blocked: false, blocked_reason: null, blocked_at: null }).eq('id', userId);
+    if (error) throw new Error(error.message);
+    showToast('User has been unblocked ✓', 'success');
+}
+async function deleteUser(userId) {
+    await window.supabaseClient.from('notifications').delete().or(`user_id.eq.${userId},from_user_id.eq.${userId}`);
+    await window.supabaseClient.from('messages').delete().or(`sender_id.eq.${userId},receiver_id.eq.${userId}`);
+    await window.supabaseClient.from('followers').delete().or(`follower_id.eq.${userId},following_id.eq.${userId}`);
+    await window.supabaseClient.from('likes').delete().eq('user_id', userId);
+    await window.supabaseClient.from('comments').delete().eq('user_id', userId);
+    await window.supabaseClient.from('posts').delete().eq('user_id', userId);
+    await window.supabaseClient.from('profiles').delete().eq('id', userId);
+    for (const b of ['avatar','post-images']) {
+        const { data: files } = await window.supabaseClient.storage.from(b).list();
+        if (files) { const uf = files.filter(f=>f.name.startsWith(userId)); if(uf.length) await window.supabaseClient.storage.from(b).remove(uf.map(f=>f.name)); }
+    }
+    showToast('User data deleted. Run SQL to remove auth record.', 'success');
+}
+async function deletePost(postId) {
+    await window.supabaseClient.from('likes').delete().eq('post_id', postId);
+    await window.supabaseClient.from('comments').delete().eq('post_id', postId);
+    const { error } = await window.supabaseClient.from('posts').delete().eq('id', postId);
+    if (error) throw new Error(error.message);
+    showToast('Post deleted', 'success');
+}
+async function deleteComment(commentId) {
+    const { error } = await window.supabaseClient.from('comments').delete().eq('id', commentId);
+    if (error) throw new Error(error.message);
+    showToast('Comment deleted', 'success');
+}
+async function deleteAllData() {
+    for (const t of ['notifications','messages','followers','likes','comments','posts','profiles'])
+        await window.supabaseClient.from(t).delete().neq('id','00000000-0000-0000-0000-000000000000');
+    for (const b of ['avatar','post-images']) {
+        const { data: files } = await window.supabaseClient.storage.from(b).list();
+        if (files && files.length) await window.supabaseClient.storage.from(b).remove(files.map(f=>f.name));
+    }
+    showToast('All data cleared. Run SQL to remove auth users.', 'success');
+}
+
+// TOAST
+function showToast(msg, type='success') {
+    const t = document.getElementById('toast');
+    document.getElementById('toastMsg').textContent = msg;
+    t.className = `toast ${type}`;
+    t.querySelector('i').className = type==='success'?'fas fa-check-circle':type==='warning'?'fas fa-ban':'fas fa-exclamation-circle';
+    t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 3500);
+}
+</script>
+</body>
+</html>

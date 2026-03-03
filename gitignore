@@ -1,0 +1,14 @@
+# Environment variables - never commit these
+.env
+.env.local
+.env.production
+
+# Generated admin panel with injected key - never commit
+admin-local.html
+
+# Node modules
+node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db

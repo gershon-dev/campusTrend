@@ -146,24 +146,43 @@
             </div>
         </div>
 
-        <!-- Posts Section -->
+        <!-- Posts & Tutorials Section -->
         <div class="posts-section">
             <div class="posts-header">
                 <h2 class="posts-title">
-                    <i class="fas fa-image"></i>
-                    Posts
+                    <i class="fas fa-th-large"></i>
+                    Activity
                 </h2>
-                <div class="posts-count" id="postsCountDisplay">0 posts</div>
+                <div class="posts-filter-tabs">
+                    <button class="posts-filter-btn active" id="filterImageBtn" onclick="switchPostFilter('image')">
+                        <i class="fas fa-image"></i>
+                        Posts <span class="filter-tab-count" id="imagePostCount">0</span>
+                    </button>
+                    <button class="posts-filter-btn" id="filterTutorialBtn" onclick="switchPostFilter('tutorial')">
+                        <i class="fas fa-play-circle"></i>
+                        Tutorials <span class="filter-tab-count" id="tutorialPostCount">0</span>
+                    </button>
+                </div>
             </div>
 
-            <div class="posts-container" id="postsContainer">
-                <!-- Posts will be dynamically loaded here -->
+            <!-- Image Posts (default) -->
+            <div id="imagePosts">
+                <div class="posts-container" id="postsContainer"></div>
+                <div class="no-posts" id="noPosts" style="display:none;">
+                    <i class="fas fa-image"></i>
+                    <h3>No posts yet</h3>
+                    <p id="noPostsMessage">No posts to display</p>
+                </div>
             </div>
 
-            <div class="no-posts" id="noPosts" style="display: none;">
-                <i class="fas fa-image"></i>
-                <h3>No posts yet</h3>
-                <p id="noPostsMessage">No posts to display</p>
+            <!-- Tutorial Posts (hidden by default) -->
+            <div id="tutorialPosts" style="display:none;">
+                <div class="posts-container" id="tutorialsContainer"></div>
+                <div class="no-posts" id="noTutorials" style="display:none;">
+                    <i class="fas fa-video"></i>
+                    <h3>No tutorials yet</h3>
+                    <p>No tutorial videos to display</p>
+                </div>
             </div>
         </div>
     </div>
@@ -226,6 +245,25 @@
                 <button class="btn-secondary" onclick="closeEditModal()">Cancel</button>
                 <button class="btn-primary" onclick="saveProfile()">
                     <span id="saveProfileText">Save Changes</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Logout Confirmation Modal -->
+    <div class="modal-overlay" id="logoutModal">
+        <div class="modal" style="max-width: 320px; text-align: center;">
+            <div class="modal-body" style="padding: 32px 24px 24px;">
+                <div style="font-size: 2.5rem; margin-bottom: 12px;">👋</div>
+                <h3 style="margin: 0 0 8px; font-size: 1.1rem;">Logout</h3>
+                <p style="margin: 0 0 0; color: #666; font-size: 0.9rem;">
+                    Are you sure you want to logout of <strong>CampusTrend</strong>?
+                </p>
+            </div>
+            <div class="modal-footer" style="gap: 12px;">
+                <button class="btn-secondary" onclick="closeLogoutModal()">Cancel</button>
+                <button class="btn-primary" onclick="confirmLogout()" style="background: #e53935;">
+                    Logout
                 </button>
             </div>
         </div>

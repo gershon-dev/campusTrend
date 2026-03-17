@@ -223,7 +223,7 @@ function updateStatsFromProfile() {
     // Update UI
     document.getElementById('followersCount').textContent = statsData.followers;
     document.getElementById('followingCount').textContent = statsData.following;
-    document.getElementById('postsCountDisplay').textContent = `${statsData.postsCount} post${statsData.postsCount !== 1 ? 's' : ''}`;
+    // postsCountDisplay removed — counts now live in filter tab badges
 }
 
 // ============================================
@@ -356,46 +356,61 @@ async function loadUserPosts() {
         
         console.log('✓ Data combined successfully');
 
-        // Calculate total likes and stars
+        // STEP 6: Fetch tutorials by this user
+        console.log('Step 6: Fetching tutorials...');
+        let userTutorials = [];
+        const { data: tutorials, error: tutorialsError } = await window.supabaseClient
+            .from('tutorials')
+            .select('*')
+            .eq('user_id', currentProfileUserId)
+            .order('created_at', { ascending: false });
+
+        if (tutorialsError) {
+            console.error('ERROR loading tutorials:', tutorialsError);
+        } else {
+            userTutorials = tutorials || [];
+            console.log('✓ Tutorials loaded:', userTutorials.length);
+        }
+
+        // Calculate total likes and stars (posts + tutorials)
         statsData.totalLikes = 0;
         statsData.totalStars = 0;
-        
+
         userPosts.forEach(post => {
             const likes = post.likes_count || 0;
             statsData.totalLikes += likes;
-            
             const rating = window.getStarRating(likes);
             statsData.totalStars += rating.stars;
         });
-
-        console.log('Stats calculated:', {
-            totalLikes: statsData.totalLikes,
-            totalStars: statsData.totalStars
+        userTutorials.forEach(tut => {
+            const likes = tut.likes_count || 0;
+            statsData.totalLikes += likes;
+            const rating = window.getStarRating(likes);
+            statsData.totalStars += rating.stars;
         });
 
         // Update UI
         document.getElementById('totalLikes').textContent = statsData.totalLikes;
         document.getElementById('totalStars').textContent = statsData.totalStars;
 
-        // Render posts
+        // --- Render IMAGE POSTS section ---
         if (userPosts.length === 0) {
-            console.log('No posts to display');
             document.getElementById('noPosts').style.display = 'block';
             document.getElementById('postsContainer').innerHTML = '';
-            
             const noPostsMessage = document.getElementById('noPostsMessage');
-            if (isOwnProfile) {
-                noPostsMessage.textContent = 'Share your first post with the campus community!';
-            } else {
-                noPostsMessage.textContent = 'This user hasn\'t posted anything yet.';
-            }
+            noPostsMessage.textContent = isOwnProfile
+                ? 'Share your first post with the campus community!'
+                : "This user hasn't posted anything yet.";
         } else {
-            console.log('Rendering', userPosts.length, 'posts');
             document.getElementById('noPosts').style.display = 'none';
             await renderPosts(userPosts);
-            console.log('✓ Posts rendered successfully');
         }
-        
+        const imgCountEl = document.getElementById('imagePostCount');
+        if (imgCountEl) imgCountEl.textContent = userPosts.length;
+
+        // --- Render TUTORIAL VIDEOS section ---
+        await renderTutorials(userTutorials);
+
         console.log('=== POST LOAD COMPLETE ===');
         
     } catch (error) {
@@ -551,6 +566,219 @@ async function renderPosts(posts) {
     });
 }
 
+
+// ============================================
+// TUTORIAL RENDERING - SEPARATE SECTION
+// ============================================
+
+
+// ============================================
+// POST FILTER TABS
+// ============================================
+
+function switchPostFilter(type) {
+    const imageBtn      = document.getElementById('filterImageBtn');
+    const tutorialBtn   = document.getElementById('filterTutorialBtn');
+    const imagePosts    = document.getElementById('imagePosts');
+    const tutorialPosts = document.getElementById('tutorialPosts');
+    if (type === 'image') {
+        imageBtn.classList.add('active');
+        tutorialBtn.classList.remove('active');
+        imagePosts.style.display    = 'block';
+        tutorialPosts.style.display = 'none';
+    } else {
+        tutorialBtn.classList.add('active');
+        imageBtn.classList.remove('active');
+        tutorialPosts.style.display = 'block';
+        imagePosts.style.display    = 'none';
+    }
+}
+
+async function renderTutorials(tutorials) {
+    const container = document.getElementById('tutorialsContainer');
+    const noTuts    = document.getElementById('noTutorials');
+    const countEl   = document.getElementById('tutorialPostCount');
+    if (!container) return;
+
+    if (countEl) countEl.textContent = tutorials.length;
+
+    if (tutorials.length === 0) {
+        container.innerHTML = '';
+        if (noTuts) noTuts.style.display = 'block';
+        return;
+    }
+
+    if (noTuts) noTuts.style.display = 'none';
+
+    const currentUser = await window.getCurrentUser();
+
+    container.innerHTML = tutorials.map(tut => buildTutorialCard(tut, currentUser)).join('');
+
+    // Wire up delete buttons
+    tutorials.forEach(tut => {
+        const card = container.querySelector(`[data-tutorial-id="${tut.id}"]`);
+        if (!card) return;
+        const menuBtn = card.querySelector('.tut-menu-btn');
+        const menuDropdown = card.querySelector('.post-menu-dropdown');
+        if (menuBtn && menuDropdown) {
+            menuBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                document.querySelectorAll('.post-menu-dropdown.open').forEach(m => {
+                    if (m !== menuDropdown) m.classList.remove('open');
+                });
+                menuDropdown.classList.toggle('open');
+            });
+        }
+        const deleteBtn = card.querySelector('.tut-delete-btn');
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', () => handleDeleteTutorial(tut.id, card));
+        }
+    });
+}
+
+function buildTutorialCard(tut, currentUser) {
+    const initials = getInitials(profileData.full_name || 'User');
+    const timeAgo = window.timeAgo(tut.created_at);
+    const isOwnTut = currentUser && tut.user_id === currentUser.id;
+
+    // Convert Google Drive share URL → embed URL (matches /file/d/ID and ?id=ID patterns)
+    function getDriveEmbedUrl(url) {
+        if (!url) return null;
+        url = url.trim();
+        const m1 = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+        if (m1) return 'https://drive.google.com/file/d/' + m1[1] + '/preview';
+        const m2 = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+        if (m2) return 'https://drive.google.com/file/d/' + m2[1] + '/preview';
+        return null;
+    }
+    const embedUrl = getDriveEmbedUrl(tut.video_url);
+
+    // Department + course badge
+    const deptTag = tut.department
+        ? '<span class="tut-dept-badge"><i class="fas fa-book-open"></i> ' +
+          escapeHtml(tut.department) + (tut.course_code ? ' · ' + escapeHtml(tut.course_code) : '') + '</span>'
+        : '';
+
+    // Tags
+    const tagsHTML = (tut.tags && tut.tags.length)
+        ? '<div class="tut-tags">' + tut.tags.map(t => '<span class="tut-tag">#' + escapeHtml(t) + '</span>').join('') + '</div>'
+        : '';
+
+    // Description (truncated)
+    const desc = tut.description || '';
+    const isLong = desc.length > 120;
+    const descId = 'tut-desc-' + tut.id;
+    const descHTML = desc ? (
+        '<div class="tut-description">' +
+        '<span id="' + descId + '-short">' + escapeHtml(isLong ? desc.slice(0, 120) + '…' : desc) + '</span>' +
+        (isLong
+            ? '<span id="' + descId + '-full" style="display:none">' + escapeHtml(desc) + '</span>' +
+              '<button class="tut-read-more" onclick="' +
+                  'document.getElementById(\'' + descId + '-short\').style.display=\'none\';' +
+                  'document.getElementById(\'' + descId + '-full\').style.display=\'inline\';' +
+                  'this.style.display=\'none\';">See more</button>'
+            : '') +
+        '</div>'
+    ) : '';
+
+    // Avatar
+    const avatarHtml = profileData.avatar_url
+        ? '<img src="' + profileData.avatar_url + '" alt="' + escapeHtml(profileData.full_name) + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">'
+        : '<span>' + initials + '</span>';
+
+    // Video: auto-embed iframe (no click-to-play)
+    const videoHTML = embedUrl
+        ? '<div class="tut-video-container"><iframe src="' + embedUrl + '" allowfullscreen allow="autoplay" loading="lazy" style="width:100%;aspect-ratio:16/9;border:none;display:block;"></iframe></div>'
+        : '<div class="tut-no-video"><i class="fas fa-video-slash"></i><span>No video available</span></div>';
+
+    return '<div class="post-card tutorial-card-profile" data-tutorial-id="' + tut.id + '">' +
+
+        // Header
+        '<div class="post-header">' +
+            '<div class="post-avatar">' + avatarHtml + '</div>' +
+            '<div class="post-user-info">' +
+                '<div class="post-username">' + escapeHtml(profileData.full_name || 'Unknown') + '</div>' +
+                '<div class="post-meta">' +
+                    '<i class="fas fa-play-circle" style="color:#1877f2"></i>' +
+                    '<span> Tutorial &nbsp;·&nbsp; </span>' +
+                    '<i class="fas fa-clock"></i><span> ' + timeAgo + '</span>' +
+                '</div>' +
+            '</div>' +
+            (isOwnTut
+                ? '<div class="post-menu-wrapper">' +
+                      '<button class="post-menu-btn tut-menu-btn" aria-label="Tutorial options"><i class="fas fa-ellipsis-h"></i></button>' +
+                      '<div class="post-menu-dropdown">' +
+                          '<button class="post-menu-item delete tut-delete-btn" data-tutorial-id="' + tut.id + '">' +
+                              '<i class="fas fa-trash-alt"></i><span>Delete Tutorial</span>' +
+                          '</button>' +
+                      '</div>' +
+                  '</div>'
+                : '') +
+        '</div>' +
+
+        // Title + dept
+        '<div class="tut-title-row">' +
+            '<div class="tut-title">' + escapeHtml(tut.title || 'Untitled Tutorial') + '</div>' +
+            deptTag +
+        '</div>' +
+
+        // Description
+        descHTML +
+
+        // Tags
+        tagsHTML +
+
+        // Video (auto-embed)
+        videoHTML +
+
+        // Action bar
+        '<div class="post-content">' +
+            '<div class="post-actions">' +
+                '<span class="post-action-btn tut-views-badge" style="cursor:default;pointer-events:none;">' +
+                    '<i class="fas fa-eye"></i><span> ' + (tut.views_count || 0) + '</span>' +
+                '</span>' +
+                '<span class="post-action-btn" style="cursor:default;pointer-events:none;">' +
+                    '<i class="fas fa-heart" style="color:#e53935"></i><span> ' + (tut.likes_count || 0) + '</span>' +
+                '</span>' +
+                '<button class="post-action-btn" onclick="shareTutorial(\'' + tut.id + '\')">' +
+                    '<i class="fas fa-share"></i><span>Share</span>' +
+                '</button>' +
+            '</div>' +
+        '</div>' +
+
+    '</div>';
+}
+
+function shareTutorial(tutId) {
+    const url = window.location.origin + '/tutorials.html';
+    if (navigator.share) {
+        navigator.share({ title: 'Check out this tutorial on CampusTrend', url: url });
+    } else {
+        navigator.clipboard.writeText(url).then(() => showToast('Link copied!', 'success'));
+    }
+}
+
+async function handleDeleteTutorial(tutId, card) {
+    document.querySelectorAll('.post-menu-dropdown.open').forEach(m => m.classList.remove('open'));
+    if (!confirm('Delete this tutorial? This cannot be undone.')) return;
+    try {
+        const { error } = await window.supabaseClient.from('tutorials').delete().eq('id', tutId);
+        if (!error) {
+            card.style.transition = 'opacity 0.3s, transform 0.3s';
+            card.style.opacity = '0';
+            card.style.transform = 'scale(0.97)';
+            setTimeout(() => {
+                card.remove();
+                showToast('Tutorial deleted', 'success');
+            }, 300);
+        } else {
+            showToast('Failed to delete tutorial', 'error');
+        }
+    } catch (e) {
+        showToast('Failed to delete tutorial', 'error');
+    }
+}
+
 // Build a single comment's HTML (with nested replies)
 function buildCommentHTML(comment, repliesMap, postId) {
     const initials = getInitials(comment.profiles?.full_name || 'User');
@@ -704,12 +932,8 @@ async function handleDeletePost(postId, card) {
             setTimeout(() => {
                 card.remove();
                 // Update posts count display
-                const countEl = document.getElementById('postsCountDisplay');
-                if (countEl) {
-                    const current = parseInt(countEl.textContent) || 1;
-                    const newCount = Math.max(0, current - 1);
-                    countEl.textContent = `${newCount} post${newCount !== 1 ? 's' : ''}`;
-                }
+                const countEl = document.getElementById('imagePostCount');
+                if (countEl) countEl.textContent = Math.max(0, (parseInt(countEl.textContent) || 1) - 1);
                 showToast('Post deleted', 'success');
             }, 300);
         } else {
@@ -1388,19 +1612,26 @@ function goToHome() {
 }
 
 // Logout
-async function logout() {
-    if (confirm('Are you sure you want to logout?')) {
-        try {
-            const result = await window.signOut();
-            if (result.success) {
-                localStorage.removeItem('campusTrendSession');
-                sessionStorage.removeItem('campusTrendSession');
-                window.location.href = 'sign-in.html';
-            }
-        } catch (error) {
-            console.error('Logout error:', error);
+function logout() {
+    document.getElementById('logoutModal').classList.add('show');
+}
+
+function closeLogoutModal() {
+    document.getElementById('logoutModal').classList.remove('show');
+}
+
+async function confirmLogout() {
+    closeLogoutModal();
+    try {
+        const result = await window.signOut();
+        if (result.success) {
+            localStorage.removeItem('campusTrendSession');
+            sessionStorage.removeItem('campusTrendSession');
             window.location.href = 'sign-in.html';
         }
+    } catch (error) {
+        console.error('Logout error:', error);
+        window.location.href = 'sign-in.html';
     }
 }
 

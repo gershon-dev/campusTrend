@@ -624,30 +624,36 @@
         }
 
         .follow-btn {
-            padding: 4px 12px;
-            background: #1877f2;
-            color: white;
-            border: none;
-            border-radius: 15px;
+            padding: 5px 14px;
+            background: transparent;
+            color: #1877f2;
+            border: 1.5px solid #1877f2;
+            border-radius: 20px;
             font-size: 12px;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.3s;
+            transition: background 0.15s, color 0.15s, border-color 0.15s;
             white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
         }
 
         .follow-btn:hover {
-            background: #166fe5;
+            background: #1877f2;
+            color: #fff;
         }
 
         .follow-btn.following {
-            background: #e4e6e9;
-            color: #050505;
+            background: #1877f2;
+            color: #fff;
+            border-color: #1877f2;
         }
 
         .follow-btn.following:hover {
             background: #ffebe9;
             color: #dc3545;
+            border-color: #dc3545;
         }
 
         .post-meta {

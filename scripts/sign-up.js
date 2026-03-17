@@ -210,6 +210,12 @@ document.addEventListener('DOMContentLoaded', () => {
         setLoading(true);
 
         try {
+            // Check internet connection before attempting sign up
+            if (!navigator.onLine) {
+                showError('<i class="fas fa-wifi" style="margin-right:8px;"></i>No internet connection. Please check your network and try again.');
+                return;
+            }
+
             // Create email from index number
             const email = `${indexNumberInput.value.trim()}@st.uew.edu.gh`;
 
@@ -239,7 +245,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (error) {
             console.error('Sign up error:', error);
-            showError('An unexpected error occurred. Please try again.');
+            // Catch network-level failures (fetch errors, timeouts, etc.)
+            if (!navigator.onLine || error.message === 'Failed to fetch' || error.name === 'TypeError') {
+                showError('<i class="fas fa-wifi" style="margin-right:8px;"></i>No internet connection. Please check your network and try again.');
+            } else {
+                showError('An unexpected error occurred. Please try again.');
+            }
         } finally {
             setLoading(false);
         }
@@ -261,4 +272,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Check login status on page load
     checkLoginStatus();
+
+    // Show/hide offline banner when connection changes
+    function handleOffline() {
+        showError('<i class="fas fa-wifi" style="margin-right:8px;"></i>You are offline. Please check your internet connection.');
+    }
+    function handleOnline() {
+        errorAlert.classList.remove('show');
+    }
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('online', handleOnline);
 });

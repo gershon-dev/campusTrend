@@ -40,6 +40,7 @@ document.addEventListener('DOMContentLoaded', async function() {
  }
  updateUserUI();
  loadDepartments();
+ loadTutorialsStrip(); // start immediately, runs in parallel
  await loadPosts();
  await loadNotifications();
  await loadTrends();
@@ -439,19 +440,33 @@ document.addEventListener('DOMContentLoaded', async function() {
  try {
  const post = posts.find(p => p.id === postId);
  if (!post) return;
- const result = await window.toggleLike(postId);
- if (result.success) {
- post.isLiked = result.liked;
- post.likes_count = result.liked ? (post.likes_count || 0) + 1 : Math.max(0, (post.likes_count || 0) - 1);
+ // Optimistic update — instant UI, confirm with server
+ const wasLiked = post.isLiked;
+ post.isLiked = !wasLiked;
+ post.likes_count = post.isLiked ? (post.likes_count || 0) + 1 : Math.max(0, (post.likes_count || 0) - 1);
  const postCard = document.querySelector(`[data-post-id="${postId}"]`);
- if (postCard) {
+ const applyLikeUI = (isLiked, count, disabled) => {
+ if (!postCard) return;
  const likeBtn = postCard.querySelector('.like-btn');
  const likesCount = postCard.querySelector('.likes-count');
  if (likeBtn) {
- likeBtn.classList.toggle('liked', post.isLiked);
- likeBtn.setAttribute('aria-pressed', post.isLiked ? 'true' : 'false');
- likeBtn.setAttribute('aria-label', post.isLiked ? 'Unlike post' : 'Like post');
+ likeBtn.classList.toggle('liked', isLiked);
+ likeBtn.setAttribute('aria-pressed', isLiked ? 'true' : 'false');
+ likeBtn.setAttribute('aria-label', isLiked ? 'Unlike post' : 'Like post');
+ likeBtn.disabled = disabled;
  }
+ if (likesCount) likesCount.textContent = count;
+ };
+ applyLikeUI(post.isLiked, post.likes_count, true);
+ const result = await window.toggleLike(postId);
+ if (result.success) {
+ post.isLiked = result.liked;
+ post.likes_count = result.liked
+ ? Math.max(post.likes_count, (post.likes_count))
+ : Math.max(0, post.likes_count);
+ applyLikeUI(post.isLiked, post.likes_count, false);
+ if (postCard) {
+ const likesCount = postCard.querySelector('.likes-count');
  if (likesCount) {
  likesCount.textContent = post.likes_count;
  }
@@ -488,25 +503,41 @@ document.addEventListener('DOMContentLoaded', async function() {
  showToast('Failed to update like', 'error');
  }
  }
+ function applyFollowUI(userId, isFollowing) {
+ // Update ALL follow buttons across every post card for this user
+ document.querySelectorAll(`.follow-btn[data-user-id="${userId}"]`).forEach(btn => {
+ btn.classList.toggle('following', isFollowing);
+ btn.disabled = false;
+ const icon = btn.querySelector('i');
+ const span = btn.querySelector('span');
+ if (icon) icon.className = isFollowing ? 'fas fa-user-check' : 'fas fa-user-plus';
+ if (span) span.textContent = isFollowing ? 'Following' : 'Follow';
+ });
+ // Sync posts array state for all posts by this user
+ posts.filter(p => p.user_id === userId).forEach(p => { p.isFollowing = isFollowing; });
+ }
  async function handleFollow(userId, button) {
  try {
  if (!userId || !button) return false;
+ // Optimistic update — instant feedback
+ const wasFollowing = button.classList.contains('following');
+ const willFollow = !wasFollowing;
+ document.querySelectorAll(`.follow-btn[data-user-id="${userId}"]`).forEach(btn => {
+ btn.disabled = true;
+ btn.classList.toggle('following', willFollow);
+ const icon = btn.querySelector('i');
+ const span = btn.querySelector('span');
+ if (icon) icon.className = willFollow ? 'fas fa-user-check' : 'fas fa-user-plus';
+ if (span) span.textContent = willFollow ? 'Following' : 'Follow';
+ });
  const result = await window.toggleFollow(userId);
  if (result.success) {
- if (button.classList.contains('follow-btn')) {
- button.classList.toggle('following', result.following);
- const icon = button.querySelector('i');
- const span = button.querySelector('span');
- if (icon) icon.className = result.following ? 'fas fa-user-check' : 'fas fa-user-plus';
- if (span) span.textContent = result.following ? 'Following' : 'Follow';
- }
- const post = posts.find(p => p.user_id === userId);
- if (post) {
- post.isFollowing = result.following;
- }
+ applyFollowUI(userId, result.following);
  showToast(result.following ? 'Following!' : 'Unfollowed successfully', 'success');
  return true;
  } else {
+ // Revert on failure
+ applyFollowUI(userId, wasFollowing);
  showToast('Failed to update follow status', 'error');
  return false;
  }
@@ -1013,3 +1044,129 @@ document.addEventListener('DOMContentLoaded', async function() {
 window.goToOwnProfile = function() {
  window.location.href = 'user-profile.html';
 };
+// ─── Tutorials Strip ──────────────────────────────────────────────────────────
+// Private helpers (escapeHTML/getInitials live inside DOMContentLoaded closure)
+function _esc(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function _ini(n) {
+    if (!n) return 'U';
+    const p = n.trim().split(' ');
+    return p.length >= 2 ? (p[0][0]+p[p.length-1][0]).toUpperCase() : n.substring(0,2).toUpperCase();
+}
+function extractDriveFileId(url) {
+    if (!url) return null;
+    const m1 = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+    if (m1) return m1[1];
+    const m2 = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    if (m2) return m2[1];
+    return null;
+}
+
+const TUT_CACHE_KEY = 'ct_tutorials_strip';
+const TUT_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+async function loadTutorialsStrip() {
+    const scroll = document.getElementById('tutorialsScroll');
+    const strip  = document.getElementById('tutorialsStrip');
+    if (!scroll || !strip) return;
+
+    // ── Step 1: show cached data instantly if available ──────────────────────
+    try {
+        const cached = localStorage.getItem(TUT_CACHE_KEY);
+        if (cached) {
+            const { html, ts } = JSON.parse(cached);
+            if (html && Date.now() - ts < TUT_CACHE_TTL) {
+                scroll.innerHTML = html;
+                strip.style.display = '';
+                // Still refresh in background silently
+                _fetchAndRenderTutorials(scroll, strip, true);
+                return;
+            }
+        }
+    } catch(e) { /* ignore cache errors */ }
+
+    // ── Step 2: no cache — fetch and render ──────────────────────────────────
+    await _fetchAndRenderTutorials(scroll, strip, false);
+}
+
+async function _fetchAndRenderTutorials(scroll, strip, isBgRefresh) {
+    try {
+        const { data: tutorials, error } = await window.supabaseClient
+            .from('tutorials')
+            .select('id, title, course_name, department, video_url, likes_count, created_at, user_id')
+            .order('created_at', { ascending: false })
+            .limit(5);
+
+        if (error) throw error;
+
+        if (!tutorials || tutorials.length === 0) {
+            if (!isBgRefresh) strip.style.display = 'none';
+            return;
+        }
+
+        // Fetch profiles
+        const userIds = [...new Set(tutorials.map(t => t.user_id))];
+        let profileMap = {};
+        if (userIds.length > 0) {
+            const { data: profiles } = await window.supabaseClient
+                .from('profiles')
+                .select('id, full_name, avatar_url')
+                .in('id', userIds);
+            (profiles || []).forEach(p => { profileMap[p.id] = p; });
+        }
+
+        const chipsHtml = tutorials.map(t => {
+            const profile  = profileMap[t.user_id] || {};
+            const name     = profile.full_name || 'UEW Student';
+            const initials = _ini(name);
+            const course   = t.course_name || t.department || 'Tutorial';
+            const driveId  = extractDriveFileId(t.video_url);
+
+            const thumbHtml = driveId
+                ? `<img src="https://drive.google.com/thumbnail?id=${driveId}&sz=w320"
+                        alt="${_esc(t.title)}" loading="lazy"
+                        onerror="this.style.display=\'none\';this.parentElement.querySelector(\'.chip-play\').style.display=\'flex\';">
+                   <div class="chip-play" style="display:none;"><i class="fas fa-play"></i></div>`
+                : `<i class="fas fa-play-circle" style="font-size:2rem;color:rgba(255,255,255,0.25);"></i>
+                   <div class="chip-play"><i class="fas fa-play"></i></div>`;
+
+            const avatarHtml = profile.avatar_url
+                ? `<img src="${_esc(profile.avatar_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" alt="">`
+                : initials;
+
+            return `<a class="tutorial-chip" href="tutorials.html" title="${_esc(t.title)}">
+                <div class="tutorial-chip-thumb">${thumbHtml}</div>
+                <div class="tutorial-chip-body">
+                    <div class="tutorial-chip-course">${_esc(course)}</div>
+                    <div class="tutorial-chip-title">${_esc(t.title)}</div>
+                    <div class="tutorial-chip-meta">
+                        <div class="tutorial-chip-avatar">${avatarHtml}</div>
+                        <span>${_esc(name.split(' ')[0])}</span>
+                        <span class="tutorial-chip-likes">
+                            <i class="fas fa-heart" style="font-size:0.65rem;"></i>
+                            ${t.likes_count || 0}
+                        </span>
+                    </div>
+                </div>
+            </a>`;
+        }).join('');
+
+        const seeAllHtml = `<a class="tutorial-chip-seeall" href="tutorials.html">
+                <i class="fas fa-th-large"></i><span>See all</span>
+            </a>`;
+
+        const finalHtml = chipsHtml + seeAllHtml;
+        scroll.innerHTML = finalHtml;
+        strip.style.display = '';
+
+        // Save to cache
+        try {
+            localStorage.setItem(TUT_CACHE_KEY, JSON.stringify({ html: finalHtml, ts: Date.now() }));
+        } catch(e) { /* storage full, ignore */ }
+
+    } catch (err) {
+        console.warn('loadTutorialsStrip:', err);
+        if (!isBgRefresh) strip.style.display = 'none';
+    }
+}

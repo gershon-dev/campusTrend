@@ -98,6 +98,14 @@ document.addEventListener('DOMContentLoaded', () => {
         submitBtn.disabled = true;
         
         try {
+            // Check internet connection before attempting sign in
+            if (!navigator.onLine) {
+                submitBtn.classList.remove('loading');
+                submitBtn.disabled = false;
+                showToast('No internet connection. Please check your network and try again.', 'error');
+                return;
+            }
+
             // Call Supabase signIn function
             const result = await window.signIn(email, password);
             
@@ -136,7 +144,11 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Sign in error:', error);
             submitBtn.classList.remove('loading');
             submitBtn.disabled = false;
-            showToast('An unexpected error occurred. Please try again.', 'error');
+            if (!navigator.onLine || error.message === 'Failed to fetch' || error.name === 'TypeError') {
+                showToast('No internet connection. Please check your network and try again.', 'error');
+            } else {
+                showToast('An unexpected error occurred. Please try again.', 'error');
+            }
         }
     });
 
@@ -167,4 +179,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Check login status on page load
     checkLoginStatus();
+
+    // Live connection listeners
+    window.addEventListener('offline', () => {
+        showToast('You are offline. Please check your internet connection.', 'error');
+    });
+    window.addEventListener('online', () => {
+        showToast('Connection restored.', 'success');
+    });
 });

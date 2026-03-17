@@ -1685,3 +1685,129 @@ body {
     padding: 0 5px;
     flex-shrink: 0;
 }
+/* ===== POST FILTER TABS ===== */
+.posts-filter-tabs {
+    display: flex;
+    gap: 8px;
+}
+
+.posts-filter-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: 1.5px solid #e2e8f0;
+    background: none;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #4a5568;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    white-space: nowrap;
+}
+.posts-filter-btn:hover {
+    border-color: #1877f2;
+    color: #1877f2;
+}
+.posts-filter-btn.active {
+    background: #1877f2;
+    border-color: #1877f2;
+    color: #fff;
+}
+.filter-tab-count {
+    background: rgba(255,255,255,0.25);
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 999px;
+    min-width: 18px;
+    text-align: center;
+}
+.posts-filter-btn:not(.active) .filter-tab-count {
+    background: #eef1f7;
+    color: #4a5568;
+}
+
+/* ===== TUTORIAL CARDS IN PROFILE ===== */
+.tutorial-card-profile {
+    border-left: 3px solid #1877f2;
+}
+.tut-title-row {
+    display: flex;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 10px 16px 4px;
+}
+.tut-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #1c1e21;
+    line-height: 1.4;
+    flex: 1;
+    min-width: 0;
+}
+.tut-dept-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(255,107,53,0.12);
+    color: #ff6b35;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    padding: 3px 10px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.tut-description {
+    padding: 2px 16px 8px;
+    font-size: 0.87rem;
+    color: #4a5568;
+    line-height: 1.55;
+}
+.tut-read-more {
+    background: none;
+    border: none;
+    color: #1877f2;
+    font-weight: 600;
+    font-size: 0.82rem;
+    cursor: pointer;
+    padding: 0;
+    margin-left: 4px;
+}
+.tut-read-more:hover { text-decoration: underline; }
+.tut-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 0 16px 8px;
+}
+.tut-tag {
+    background: #eef1f7;
+    color: #4a5568;
+    font-size: 0.73rem;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-weight: 500;
+}
+.tut-video-container {
+    width: 100%;
+    background: #000;
+    overflow: hidden;
+}
+.tut-no-video {
+    width: 100%;
+    padding: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    background: #f5f7fb;
+    color: #8a94a6;
+    font-size: 0.88rem;
+}
+.tut-no-video i { font-size: 1.4rem; }

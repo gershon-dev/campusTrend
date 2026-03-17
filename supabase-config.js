@@ -1059,3 +1059,200 @@ window.unlikePost = async function(postId) {
 };
 
 console.log('Supabase config loaded successfully!');
+
+// ============================================
+// TUTORIALS FUNCTIONS
+// Added for tutorials.html page
+// ============================================
+
+// Get all tutorials (with profiles joined separately to avoid FK name issues)
+window.getTutorials = async function(limit = 50) {
+    try {
+        const { data: tutorials, error } = await window.supabaseClient
+            .from('tutorials')
+            .select('id, title, course_name, course_code, department, description, tags, video_url, likes_count, views_count, comments_count, created_at, user_id')
+            .order('created_at', { ascending: false })
+            .limit(limit);
+
+        if (error) return { success: false, error: error.message, tutorials: [] };
+
+        // Fetch profiles separately — avoids FK name dependency
+        const userIds = [...new Set((tutorials || []).map(t => t.user_id))];
+        let profileMap = {};
+        if (userIds.length > 0) {
+            const { data: profiles } = await window.supabaseClient
+                .from('profiles')
+                .select('id, full_name, avatar_url, department, followers_count')
+                .in('id', userIds);
+            (profiles || []).forEach(p => { profileMap[p.id] = p; });
+        }
+
+        const result = (tutorials || []).map(t => ({
+            ...t,
+            tags: t.tags || [],
+            profiles: profileMap[t.user_id] || {},
+        }));
+
+        return { success: true, tutorials: result };
+    } catch (error) {
+        console.error('getTutorials error:', error);
+        return { success: false, error: error.message, tutorials: [] };
+    }
+};
+
+// Create a tutorial
+window.createTutorial = async function({ title, course_name, course_code, department, description, tags, video_url }) {
+    try {
+        const user = await window.getCurrentUser();
+        if (!user) return { success: false, error: 'Not logged in' };
+
+        const { data, error } = await window.supabaseClient
+            .from('tutorials')
+            .insert({
+                user_id: user.id,
+                title,
+                course_name,
+                course_code,
+                department,
+                description,
+                tags: tags || [],
+                video_url,
+                likes_count:    0,
+                views_count:    0,
+                comments_count: 0,
+            })
+            .select('id, title, course_name, course_code, department, description, tags, video_url, likes_count, views_count, comments_count, created_at, user_id')
+            .single();
+
+        if (error) return { success: false, error: error.message };
+        return { success: true, tutorial: { ...data, tags: data.tags || [] } };
+    } catch (error) {
+        console.error('createTutorial error:', error);
+        return { success: false, error: error.message };
+    }
+};
+
+// Delete a tutorial (owner only — enforced by RLS)
+window.deleteTutorial = async function(tutorialId) {
+    try {
+        const { error } = await window.supabaseClient
+            .from('tutorials')
+            .delete()
+            .eq('id', tutorialId);
+
+        if (error) return { success: false, error: error.message };
+        return { success: true };
+    } catch (error) {
+        console.error('deleteTutorial error:', error);
+        return { success: false, error: error.message };
+    }
+};
+
+// Toggle like on a tutorial
+window.toggleTutorialLike = async function(tutorialId) {
+    try {
+        const user = await window.getCurrentUser();
+        if (!user) return { success: false, error: 'Not logged in' };
+
+        const { data: existing } = await window.supabaseClient
+            .from('tutorial_likes')
+            .select('id')
+            .eq('tutorial_id', tutorialId)
+            .eq('user_id', user.id)
+            .maybeSingle();
+
+        if (existing) {
+            const { error } = await window.supabaseClient
+                .from('tutorial_likes')
+                .delete()
+                .eq('id', existing.id);
+            if (error) return { success: false, error: error.message };
+            return { success: true, liked: false };
+        } else {
+            const { error } = await window.supabaseClient
+                .from('tutorial_likes')
+                .insert({ tutorial_id: tutorialId, user_id: user.id });
+            if (error) return { success: false, error: error.message };
+            return { success: true, liked: true };
+        }
+    } catch (error) {
+        console.error('toggleTutorialLike error:', error);
+        return { success: false, error: error.message };
+    }
+};
+
+// Get all tutorial IDs liked by current user
+window.getMyTutorialLikes = async function() {
+    try {
+        const user = await window.getCurrentUser();
+        if (!user) return [];
+
+        const { data } = await window.supabaseClient
+            .from('tutorial_likes')
+            .select('tutorial_id')
+            .eq('user_id', user.id);
+
+        return (data || []).map(r => r.tutorial_id);
+    } catch (error) {
+        console.error('getMyTutorialLikes error:', error);
+        return [];
+    }
+};
+
+// Get comments for a tutorial
+window.getTutorialComments = async function(tutorialId) {
+    try {
+        const { data, error } = await window.supabaseClient
+            .from('tutorial_comments')
+            .select('id, content, created_at, user_id')
+            .eq('tutorial_id', tutorialId)
+            .order('created_at', { ascending: true })
+            .limit(20);
+
+        if (error) return { success: false, error: error.message, comments: [] };
+
+        // Fetch commenter profiles
+        const uids = [...new Set((data || []).map(c => c.user_id))];
+        let profileMap = {};
+        if (uids.length > 0) {
+            const { data: profiles } = await window.supabaseClient
+                .from('profiles')
+                .select('id, full_name, avatar_url')
+                .in('id', uids);
+            (profiles || []).forEach(p => { profileMap[p.id] = p; });
+        }
+
+        const comments = (data || []).map(c => ({
+            ...c,
+            profiles: profileMap[c.user_id] || {},
+        }));
+
+        return { success: true, comments };
+    } catch (error) {
+        console.error('getTutorialComments error:', error);
+        return { success: false, error: error.message, comments: [] };
+    }
+};
+
+// Add a comment to a tutorial
+window.addTutorialComment = async function(tutorialId, content) {
+    try {
+        const user = await window.getCurrentUser();
+        if (!user) return { success: false, error: 'Not logged in' };
+        if (!content?.trim()) return { success: false, error: 'Comment cannot be empty' };
+
+        const { data, error } = await window.supabaseClient
+            .from('tutorial_comments')
+            .insert({ tutorial_id: tutorialId, user_id: user.id, content: content.trim() })
+            .select('id, content, created_at, user_id')
+            .single();
+
+        if (error) return { success: false, error: error.message };
+        return { success: true, comment: data };
+    } catch (error) {
+        console.error('addTutorialComment error:', error);
+        return { success: false, error: error.message };
+    }
+};
+
+console.log('Tutorials config functions loaded!');

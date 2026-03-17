@@ -4,8 +4,11 @@ const CACHE_NAME = 'campustrend-uew-v1';
 const CORE_FILES = [
   '/campusTrend/',
   '/campusTrend/index.html',
+  '/campusTrend/tutorials.html',
   '/campusTrend/styles/index.css',
-  '/campusTrend/index.js',
+  '/campusTrend/scripts/index.js',
+  '/campusTrend/scripts/tutorials.js',
+  '/campusTrend/supabase-config.js',
   '/campusTrend/manifest.json'
 ];
 

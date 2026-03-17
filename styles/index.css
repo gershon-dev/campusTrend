@@ -534,8 +534,15 @@
             margin-bottom: 20px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .feed-header-row1 {
+            display: flex;
             align-items: center;
             justify-content: space-between;
+            width: 100%;
         }
 
         .feed-title {
@@ -624,36 +631,30 @@
         }
 
         .follow-btn {
-            padding: 5px 14px;
-            background: transparent;
-            color: #1877f2;
-            border: 1.5px solid #1877f2;
-            border-radius: 20px;
+            padding: 4px 12px;
+            background: #1877f2;
+            color: white;
+            border: none;
+            border-radius: 15px;
             font-size: 12px;
             font-weight: 600;
             cursor: pointer;
-            transition: background 0.15s, color 0.15s, border-color 0.15s;
+            transition: all 0.3s;
             white-space: nowrap;
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
         }
 
         .follow-btn:hover {
-            background: #1877f2;
-            color: #fff;
+            background: #166fe5;
         }
 
         .follow-btn.following {
-            background: #1877f2;
-            color: #fff;
-            border-color: #1877f2;
+            background: #e4e6e9;
+            color: #050505;
         }
 
         .follow-btn.following:hover {
             background: #ffebe9;
             color: #dc3545;
-            border-color: #dc3545;
         }
 
         .post-meta {
@@ -1886,28 +1887,38 @@
                 margin: 0 !important;
             }
 
+            /* ── Feed header: title + upload on row 1, filters on row 2 ── */
             .feed-header {
                 border-radius: 0;
                 margin-bottom: 8px;
-                padding: 12px 12px 8px;
+                padding: 10px 12px 0;
                 display: flex;
-                flex-wrap: wrap;
-                align-items: center;
-                gap: 8px;
+                flex-direction: column;
+                gap: 0;
                 box-shadow: 0 1px 2px rgba(0,0,0,0.06);
             }
 
+            .feed-header-row1 {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                width: 100%;
+                padding-bottom: 8px;
+            }
+
             .feed-title {
-                flex: 1;
                 font-size: 16px;
+                font-weight: 700;
+                flex: 1;
             }
 
             .upload-btn {
-                padding: 7px 14px !important;
+                padding: 7px 16px !important;
                 font-size: 13px !important;
                 min-width: unset !important;
                 min-height: unset !important;
                 border-radius: 20px !important;
+                flex-shrink: 0;
             }
 
             .feed-filter {
@@ -1916,8 +1927,9 @@
                 overflow-x: auto;
                 -webkit-overflow-scrolling: touch;
                 scrollbar-width: none;
-                padding: 4px 0 2px;
+                padding: 6px 0 8px;
                 gap: 8px;
+                border-top: 1px solid #f0f2f5;
             }
 
             .feed-filter::-webkit-scrollbar {
@@ -1927,7 +1939,7 @@
             .filter-btn {
                 white-space: nowrap;
                 flex-shrink: 0;
-                padding: 6px 14px;
+                padding: 6px 16px;
                 font-size: 13px;
             }
 
@@ -1959,6 +1971,59 @@
 
             .action-btn span {
                 display: none;
+            }
+
+            /* Tutorial strip mobile */
+            .tutorials-strip {
+                margin: 0 0 8px 0;
+                border-radius: 0;
+                border-left: none;
+                border-right: none;
+            }
+
+            .tutorials-scroll {
+                padding: 10px 12px;
+                gap: 10px;
+            }
+
+            .tutorial-chip {
+                flex: 0 0 160px !important;
+            }
+
+            .tutorial-chip-thumb {
+                aspect-ratio: 16/9;
+                width: 100%;
+                background: #1a1a2e;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                overflow: hidden;
+                position: relative;
+            }
+
+            .tutorial-chip-thumb img {
+                width: 100% !important;
+                height: 100% !important;
+                object-fit: cover !important;
+                display: block !important;
+            }
+
+            .tutorial-chip-body {
+                padding: 8px 10px 10px;
+            }
+
+            .tutorial-chip-title {
+                font-size: 0.78rem;
+            }
+
+            .tut-chip-skeleton {
+                flex: 0 0 160px !important;
+            }
+
+            .tutorial-chip-seeall {
+                flex: 0 0 80px !important;
+                min-height: 100px;
+                font-size: 0.75rem;
             }
 
             .follow-btn {

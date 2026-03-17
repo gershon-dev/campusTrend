@@ -440,33 +440,19 @@ document.addEventListener('DOMContentLoaded', async function() {
  try {
  const post = posts.find(p => p.id === postId);
  if (!post) return;
- // Optimistic update — instant UI, confirm with server
- const wasLiked = post.isLiked;
- post.isLiked = !wasLiked;
- post.likes_count = post.isLiked ? (post.likes_count || 0) + 1 : Math.max(0, (post.likes_count || 0) - 1);
- const postCard = document.querySelector(`[data-post-id="${postId}"]`);
- const applyLikeUI = (isLiked, count, disabled) => {
- if (!postCard) return;
- const likeBtn = postCard.querySelector('.like-btn');
- const likesCount = postCard.querySelector('.likes-count');
- if (likeBtn) {
- likeBtn.classList.toggle('liked', isLiked);
- likeBtn.setAttribute('aria-pressed', isLiked ? 'true' : 'false');
- likeBtn.setAttribute('aria-label', isLiked ? 'Unlike post' : 'Like post');
- likeBtn.disabled = disabled;
- }
- if (likesCount) likesCount.textContent = count;
- };
- applyLikeUI(post.isLiked, post.likes_count, true);
  const result = await window.toggleLike(postId);
  if (result.success) {
  post.isLiked = result.liked;
- post.likes_count = result.liked
- ? Math.max(post.likes_count, (post.likes_count))
- : Math.max(0, post.likes_count);
- applyLikeUI(post.isLiked, post.likes_count, false);
+ post.likes_count = result.liked ? (post.likes_count || 0) + 1 : Math.max(0, (post.likes_count || 0) - 1);
+ const postCard = document.querySelector(`[data-post-id="${postId}"]`);
  if (postCard) {
+ const likeBtn = postCard.querySelector('.like-btn');
  const likesCount = postCard.querySelector('.likes-count');
+ if (likeBtn) {
+ likeBtn.classList.toggle('liked', post.isLiked);
+ likeBtn.setAttribute('aria-pressed', post.isLiked ? 'true' : 'false');
+ likeBtn.setAttribute('aria-label', post.isLiked ? 'Unlike post' : 'Like post');
+ }
  if (likesCount) {
  likesCount.textContent = post.likes_count;
  }
@@ -503,41 +489,25 @@ document.addEventListener('DOMContentLoaded', async function() {
  showToast('Failed to update like', 'error');
  }
  }
- function applyFollowUI(userId, isFollowing) {
- // Update ALL follow buttons across every post card for this user
- document.querySelectorAll(`.follow-btn[data-user-id="${userId}"]`).forEach(btn => {
- btn.classList.toggle('following', isFollowing);
- btn.disabled = false;
- const icon = btn.querySelector('i');
- const span = btn.querySelector('span');
- if (icon) icon.className = isFollowing ? 'fas fa-user-check' : 'fas fa-user-plus';
- if (span) span.textContent = isFollowing ? 'Following' : 'Follow';
- });
- // Sync posts array state for all posts by this user
- posts.filter(p => p.user_id === userId).forEach(p => { p.isFollowing = isFollowing; });
- }
  async function handleFollow(userId, button) {
  try {
  if (!userId || !button) return false;
- // Optimistic update — instant feedback
- const wasFollowing = button.classList.contains('following');
- const willFollow = !wasFollowing;
- document.querySelectorAll(`.follow-btn[data-user-id="${userId}"]`).forEach(btn => {
- btn.disabled = true;
- btn.classList.toggle('following', willFollow);
- const icon = btn.querySelector('i');
- const span = btn.querySelector('span');
- if (icon) icon.className = willFollow ? 'fas fa-user-check' : 'fas fa-user-plus';
- if (span) span.textContent = willFollow ? 'Following' : 'Follow';
- });
  const result = await window.toggleFollow(userId);
  if (result.success) {
- applyFollowUI(userId, result.following);
+ if (button.classList.contains('follow-btn')) {
+ button.classList.toggle('following', result.following);
+ const icon = button.querySelector('i');
+ const span = button.querySelector('span');
+ if (icon) icon.className = result.following ? 'fas fa-user-check' : 'fas fa-user-plus';
+ if (span) span.textContent = result.following ? 'Following' : 'Follow';
+ }
+ const post = posts.find(p => p.user_id === userId);
+ if (post) {
+ post.isFollowing = result.following;
+ }
  showToast(result.following ? 'Following!' : 'Unfollowed successfully', 'success');
  return true;
  } else {
- // Revert on failure
- applyFollowUI(userId, wasFollowing);
  showToast('Failed to update follow status', 'error');
  return false;
  }
@@ -1124,9 +1094,11 @@ async function _fetchAndRenderTutorials(scroll, strip, isBgRefresh) {
             const driveId  = extractDriveFileId(t.video_url);
 
             const thumbHtml = driveId
-                ? `<img src="https://drive.google.com/thumbnail?id=${driveId}&sz=w320"
-                        alt="${_esc(t.title)}" loading="lazy"
-                        onerror="this.style.display=\'none\';this.parentElement.querySelector(\'.chip-play\').style.display=\'flex\';">
+                ? `<img src="https://drive.google.com/thumbnail?id=${driveId}&sz=w400"
+                        alt="${_esc(t.title)}"
+                        style="width:100%;height:100%;object-fit:cover;display:block;"
+                        onload="this.style.display='block';this.parentElement.querySelector('.chip-play').style.display='flex';"
+                        onerror="this.style.display='none';this.parentElement.querySelector('.chip-play').style.display='flex';">
                    <div class="chip-play" style="display:none;"><i class="fas fa-play"></i></div>`
                 : `<i class="fas fa-play-circle" style="font-size:2rem;color:rgba(255,255,255,0.25);"></i>
                    <div class="chip-play"><i class="fas fa-play"></i></div>`;

@@ -94,8 +94,8 @@
             .category-btn {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 7px 16px;
+    gap: 5px;
+    padding: 6px 14px;
     border: 1.5px solid #ccc;
     border-radius: 50px;
     background: transparent;
@@ -533,11 +533,6 @@
             max-width: 680px;
         }
 
-        /* Category nav (desktop) */
-        .category-nav {
-            background: #fff;
-            border-top: 1px solid #e4e6eb;
-        }
         .category-nav-inner {
             display: flex;
             align-items: center;
@@ -1879,23 +1874,23 @@
                 overflow-x: auto;
                 -webkit-overflow-scrolling: touch;
                 scrollbar-width: none;
-                gap: 8px;
-                padding: 8px 12px;
+                gap: 6px;
+                padding: 7px 12px;
                 align-items: center;
             }
 
-            .category-nav-inner::-webkit-scrollbar {
-                display: none;
-            }
+            .category-nav-inner::-webkit-scrollbar { display: none; }
 
             .category-btn {
-                padding: 5px 12px;
-                font-size: 12px;
+                padding: 5px 11px !important;
+                font-size: 12px !important;
                 font-weight: 600;
                 flex-shrink: 0;
-                border: 1.5px solid #ccc;
-                border-radius: 50px;
+                border: 1.5px solid #ccc !important;
+                border-radius: 50px !important;
                 white-space: nowrap;
+                color: #444 !important;
+                background: transparent !important;
             }
 
             .category-btn.active {
@@ -1906,12 +1901,12 @@
 
             .category-btn i {
                 color: inherit;
-                font-size: 13px;
+                font-size: 12px;
             }
 
             .main-layout {
                 padding: 0 !important;
-                margin-top: 104px !important;
+                margin-top: 100px !important;
                 gap: 0 !important;
                 max-width: 100% !important;
                 width: 100% !important;
@@ -1934,7 +1929,6 @@
                 box-shadow: 0 1px 2px rgba(0,0,0,0.06);
             }
 
-            /* Row 1: title + upload button side by side */
             .feed-header-row1 {
                 display: flex;
                 align-items: center;
@@ -1950,16 +1944,14 @@
             }
 
             .upload-btn {
-                padding: 6px 14px !important;
+                padding: 6px 13px !important;
                 font-size: 12px !important;
                 min-width: unset !important;
                 min-height: unset !important;
                 border-radius: 20px !important;
                 flex-shrink: 0;
-                gap: 5px !important;
             }
 
-            /* Row 2: filter pills */
             .feed-filter {
                 width: 100%;
                 display: flex;
@@ -1971,9 +1963,7 @@
                 border-top: 1px solid #f0f2f5;
             }
 
-            .feed-filter::-webkit-scrollbar {
-                display: none;
-            }
+            .feed-filter::-webkit-scrollbar { display: none; }
 
             .filter-btn {
                 white-space: nowrap;

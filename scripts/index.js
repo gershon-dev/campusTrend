@@ -321,7 +321,7 @@ document.addEventListener('DOMContentLoaded', async function() {
  </span>
  <span class="stat-item">
  <i class="fas fa-share" aria-hidden="true"></i>
- ${post.shares_count} shares
+    shares
  </span>
  </div>
  <div class="post-actions" role="group" aria-label="Post actions">
@@ -494,17 +494,20 @@ document.addEventListener('DOMContentLoaded', async function() {
  if (!userId || !button) return false;
  const result = await window.toggleFollow(userId);
  if (result.success) {
- if (button.classList.contains('follow-btn')) {
- button.classList.toggle('following', result.following);
- const icon = button.querySelector('i');
- const span = button.querySelector('span');
+ // Update ALL follow buttons for this user across the entire feed
+ document.querySelectorAll(`.follow-btn[data-user-id="${userId}"]`).forEach(btn => {
+ btn.classList.toggle('following', result.following);
+ btn.setAttribute('aria-pressed', result.following ? 'true' : 'false');
+ btn.setAttribute('aria-label', `${result.following ? 'Unfollow' : 'Follow'} user`);
+ const icon = btn.querySelector('i');
+ const span = btn.querySelector('span');
  if (icon) icon.className = result.following ? 'fas fa-user-check' : 'fas fa-user-plus';
  if (span) span.textContent = result.following ? 'Following' : 'Follow';
- }
- const post = posts.find(p => p.user_id === userId);
- if (post) {
- post.isFollowing = result.following;
- }
+ });
+ // Update all matching posts in the data array
+ posts.forEach(post => {
+ if (post.user_id === userId) post.isFollowing = result.following;
+ });
  showToast(result.following ? 'Following!' : 'Unfollowed successfully', 'success');
  return true;
  } else {

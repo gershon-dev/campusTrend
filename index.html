@@ -131,6 +131,26 @@
                 <div class="user-avatar" id="currentUserAvatar" aria-hidden="true">U</div>
                 <span class="user-name" id="currentUserName">User</span>
             </div>
+
+            <!-- Hamburger Menu -->
+            <div class="hamburger-menu" id="hamburgerMenu" role="button" tabindex="0" aria-label="Open menu" aria-haspopup="true" aria-expanded="false">
+                <i class="fas fa-bars" aria-hidden="true"></i>
+            </div>
+            <div class="hamburger-dropdown" id="hamburgerDropdown" role="dialog" aria-label="Navigation menu">
+                <a href="comments.html" class="hamburger-item">
+                    <i class="fas fa-question-circle"></i>
+                    <span>Help</span>
+                </a>
+                <a href="" class="hamburger-item">
+                    <i class="fas fa-info-circle"></i>
+                    <span>About Us</span>
+                </a>
+                <a href="" class="hamburger-item">
+                    <i class="fas fa-handshake"></i>
+                    <span>Sponsorship</span>
+                </a>
+            </div>
+
         </div>
         </div><!-- end header-top -->
 
@@ -489,5 +509,29 @@
             });
         }
     </script>
+
+<script>
+/* ── Hamburger Menu Toggle ── */
+(function() {
+    const menu   = document.getElementById('hamburgerMenu');
+    const drop   = document.getElementById('hamburgerDropdown');
+    if (!menu || !drop) return;
+
+    menu.addEventListener('click', function(e) {
+        e.stopPropagation();
+        const open = drop.classList.toggle('show');
+        menu.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+    menu.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); menu.click(); }
+    });
+    document.addEventListener('click', function(e) {
+        if (!menu.contains(e.target) && !drop.contains(e.target)) {
+            drop.classList.remove('show');
+            menu.setAttribute('aria-expanded', 'false');
+        }
+    });
+})();
+</script>
 </body>
 </html>

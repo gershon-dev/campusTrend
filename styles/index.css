@@ -2667,3 +2667,72 @@ button:disabled {
             0%   { background-position: 200% 0; }
             100% { background-position: -200% 0; }
         }
+/* ── Hamburger Menu ─────────────────────────────────── */
+.hamburger-menu {
+    position: relative;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #240606;
+    font-size: 1.1rem;
+    transition: background 0.2s ease;
+    flex-shrink: 0;
+}
+.hamburger-menu:hover {
+    background: rgba(255,255,255,0.28);
+}
+.hamburger-dropdown {
+    display: none;
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.18);
+    min-width: 190px;
+    z-index: 500;
+    overflow: hidden;
+    animation: dropdownFade 0.2s ease;
+}
+.hamburger-dropdown.show {
+    display: block;
+}
+@keyframes dropdownFade {
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.hamburger-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    color: #333;
+    text-decoration: none;
+    font-size: 0.95rem;
+    font-weight: 500;
+    transition: background 0.15s ease;
+    border-bottom: 1px solid #f0f0f0;
+}
+.hamburger-item:last-child {
+    border-bottom: none;
+}
+.hamburger-item i {
+    font-size: 1rem;
+    color: #667eea;
+    width: 20px;
+    text-align: center;
+}
+.hamburger-item:hover {
+    background: #f5f0ff;
+    color: #667eea;
+}
+
+/* Make the hamburger wrapper position:relative for dropdown positioning */
+#hamburgerMenu {
+    position: relative;
+}

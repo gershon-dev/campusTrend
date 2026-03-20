@@ -45,14 +45,7 @@ const COURSE_KEYWORDS = {
     'French':                ['french','francais','grammaire','conjugaison','vocabulaire','langue'],
 };
 
-function detectCourse(title) {
-    if (!title) return null;
-    const lower = title.toLowerCase();
-    for (const [course, keywords] of Object.entries(COURSE_KEYWORDS)) {
-        if (keywords.some(k => lower.includes(k))) return course;
-    }
-    return null;
-}
+
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function getInitials(name) {
@@ -383,7 +376,7 @@ function buildTutorialCard(t) {
     const tags        = (t.tags || []).slice(0, 4);
 
     const videoEmbed = buildVideoEmbed(t.video_url);
-    const courseName = t.course_name || detectCourse(t.title) || t.department || '';
+    const courseName = t.course_name || t.department || '';
 
     return `
     <article class="tutorial-card" id="card-${t.id}" data-tutorial-id="${t.id}">
@@ -638,12 +631,66 @@ async function toggleFollow(targetUserId, cardId) {
                 .from('followers')
                 .insert({ follower_id: currentUser.id, following_id: targetUserId });
         }
+
+        // ── Update followers_count on the target user's profile ──────────────
+        const { data: targetProfile } = await window.supabaseClient
+            .from('profiles')
+            .select('followers_count')
+            .eq('id', targetUserId)
+            .single();
+        if (targetProfile) {
+            const newFollowers = isFollowing
+                ? Math.max(0, (targetProfile.followers_count || 0) - 1)
+                : (targetProfile.followers_count || 0) + 1;
+            await window.supabaseClient
+                .from('profiles')
+                .update({ followers_count: newFollowers })
+                .eq('id', targetUserId);
+        }
+
+        // ── Update following_count on the current user's profile ─────────────
+        const { data: myProfile } = await window.supabaseClient
+            .from('profiles')
+            .select('following_count')
+            .eq('id', currentUser.id)
+            .single();
+        if (myProfile) {
+            const newFollowing = isFollowing
+                ? Math.max(0, (myProfile.following_count || 0) - 1)
+                : (myProfile.following_count || 0) + 1;
+            await window.supabaseClient
+                .from('profiles')
+                .update({ following_count: newFollowing })
+                .eq('id', currentUser.id);
+        }
+
+        // ── Update all follow buttons in the feed for this user ───────────────
+        document.querySelectorAll(`.tc-follow-btn[data-uid="${targetUserId}"]`).forEach(btn => {
+            if (!isFollowing) {
+                btn.classList.add('following');
+                btn.innerHTML = '<i class="fas fa-user-check"></i> Following';
+            } else {
+                btn.classList.remove('following');
+                btn.innerHTML = '<i class="fas fa-user-plus"></i> Follow';
+            }
+        });
+
         showToast(isFollowing ? 'Unfollowed' : 'Now following!');
     } catch (err) {
         console.error('toggleFollow error:', err);
         showToast('Could not update follow', 'error');
-        // Revert
+        // Revert optimistic update
         if (isFollowing) myFollowing.add(targetUserId); else myFollowing.delete(targetUserId);
+        const btn = document.getElementById(`follow-btn-${cardId}`);
+        if (btn) {
+            if (isFollowing) {
+                btn.classList.add('following');
+                btn.innerHTML = '<i class="fas fa-user-check"></i> Following';
+            } else {
+                btn.classList.remove('following');
+                btn.innerHTML = '<i class="fas fa-user-plus"></i> Follow';
+            }
+        }
     }
 }
 
@@ -865,7 +912,7 @@ function resetUploadForm() {
         if (el) el.value = '';
     });
     document.getElementById('videoDepartment').value = '';
-    document.getElementById('courseDetected').style.display = 'none';
+    
     // Clear YouTube preview
     const preview = document.getElementById('ytPreview');
     const frame   = document.getElementById('ytPreviewFrame');
@@ -880,8 +927,6 @@ async function submitTutorial() {
     const desc     = (document.getElementById('videoDesc')?.value || '').trim();
     const tags     = (document.getElementById('videoTags')?.value || '').split(',').map(t => t.trim()).filter(Boolean);
     const course   = (document.getElementById('videoCourse')?.value || '').trim();
-    const detectedCourse = detectCourse(title) || dept;
-
     // Validation
     if (!videoUrl || !isValidDriveUrl(videoUrl)) {
         showToast('Please paste a valid Google Drive link', 'error');
@@ -890,8 +935,7 @@ async function submitTutorial() {
     }
     if (!title) { showToast('Please enter a video title', 'error'); return; }
     if (!dept)  { showToast('Please select a department', 'error'); return; }
-    if (!desc)  { showToast('Please add a description', 'error'); return; }
-
+    
     const btn = document.getElementById('submitTutorialBtn');
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Publishing…';
@@ -902,7 +946,7 @@ async function submitTutorial() {
             .insert({
                 user_id:        currentUser.id,
                 title,
-                course_name:    detectedCourse,
+                course_name:    course,
                 course_code:    course,
                 department:     dept,
                 description:    desc,
@@ -1050,23 +1094,7 @@ function setupEventListeners() {
     // YouTube live preview
     initYouTubePreview();
 
-    // Title → course auto-detect
-    document.getElementById('videoTitle')?.addEventListener('input', e => {
-        const course   = detectCourse(e.target.value);
-        const detected = document.getElementById('courseDetected');
-        const name     = document.getElementById('courseDetectedName');
-        if (course && detected && name) {
-            name.textContent = course;
-            detected.style.display = 'block';
-            const deptSel = document.getElementById('videoDepartment');
-            if (deptSel && !deptSel.value) {
-                const opt = [...deptSel.options].find(o => o.value === course);
-                if (opt) deptSel.value = course;
-            }
-        } else if (detected) {
-            detected.style.display = 'none';
-        }
-    });
+
 
     // Search
     let searchTimeout;

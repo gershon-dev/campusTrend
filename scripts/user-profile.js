@@ -213,17 +213,45 @@ function updateProfileUI() {
     }
 }
 
-// Update stats from profile data (using count fields from profiles table)
+// Update stats from profile data
 function updateStatsFromProfile() {
-    // Use count fields from profiles table
+    // Show cached values immediately while the accurate count loads
     statsData.followers = profileData.followers_count;
     statsData.following = profileData.following_count;
     statsData.postsCount = profileData.posts_count;
 
-    // Update UI
     document.getElementById('followersCount').textContent = statsData.followers;
     document.getElementById('followingCount').textContent = statsData.following;
-    // postsCountDisplay removed — counts now live in filter tab badges
+
+    // Always recount live from the followers table — the cached column
+    // can be stale if someone followed from the index feed (RLS blocks
+    // updating another user's profile row from client code)
+    refreshFollowerCounts();
+}
+
+async function refreshFollowerCounts() {
+    try {
+        const [followersRes, followingRes] = await Promise.all([
+            window.supabaseClient
+                .from('followers')
+                .select('id', { count: 'exact', head: true })
+                .eq('following_id', currentProfileUserId),
+            window.supabaseClient
+                .from('followers')
+                .select('id', { count: 'exact', head: true })
+                .eq('follower_id', currentProfileUserId)
+        ]);
+
+        const followers = followersRes.count ?? statsData.followers;
+        const following = followingRes.count ?? statsData.following;
+
+        statsData.followers = followers;
+        statsData.following = following;
+        document.getElementById('followersCount').textContent = followers;
+        document.getElementById('followingCount').textContent = following;
+    } catch (err) {
+        console.error('refreshFollowerCounts error:', err);
+    }
 }
 
 // ============================================
@@ -1130,12 +1158,8 @@ async function handleFollowClick() {
             // Update button immediately in-place
             await updateFollowButton(nowFollowing);
 
-            // Update follower count in-place (no full profile reload)
-            const followersEl = document.getElementById('followersCount');
-            if (followersEl) {
-                const current = parseInt(followersEl.textContent) || 0;
-                followersEl.textContent = nowFollowing ? current + 1 : Math.max(0, current - 1);
-            }
+            // Recount live from followers table for accuracy
+            await refreshFollowerCounts();
 
             showToast(nowFollowing ? 'Followed!' : 'Unfollowed', 'success');
 

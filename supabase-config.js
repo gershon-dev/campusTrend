@@ -28,11 +28,11 @@ if (typeof window.supabaseClient === 'undefined') {
         if (event === 'TOKEN_REFRESHED') {
             console.log('Token refreshed successfully');
         }
-        if (event === 'SIGNED_OUT') {
+        // Only clear session on explicit SIGNED_OUT — never when offline/no internet
+        // Supabase fires SIGNED_OUT when token refresh fails due to no network,
+        // which would incorrectly wipe a valid local session
+        if (event === 'SIGNED_OUT' && navigator.onLine) {
             console.log('User signed out');
-        }
-        // Clear invalid sessions
-        if (event === 'SIGNED_OUT' || !session) {
             window.clearInvalidSession();
         }
     });
@@ -263,13 +263,19 @@ window.getCurrentUser = async function() {
                 return session?.user || null;
             }
             
-            // Handle refresh token errors
+            // Handle refresh token errors — but only clear if we're online
+            // When offline, these errors are just network failures, not real invalidity
             if (error.message.includes('Refresh Token') || 
                 error.message.includes('Invalid') ||
                 error.message.includes('expired')) {
-                console.warn('Invalid session detected, clearing...');
-                await window.clearInvalidSession();
-                return null;
+                if (navigator.onLine) {
+                    console.warn('Invalid session detected, clearing...');
+                    await window.clearInvalidSession();
+                    return null;
+                }
+                // Offline — use local session as fallback
+                const { data: { session } } = await window.supabaseClient.auth.getSession();
+                return session?.user || null;
             }
             console.error('Get user error:', error);
             return null;
@@ -412,21 +418,34 @@ window.getCurrentProfile = async function() {
 window.isLoggedIn = async function() {
     try {
         const { data: { session }, error } = await window.supabaseClient.auth.getSession();
-        
+
         if (error) {
-            // Handle refresh token errors silently
-            if (error.message.includes('Refresh Token') || error.message.includes('Invalid')) {
+            // Only clear session for token errors when we're actually online
+            // When offline, token refresh fails but the local session is still valid
+            if ((error.message.includes('Refresh Token') || error.message.includes('Invalid')) && navigator.onLine) {
                 await window.clearInvalidSession();
                 return false;
+            }
+            // Offline or network error — trust the local session
+            if (!navigator.onLine) {
+                return session !== null;
             }
             console.error('Session check error:', error);
             return false;
         }
-        
+
         return session !== null;
     } catch (error) {
         console.error('Check login status error:', error);
-        // If there's a token error, clear the session
+        // If offline, fall back to local session rather than returning false
+        if (!navigator.onLine) {
+            try {
+                const { data: { session } } = await window.supabaseClient.auth.getSession();
+                return session !== null;
+            } catch (e) {
+                return false;
+            }
+        }
         if (error.message && error.message.includes('Refresh Token')) {
             await window.clearInvalidSession();
         }
@@ -755,24 +774,45 @@ window.toggleFollow = async function(targetUserId) {
             .eq('following_id', targetUserId)
             .maybeSingle();
 
+        const nowFollowing = !existingFollow;
+
         if (existingFollow) {
             // Unfollow
             const { error } = await window.supabaseClient
                 .from('followers')
                 .delete()
                 .eq('id', existingFollow.id);
-
             if (error) return { success: false, error: error.message };
-            return { success: true, following: false };
         } else {
             // Follow
             const { error } = await window.supabaseClient
                 .from('followers')
                 .insert({ follower_id: user.id, following_id: targetUserId });
-
             if (error) return { success: false, error: error.message };
-            return { success: true, following: true };
         }
+
+        // ── Update followers_count on target user's profile ──────────────────
+        // Count actual rows to avoid stale read-modify-write drift
+        const { count: actualFollowers } = await window.supabaseClient
+            .from('followers')
+            .select('id', { count: 'exact', head: true })
+            .eq('following_id', targetUserId);
+        await window.supabaseClient
+            .from('profiles')
+            .update({ followers_count: actualFollowers || 0 })
+            .eq('id', targetUserId);
+
+        // ── Update following_count on current user's profile ─────────────────
+        const { count: actualFollowing } = await window.supabaseClient
+            .from('followers')
+            .select('id', { count: 'exact', head: true })
+            .eq('follower_id', user.id);
+        await window.supabaseClient
+            .from('profiles')
+            .update({ following_count: actualFollowing || 0 })
+            .eq('id', user.id);
+
+        return { success: true, following: nowFollowing };
     } catch (error) {
         console.error('Toggle follow error:', error);
         return { success: false, error: error.message };

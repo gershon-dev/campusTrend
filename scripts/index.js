@@ -25,6 +25,12 @@ document.addEventListener('DOMContentLoaded', async function() {
  console.log('Checking authentication...');
  const isLoggedIn = await window.isLoggedIn();
  if (!isLoggedIn) {
+ // Only redirect if we're online — offline failures should not kick user out
+ if (!navigator.onLine) {
+ console.warn('Offline and not logged in — staying on page');
+ showError('You are offline. Please check your internet connection.');
+ return;
+ }
  console.log('Not logged in, redirecting to sign-in...');
  window.location.href = 'sign-in.html';
  return;
@@ -34,6 +40,12 @@ document.addEventListener('DOMContentLoaded', async function() {
  console.log('Current user:', currentUser);
  console.log('Current profile:', currentProfile);
  if (!currentUser || !currentProfile) {
+ // Don't redirect if offline — the fetch just failed due to no network
+ if (!navigator.onLine) {
+ console.warn('Offline — could not load profile, staying on page');
+ showError('You are offline. Please check your internet connection.');
+ return;
+ }
  console.error('Failed to load user or profile');
  window.location.href = 'sign-in.html';
  return;
@@ -1074,7 +1086,10 @@ async function _fetchAndRenderTutorials(scroll, strip, isBgRefresh) {
         if (error) throw error;
 
         if (!tutorials || tutorials.length === 0) {
-            if (!isBgRefresh) strip.style.display = 'none';
+            // Always hide the strip and clear cache — even on background refresh
+            // so deleted tutorials don't keep showing from stale cache
+            strip.style.display = 'none';
+            localStorage.removeItem(TUT_CACHE_KEY);
             return;
         }
 
@@ -1118,10 +1133,7 @@ async function _fetchAndRenderTutorials(scroll, strip, isBgRefresh) {
                     <div class="tutorial-chip-meta">
                         <div class="tutorial-chip-avatar">${avatarHtml}</div>
                         <span>${_esc(name.split(' ')[0])}</span>
-                        <span class="tutorial-chip-likes">
-                            <i class="fas fa-heart" style="font-size:0.65rem;"></i>
-                            ${t.likes_count || 0}
-                        </span>
+            
                     </div>
                 </div>
             </a>`;
@@ -1132,10 +1144,13 @@ async function _fetchAndRenderTutorials(scroll, strip, isBgRefresh) {
             </a>`;
 
         const finalHtml = chipsHtml + seeAllHtml;
+
+        // Always update the DOM — including background refresh so deletions
+        // are reflected immediately without waiting for cache to expire
         scroll.innerHTML = finalHtml;
         strip.style.display = '';
 
-        // Save to cache
+        // Update cache with fresh data
         try {
             localStorage.setItem(TUT_CACHE_KEY, JSON.stringify({ html: finalHtml, ts: Date.now() }));
         } catch(e) { /* storage full, ignore */ }

@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Campus Market - CampusTrend UEW</title>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+    <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></noscript>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <meta name="theme-color" content="#1877f2">
+    <link rel="manifest" href="manifest.json">
+
+    <style>
+        :root {
+            --brand:       #1877f2;
+            --brand-dark:  #1255b8;
+            --accent:      #ff6b2b;
+            --accent-soft: #fff0ea;
+            --surface:     #ffffff;
+            --bg:          #f0f2f5;
+            --text:        #1c1e21;
+            --muted:       #65676b;
+            --border:      #dde1e7;
+            --grad: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* ── HEADER ── */
+        .header {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+        }
+        .header-top {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 0 16px;
+            height: 56px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .logo i { color: var(--brand); font-size: 1.5rem; }
+        .logo span {
+            font-family: 'Syne', sans-serif;
+            font-weight: 800;
+            font-size: 1.15rem;
+            color: var(--brand);
+        }
+        .logo-subtitle { font-size: 0.65rem; color: var(--muted); line-height: 1; }
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 16px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--text);
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+        .back-btn:hover { background: var(--border); transform: translateX(-2px); }
+
+        /* ── HERO ── */
+        .hero {
+            background: var(--grad);
+            position: relative;
+            overflow: hidden;
+            padding: 80px 20px 100px;
+            text-align: center;
+        }
+
+        /* Decorative floating shapes */
+        .hero::before {
+            content: '';
+            position: absolute;
+            width: 420px; height: 420px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.06);
+            top: -120px; right: -80px;
+            animation: floatA 7s ease-in-out infinite;
+        }
+        .hero::after {
+            content: '';
+            position: absolute;
+            width: 260px; height: 260px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.05);
+            bottom: -60px; left: -40px;
+            animation: floatB 9s ease-in-out infinite;
+        }
+        @keyframes floatA { 0%,100%{transform:translateY(0) rotate(0deg)} 50%{transform:translateY(-20px) rotate(5deg)} }
+        @keyframes floatB { 0%,100%{transform:translateY(0)} 50%{transform:translateY(14px)} }
+
+        /* Dotted grid overlay */
+        .hero-grid {
+            position: absolute; inset: 0;
+            background-image: radial-gradient(circle, rgba(255,255,255,0.12) 1px, transparent 1px);
+            background-size: 28px 28px;
+            pointer-events: none;
+        }
+
+        .hero-content { position: relative; z-index: 2; max-width: 640px; margin: 0 auto; }
+
+        .hero-icon-wrap {
+            width: 90px; height: 90px;
+            background: rgba(255,255,255,0.18);
+            backdrop-filter: blur(10px);
+            border-radius: 24px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 24px;
+            border: 1px solid rgba(255,255,255,0.3);
+            animation: iconPop 0.6s cubic-bezier(0.34,1.56,0.64,1) both;
+        }
+        @keyframes iconPop { from{transform:scale(0.5) rotate(-10deg);opacity:0} to{transform:scale(1) rotate(0deg);opacity:1} }
+        .hero-icon-wrap i { font-size: 2.6rem; color: #fff; }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(255,107,43,0.9);
+            color: #fff;
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            padding: 5px 14px;
+            border-radius: 20px;
+            margin-bottom: 18px;
+            animation: fadeDown 0.5s 0.2s ease both;
+        }
+        .hero-badge i { font-size: 0.65rem; animation: blink 1.4s ease-in-out infinite; }
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+        .hero h1 {
+            font-family: 'Syne', sans-serif;
+            font-size: clamp(2rem, 5vw, 3rem);
+            font-weight: 800;
+            color: #fff;
+            line-height: 1.15;
+            margin-bottom: 16px;
+            animation: fadeDown 0.5s 0.3s ease both;
+        }
+        .hero h1 span {
+            background: linear-gradient(90deg, #ffd54f, #ffb300);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-desc {
+            font-size: 1.05rem;
+            color: rgba(255,255,255,0.88);
+            line-height: 1.65;
+            max-width: 480px;
+            margin: 0 auto 32px;
+            font-weight: 300;
+            animation: fadeDown 0.5s 0.4s ease both;
+        }
+        .hero-desc strong { color: #fff; font-weight: 600; }
+
+        @keyframes fadeDown { from{opacity:0;transform:translateY(-14px)} to{opacity:1;transform:translateY(0)} }
+
+        /* Notify form */
+        .notify-form {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            max-width: 440px;
+            margin: 0 auto;
+            animation: fadeDown 0.5s 0.5s ease both;
+        }
+        .notify-form .notify-input { flex: 1; min-width: 180px; }
+        .notify-form .notify-btn { flex-shrink: 0; }
+        .notify-input {
+            flex: 1;
+            padding: 13px 18px;
+            border-radius: 30px;
+            border: none;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.9rem;
+            background: rgba(255,255,255,0.95);
+            color: var(--text);
+            outline: none;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+        }
+        .notify-input::placeholder { color: #aaa; }
+        .notify-input:focus { background: #fff; box-shadow: 0 2px 18px rgba(0,0,0,0.2); }
+        .notify-btn {
+            padding: 13px 22px;
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: 30px;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.88rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+            box-shadow: 0 4px 14px rgba(255,107,43,0.4);
+        }
+        .notify-btn:hover { background: #e85a1a; transform: translateY(-1px); box-shadow: 0 6px 18px rgba(255,107,43,0.5); }
+        .notify-btn:active { transform: scale(0.97); }
+
+        /* Scroll chevron */
+        .hero-scroll {
+            position: absolute;
+            bottom: 24px; left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255,255,255,0.5);
+            font-size: 1.2rem;
+            animation: bounce 2s ease-in-out infinite;
+        }
+        @keyframes bounce { 0%,100%{transform:translateX(-50%) translateY(0)} 50%{transform:translateX(-50%) translateY(7px)} }
+
+        /* ── WAVE DIVIDER ── */
+        .wave { display: block; margin-top: -2px; background: var(--bg); }
+        .wave svg { display: block; }
+
+        /* ── FEATURES SECTION ── */
+        .section {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 60px 20px;
+        }
+        .section-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            background: #e8f0fe;
+            color: var(--brand);
+            font-size: 0.78rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            padding: 5px 14px;
+            border-radius: 20px;
+            margin-bottom: 14px;
+        }
+        .section-title {
+            font-family: 'Syne', sans-serif;
+            font-size: clamp(1.5rem, 3.5vw, 2rem);
+            font-weight: 800;
+            margin-bottom: 10px;
+            color: var(--text);
+        }
+        .section-sub {
+            color: var(--muted);
+            font-size: 0.95rem;
+            max-width: 500px;
+            line-height: 1.6;
+            margin-bottom: 44px;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 20px;
+        }
+
+        .feature-card {
+            background: var(--surface);
+            border-radius: 18px;
+            padding: 28px 24px;
+            border: 1px solid var(--border);
+            transition: transform 0.25s, box-shadow 0.25s;
+            animation: riseUp 0.5s ease both;
+            position: relative;
+            overflow: hidden;
+        }
+        .feature-card::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: var(--grad);
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+        .feature-card:hover { transform: translateY(-5px); box-shadow: 0 16px 40px rgba(0,0,0,0.1); }
+
+        @keyframes riseUp { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
+        .feature-card:nth-child(1) { animation-delay: 0.1s; }
+        .feature-card:nth-child(2) { animation-delay: 0.2s; }
+        .feature-card:nth-child(3) { animation-delay: 0.3s; }
+        .feature-card:nth-child(4) { animation-delay: 0.4s; }
+        .feature-card:nth-child(5) { animation-delay: 0.5s; }
+        .feature-card:nth-child(6) { animation-delay: 0.6s; }
+
+        .feature-icon {
+            width: 52px; height: 52px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4rem;
+            margin-bottom: 18px;
+        }
+        .feature-card h3 {
+            font-family: 'Syne', sans-serif;
+            font-size: 1rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: var(--text);
+        }
+        .feature-card p {
+            font-size: 0.88rem;
+            color: var(--muted);
+            line-height: 1.6;
+        }
+
+        /* ── CATEGORIES PREVIEW ── */
+        .categories-section {
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+            padding: 60px 20px;
+        }
+        .categories-inner { max-width: 1000px; margin: 0 auto; }
+        .categories-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 14px;
+            margin-top: 40px;
+        }
+        .cat-chip {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 20px 14px;
+            text-align: center;
+            transition: all 0.22s;
+            cursor: default;
+            position: relative;
+        }
+        .cat-chip:hover { background: #e8f0fe; border-color: var(--brand); transform: translateY(-3px); }
+        .cat-chip i { font-size: 1.6rem; margin-bottom: 10px; display: block; }
+        .cat-chip span { font-size: 0.82rem; font-weight: 600; color: var(--text); display: block; }
+        .cat-chip .soon-dot {
+            position: absolute;
+            top: 8px; right: 8px;
+            width: 7px; height: 7px;
+            background: var(--accent);
+            border-radius: 50%;
+        }
+
+        /* ── COMING SOON BANNER ── */
+        .coming-soon-section {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 60px 20px;
+        }
+        .coming-soon-card {
+            background: var(--grad);
+            border-radius: 24px;
+            padding: 52px 40px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .coming-soon-card::before {
+            content: '';
+            position: absolute;
+            width: 300px; height: 300px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.07);
+            top: -100px; right: -60px;
+        }
+        .coming-soon-card::after {
+            content: '';
+            position: absolute;
+            width: 200px; height: 200px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.05);
+            bottom: -70px; left: -40px;
+        }
+        .coming-soon-card > * { position: relative; z-index: 1; }
+
+        .countdown-wrap {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+        }
+        .count-box {
+            background: rgba(255,255,255,0.15);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,0.25);
+            border-radius: 16px;
+            padding: 18px 22px;
+            min-width: 80px;
+        }
+        .count-num {
+            font-family: 'Syne', sans-serif;
+            font-size: 2rem;
+            font-weight: 800;
+            color: #fff;
+            line-height: 1;
+            display: block;
+            font-variant-numeric: tabular-nums;
+        }
+        .count-label {
+            font-size: 0.7rem;
+            color: rgba(255,255,255,0.7);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-top: 4px;
+            display: block;
+        }
+
+        .coming-soon-card h2 {
+            font-family: 'Syne', sans-serif;
+            font-size: clamp(1.6rem, 4vw, 2.2rem);
+            font-weight: 800;
+            color: #fff;
+            margin-bottom: 14px;
+        }
+        .coming-soon-card p {
+            color: rgba(255,255,255,0.85);
+            font-size: 1rem;
+            line-height: 1.65;
+            max-width: 500px;
+            margin: 0 auto 28px;
+        }
+        .progress-bar-wrap {
+            max-width: 340px;
+            margin: 0 auto 10px;
+        }
+        .progress-bar-track {
+            height: 8px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ffd54f, #ffb300);
+            border-radius: 4px;
+            width: 0%;
+            transition: width 2s cubic-bezier(0.22,1,0.36,1);
+        }
+        .progress-label {
+            font-size: 0.78rem;
+            color: rgba(255,255,255,0.65);
+            margin-top: 6px;
+            text-align: right;
+        }
+
+        /* ── TOAST ── */
+        .toast {
+            position: fixed;
+            bottom: 24px; left: 50%;
+            transform: translateX(-50%) translateY(80px);
+            background: #1c1e21;
+            color: #fff;
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-size: 0.88rem;
+            font-weight: 500;
+            opacity: 0;
+            transition: all 0.35s cubic-bezier(0.34,1.56,0.64,1);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+            white-space: nowrap;
+        }
+        .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+        .toast.success i { color: #4caf50; }
+        .toast.error i { color: #f44336; }
+
+        /* ── FOOTER ── */
+        .footer {
+            text-align: center;
+            padding: 28px 20px;
+            color: var(--muted);
+            font-size: 0.82rem;
+            border-top: 1px solid var(--border);
+            background: var(--surface);
+        }
+        .footer strong { color: var(--brand); }
+
+        /* ── RESPONSIVE ── */
+        @media (max-width: 480px) {
+            .hero { padding: 60px 16px 80px; }
+            .notify-form { flex-direction: column; }
+            .notify-btn { width: 100%; }
+            .coming-soon-card { padding: 36px 20px; }
+            .count-box { min-width: 64px; padding: 14px 16px; }
+            .count-num { font-size: 1.6rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- HEADER -->
+    <header class="header">
+        <div class="header-top">
+            <a href="index.html" class="logo" aria-label="CampusTrend home">
+                <i class="fas fa-graduation-cap" aria-hidden="true"></i>
+                <div>
+                    <span>CampusTrend</span>
+                    <div class="logo-subtitle">University of Education, Winneba</div>
+                </div>
+            </a>
+            <a href="index.html" class="back-btn">
+                <i class="fas fa-arrow-left"></i> Back to Feed
+            </a>
+        </div>
+    </header>
+
+    <!-- HERO -->
+    <section class="hero" aria-labelledby="hero-heading">
+        <div class="hero-grid" aria-hidden="true"></div>
+        <div class="hero-content">
+            <div class="hero-icon-wrap" aria-hidden="true">
+                <i class="fas fa-store"></i>
+            </div>
+            <div class="hero-badge">
+                <i class="fas fa-circle"></i> Coming Soon
+            </div>
+            <h1 id="hero-heading">
+                Campus <span>Market</span>
+            </h1>
+            <p class="hero-desc">
+                 The easiest way for <strong>UEW students</strong> to buy and sell — phones, laptops, gadgets, clothing, foodwear, cosmetics and more. 
+                Fast, trusted and built for <strong>on-campus delivery</strong>.
+            </p>
+            <form class="notify-form" id="notifyForm" onsubmit="handleNotify(event)" novalidate>
+                <input
+                    type="email"
+                    class="notify-input"
+                    id="notifyEmail"
+                    placeholder="Enter your UEW email..."
+                    autocomplete="email"
+                    aria-label="Your email address"
+                >
+                <button type="submit" class="notify-btn">
+                    <i class="fas fa-bell"></i> Notify Me
+                </button>
+            </form>
+        </div>
+        <div class="hero-scroll" aria-hidden="true">
+            <i class="fas fa-chevron-down"></i>
+        </div>
+    </section>
+
+    <!-- WAVE -->
+    <div class="wave">
+        <svg viewBox="0 0 1440 60" preserveAspectRatio="none" height="60" width="100%" xmlns="http://www.w3.org/2000/svg">
+            <path d="M0,30 C360,60 1080,0 1440,30 L1440,60 L0,60 Z" fill="#f0f2f5"/>
+        </svg>
+    </div>
+
+    <!-- FEATURES -->
+    <section class="section" aria-labelledby="features-heading">
+        <div class="section-label"><i class="fas fa-sparkles"></i> What to expect</div>
+        <h2 class="section-title" id="features-heading">Built for UEW Students</h2>
+        <p class="section-sub">Everything you need to trade safely and conveniently within the campus community.</p>
+
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon" style="background:#e8f5e9;">
+                    <i class="fas fa-map-marker-alt" style="color:#2e7d32;"></i>
+                </div>
+                <h3>On-Campus Delivery</h3>
+                <p>Meet up or arrange delivery within UEW hostels and faculties. No courier fees, no long waits.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon" style="background:#e8f0fe;">
+                    <i class="fas fa-user-shield" style="color:#1877f2;"></i>
+                </div>
+                <h3>Verified Students Only</h3>
+                <p>Only registered UEW students can buy and sell. Your index number keeps the community safe and trusted.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon" style="background:#fff8e1;">
+                    <i class="fas fa-tags" style="color:#f9a825;"></i>
+                </div>
+                <h3>Student-Friendly Prices</h3>
+                <p>Find textbooks, lecture notes, gadgets and essentials at fair prices — from students, for students.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon" style="background:#fce4ec;">
+                    <i class="fas fa-comments" style="color:#c62828;"></i>
+                </div>
+                <h3>In-App Chat</h3>
+                <p>Negotiate and finalise deals directly through CampusTrend's messaging — no need to share personal numbers.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon" style="background:#f3e5f5;">
+                    <i class="fas fa-star" style="color:#7b1fa2;"></i>
+                </div>
+                <h3>Seller Ratings</h3>
+                <p>Rate and review sellers after every transaction. The campus community keeps each other accountable.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon" style="background:#e0f7fa;">
+                    <i class="fas fa-bolt" style="color:#00838f;"></i>
+                </div>
+                <h3>Quick Listings</h3>
+                <p>Post an item in under 60 seconds. Add a photo, set a price, and let your fellow students find it instantly.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- CATEGORIES PREVIEW -->
+    <section class="categories-section" aria-labelledby="cat-heading">
+        <div class="categories-inner">
+            <div class="section-label"><i class="fas fa-th-large"></i> Categories</div>
+            <h2 class="section-title" id="cat-heading">What You'll Find Here</h2>
+            <p class="section-sub">From academic materials to everyday essentials — all in one campus marketplace.</p>
+            <div class="categories-grid">
+                <div class="cat-chip"><span class="soon-dot"></span><i class="fas fa-book" style="color:#1877f2;"></i><span>Textbooks</span></div>
+                <div class="cat-chip"><span class="soon-dot"></span><i class="fas fa-laptop" style="color:#7b1fa2;"></i><span>Electronics</span></div>
+                <div class="cat-chip"><span class="soon-dot"></span><i class="fas fa-tshirt" style="color:#e53935;"></i><span>Clothing</span></div>
+                <div class="cat-chip"><span class="soon-dot"></span><i class="fas fa-utensils" style="color:#f9a825;"></i><span>Food & Snacks</span></div>
+                <div class="cat-chip"><span class="soon-dot"></span><i class="fas fa-couch" style="color:#00838f;"></i><span>Room Items</span></div>
+                <div class="cat-chip"><span class="soon-dot"></span><i class="fas fa-paint-brush" style="color:#2e7d32;"></i><span>Art Supplies</span></div>
+                <div class="cat-chip"><span class="soon-dot"></span><i class="fas fa-dumbbell" style="color:#c62828;"></i><span>Sports Gear</span></div>
+                <div class="cat-chip"><span class="soon-dot"></span><i class="fas fa-ellipsis-h" style="color:#555;"></i><span>More…</span></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- COMING SOON BANNER -->
+    <section class="coming-soon-section" aria-labelledby="cs-heading">
+        <div class="coming-soon-card">
+            <div class="countdown-wrap" aria-label="Countdown timer" id="countdown">
+                <div class="count-box">
+                    <span class="count-num" id="cd-days">00</span>
+                    <span class="count-label">Days</span>
+                </div>
+                <div class="count-box">
+                    <span class="count-num" id="cd-hours">00</span>
+                    <span class="count-label">Hours</span>
+                </div>
+                <div class="count-box">
+                    <span class="count-num" id="cd-mins">00</span>
+                    <span class="count-label">Minutes</span>
+                </div>
+                <div class="count-box">
+                    <span class="count-num" id="cd-secs">00</span>
+                    <span class="count-label">Seconds</span>
+                </div>
+            </div>
+
+            <h2 id="cs-heading">This Page Will Be Available Soon</h2>
+            <p>
+                Campus Market is currently being built with care for the UEW community.
+                Leave your email above and we'll let you know the moment it goes live.
+            </p>
+
+            <div class="progress-bar-wrap">
+                <div class="progress-bar-track">
+                    <div class="progress-bar-fill" id="progressFill"></div>
+                </div>
+                <div class="progress-label" id="progressLabel">Loading…</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer class="footer">
+        <strong>CampusTrend</strong> · University of Education, Winneba &nbsp;·&nbsp;
+        Campus Market — Coming Soon
+    </footer>
+
+    <!-- TOAST -->
+    <div class="toast" id="toast" role="status" aria-live="polite">
+        <i class="fas fa-check-circle"></i>
+        <span id="toastMsg"></span>
+    </div>
+
+    <script>
+        // ── Progress bar animation on load ──
+        window.addEventListener('load', () => {
+            const fill = document.getElementById('progressFill');
+            const label = document.getElementById('progressLabel');
+            const pct = 62; // build progress %
+            setTimeout(() => {
+                fill.style.width = pct + '%';
+                label.textContent = pct + '% complete';
+            }, 600);
+        });
+
+        // ── Countdown timer (target: 60 days from today) ──
+        const launchDate = new Date();
+        launchDate.setDate(launchDate.getDate() + 60);
+
+        function updateCountdown() {
+            const now  = new Date();
+            const diff = launchDate - now;
+            if (diff <= 0) return;
+            const days  = Math.floor(diff / 86400000);
+            const hours = Math.floor((diff % 86400000) / 3600000);
+            const mins  = Math.floor((diff % 3600000)  / 60000);
+            const secs  = Math.floor((diff % 60000)    / 1000);
+            document.getElementById('cd-days').textContent  = String(days).padStart(2,'0');
+            document.getElementById('cd-hours').textContent = String(hours).padStart(2,'0');
+            document.getElementById('cd-mins').textContent  = String(mins).padStart(2,'0');
+            document.getElementById('cd-secs').textContent  = String(secs).padStart(2,'0');
+        }
+        updateCountdown();
+        setInterval(updateCountdown, 1000);
+
+        // ── Notify Me form ──
+        function handleNotify(e) {
+            e.preventDefault();
+            const emailInput = document.getElementById('notifyEmail');
+            const email = emailInput.value.trim();
+
+            if (!email || !email.includes('@')) {
+                showToast('Please enter a valid email address.', 'error');
+                return;
+            }
+
+            const list = JSON.parse(localStorage.getItem('ct_market_notify') || '[]');
+            if (list.some(e => e.email === email)) {
+                showToast("You're already on the list!", 'error');
+                return;
+            }
+
+            list.push({ email, date: new Date().toISOString() });
+            localStorage.setItem('ct_market_notify', JSON.stringify(list));
+
+            emailInput.value = '';
+            showToast("You're on the list! We'll notify you when it's live. 🎉", 'success');
+        }
+
+
+        // ── Toast ──
+        let toastTimer;
+        function showToast(msg, type = 'success') {
+            const toast = document.getElementById('toast');
+            const icon  = toast.querySelector('i');
+            document.getElementById('toastMsg').textContent = msg;
+            toast.className = 'toast ' + type;
+            icon.className = type === 'success' ? 'fas fa-check-circle' : 'fas fa-exclamation-circle';
+            toast.classList.add('show');
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => toast.classList.remove('show'), 4000);
+        }
+    </script>
+
+</body>
+</html>

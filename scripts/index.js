@@ -848,7 +848,35 @@ document.addEventListener('DOMContentLoaded', async function() {
  if (uploadPlaceholder) uploadPlaceholder.style.display = 'flex';
  if (imagePreviewContainer) imagePreviewContainer.style.display = 'none';
  uploadModal.classList.remove('show');
- await loadPosts();
+
+ // Prepend the new post directly from the returned data so the image
+ // shows immediately without waiting for the CDN to propagate.
+ // Use a local blob URL for the image so it renders instantly.
+ const newPost = result.post;
+ newPost.isLiked = false;
+ newPost.isFollowing = false;
+ if (imageFile && newPost.image_url) {
+     newPost._localBlobUrl = URL.createObjectURL(imageFile);
+ }
+ posts.unshift(newPost);
+ const tempHTML = createPostHTML(newPost, 0);
+ const tempDiv = document.createElement('div');
+ tempDiv.innerHTML = tempHTML;
+ const newCard = tempDiv.firstElementChild;
+ // Swap in the local blob URL so the image shows before CDN is ready
+ if (newPost._localBlobUrl) {
+     const img = newCard.querySelector('.post-image');
+     if (img) img.src = newPost._localBlobUrl;
+ }
+ if (postsContainer.firstChild) {
+     postsContainer.insertBefore(newCard, postsContainer.firstChild);
+ } else {
+     postsContainer.appendChild(newCard);
+ }
+ setupPostEventListeners(newPost.id);
+
+ // Reload in background to sync counts/comments without blocking UI
+ loadPosts();
  } else {
  showToast(result.error || 'Failed to create post', 'error');
  }

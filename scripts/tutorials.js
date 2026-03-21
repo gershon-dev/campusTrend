@@ -509,15 +509,13 @@ function attachCardListeners(t) {
         }
     });
 
-    // View count — only on explicit play overlay click (not iframe load)
-    // This prevents false counts from iframes loading on page render
-    const playOverlay = document.querySelector(`#card-${t.id} .tc-play-overlay`);
-    if (playOverlay) {
-        playOverlay.addEventListener('click', () => incrementViews(t.id), { once: true });
-    }
-    // Also count for native <video> elements on actual play
+    // View count — fire when user clicks on the video wrap to start it.
+    // Google Drive iframes are cross-origin so play events are not accessible
+    // from the parent page — clicking the wrap is the only reliable signal.
     const videoWrap = document.getElementById(`video-wrap-${t.id}`);
     if (videoWrap) {
+        videoWrap.addEventListener('click', () => incrementViews(t.id), { once: true });
+        // Also handle native <video> elements
         const vid = videoWrap.querySelector('video');
         if (vid) {
             vid.addEventListener('play', () => incrementViews(t.id), { once: true });
@@ -813,9 +811,10 @@ function saveViewedSet(s) {
     try { localStorage.setItem(VIEWED_KEY, JSON.stringify([...s])); } catch {}
 }
 async function incrementViews(tutorialId) {
+    const id = String(tutorialId); // always string for consistent localStorage comparison
     const viewed = getViewedSet();
-    if (viewed.has(tutorialId)) return; // already counted on this device
-    viewed.add(tutorialId);
+    if (viewed.has(id)) return; // already counted on this device
+    viewed.add(id);
     saveViewedSet(viewed);
     try {
         // Fetch the true current count from DB to avoid stale read-modify-write

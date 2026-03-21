@@ -861,8 +861,11 @@ document.addEventListener('DOMContentLoaded', async function() {
  }
  setupPostEventListeners(newPost.id);
 
- // Reload in background to sync counts/comments without blocking UI
- loadPosts();
+ // Reload in background after a delay — gives the CDN time to make
+ // the image publicly accessible before we re-render from the DB.
+ // Without the delay, loadPosts() overwrites our blob-URL card with
+ // the CDN URL before the CDN is ready, causing a blank image.
+ setTimeout(() => loadPosts(), 4000);
  } else {
  showToast(result.error || 'Failed to create post', 'error');
  }

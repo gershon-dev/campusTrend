@@ -675,7 +675,7 @@ async function loadQuestions() {
     // Check admin status
     try {
         const userResult = await window.authFunctions.getCurrentUser();
-        isAdmin = !!(userResult.success && userResult.user);
+        isAdmin = userResult.user?.profile?.is_admin === true;
     } catch(e) { isAdmin = false; }
 
     // Build filters
@@ -720,7 +720,7 @@ function renderQuestions(questions) {
                     ${q.course_code ? q.course_code + ' — ' : ''}${q.course_name || ''}
                 </div>
                 <div class="question-meta">
-                    Year: ${q.year || 'N/A'} &nbsp;|&nbsp; Downloads: ${q.download_count || 0}
+                    Year: ${q.year || 'N/A'}
                 </div>
                 ${q.is_free
                     ? '<span class="free-badge">FREE</span>'

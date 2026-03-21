@@ -296,7 +296,7 @@
     <!-- Top nav -->
     <div class="top-bar">
         <button class="nav-btn back" onclick="window.history.back()">← Back</button>
-        <a href="admin-upload.html" class="nav-btn upload">📤 Upload New</a>
+        <a href="admin-upload.html" class="nav-btn upload" id="uploadNavBtn" style="display:none;">📤 Upload New</a>
     </div>
 
     <!-- Title -->
@@ -320,10 +320,6 @@
         <div class="stat-card">
             <div class="num" id="statPaid">—</div>
             <div class="lbl">Paid</div>
-        </div>
-        <div class="stat-card">
-            <div class="num" id="statDls">—</div>
-            <div class="lbl">Downloads</div>
         </div>
     </div>
 
@@ -396,7 +392,11 @@
     /* ── Boot ── */
     document.addEventListener('DOMContentLoaded', async () => {
         const result = await window.authFunctions.getCurrentUser();
-        isAdmin = !!(result.success && result.user);
+        isAdmin = result.user?.profile?.is_admin === true;
+        if (isAdmin) {
+            const uploadBtn = document.getElementById('uploadNavBtn');
+            if (uploadBtn) uploadBtn.style.display = 'inline-flex';
+        }
         buildFilterBar();
         await loadQuestions();
     });
@@ -456,11 +456,9 @@
     function renderStats(data) {
         const free  = data.filter(q => q.is_free).length;
         const paid  = data.length - free;
-        const dls   = data.reduce((s, q) => s + (q.download_count || 0), 0);
         document.getElementById('statTotal').textContent = data.length;
         document.getElementById('statFree').textContent  = free;
         document.getElementById('statPaid').textContent  = paid;
-        document.getElementById('statDls').textContent   = dls;
         document.getElementById('statsRow').style.display = 'flex';
     }
 
@@ -486,7 +484,6 @@
                         ${q.course_code ? `<span class="meta-chip">📘 ${q.course_code}</span>` : ''}
                         ${q.course_name ? `<span class="meta-chip">📖 ${q.course_name}</span>` : ''}
                         ${q.year        ? `<span class="meta-chip year">📅 ${q.year}</span>` : ''}
-                        <span class="meta-chip dls">⬇ ${q.download_count || 0}</span>
                     </div>
                     <div class="badge-row">
                         ${q.is_free

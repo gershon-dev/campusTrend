@@ -61,6 +61,14 @@
         .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
         .toast.success { background: #48bb78; }
         .toast.error { background: #e53e3e; }
+        .comment-menu { position: relative; flex-shrink: 0; margin-left: auto; }
+        .menu-dots { background: none; border: none; cursor: pointer; padding: 4px 6px; border-radius: 6px; color: #bbb; display: flex; flex-direction: column; gap: 3px; align-items: center; transition: background 0.15s; }
+        .menu-dots:hover { background: #f3f3f3; color: #888; }
+        .menu-dots span { display: block; width: 4px; height: 4px; border-radius: 50%; background: currentColor; }
+        .menu-dropdown { display: none; position: absolute; right: 0; top: 110%; background: #fff; border: 1px solid #eee; border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,0.12); min-width: 130px; z-index: 10; overflow: hidden; }
+        .menu-dropdown.open { display: block; }
+        .menu-dropdown button { width: 100%; text-align: left; background: none; border: none; padding: 10px 14px; font-size: 0.88rem; cursor: pointer; color: #e53e3e; display: flex; align-items: center; gap: 8px; transition: background 0.15s; }
+        .menu-dropdown button:hover { background: #fff5f5; }
         @media (max-width: 520px) { .card { padding: 22px 18px; } .card::before { margin: -22px -18px 20px; } .page-header h1 { font-size: 1.7rem; } .stars label { font-size: 1.7rem; } }
     </style>
 </head>
@@ -75,7 +83,7 @@
 
     <div class="email-banner">
         <span class="email-icon">📧</span>
-        <span>You can also Email us directly: <a href="mailto:gersh8085@gmail.com">gersh8085@gmail.com</a></span>
+        <span>You can also Email us directly: <a href="/cdn-cgi/l/email-protection#7b1c1e090813434b434e3b1c161a121755181416"><span class="__cf_email__" data-cfemail="b5d2d0c7c6dd8d858d80f5d2d8d4dcd99bd6dad8">god940350@gmail.com</span></a></span>
     </div>
 
     <div class="card">
@@ -115,18 +123,21 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="Past questions/scripts/supabase-config.js"></script>
+
 <script>
-    // Safety net: init inline if supabase-config.js didn't run (path issue, etc.)
-    if (!window.supabaseClient && window.supabase) {
-        window.supabaseClient = window.supabase.createClient(
-            'https://udypvfyretvxaxmtbaol.supabase.co',
-            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVkeXB2ZnlyZXR2eGF4bXRiYW9sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA4MzMyNDksImV4cCI6MjA4NjQwOTI0OX0.DCubcRVWQ55tlxsArt_Wrf0WCnuD5NGwgdMUa_j8wRc'
-        );
-    }
-</script>
-<script>
+const STORAGE_KEY = 'uew_page_comments';
+
+function getComments() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
+    catch { return []; }
+}
+function saveComments(comments) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(comments));
+}
+function generateId() {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
 function esc(str) {
     if (!str) return '';
     const d = document.createElement('div');
@@ -152,6 +163,7 @@ function starsHTML(rating) {
     for (let i = 1; i <= 5; i++) h += i <= rating ? '★' : '<span class="no-star">★</span>';
     return h;
 }
+
 let toastTimer;
 function showToast(msg, type = '') {
     const t = document.getElementById('toast');
@@ -162,41 +174,40 @@ function showToast(msg, type = '') {
     toastTimer = setTimeout(() => t.classList.remove('show'), 3500);
 }
 
-async function loadComments() {
+function loadComments() {
     const area = document.getElementById('commentsArea');
-    try {
-        const { data, error } = await window.supabaseClient
-            .from('page_comments')
-            .select('*')
-            .order('created_at', { ascending: false });
-        if (error) throw new Error(error.message || JSON.stringify(error));
-        const count = data ? data.length : 0;
-        document.getElementById('commentCount').textContent = count === 1 ? '1 comment' : count + ' comments';
-        if (!count) {
-            area.innerHTML = '<div class="comments-empty"><div class="empty-icon">💭</div><p>No comments yet. Be the first to share your thoughts!</p></div>';
-            return;
-        }
-        area.innerHTML = data.map(c => `
-            <div class="comment-card">
-                <div class="comment-card-top">
-                    <div class="comment-author">
-                        <div class="comment-avatar">${esc(initials(c.name))}</div>
-                        <div>
-                            <div class="comment-name">${esc(c.name || 'Anonymous')}</div>
-                            <div class="comment-date">${timeAgo(c.created_at)}</div>
-                        </div>
-                    </div>
-                    ${c.rating ? `<div class="comment-stars">${starsHTML(c.rating)}</div>` : ''}
-                </div>
-                <div class="comment-body">${esc(c.message)}</div>
-            </div>`).join('');
-    } catch (err) {
-        console.error('loadComments:', err);
-        area.innerHTML = `<div class="comments-empty"><div class="empty-icon">⚠️</div><p>Could not load comments. Refresh to try again.<br><small style="opacity:0.7">${esc(err.message)}</small></p></div>`;
+    const data = getComments().sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    const count = data.length;
+    document.getElementById('commentCount').textContent = count === 1 ? '1 comment' : count + ' comments';
+    if (!count) {
+        area.innerHTML = '<div class="comments-empty"><div class="empty-icon">💭</div><p>No comments yet. Be the first to share your thoughts!</p></div>';
+        return;
     }
+    area.innerHTML = data.map(c => `
+        <div class="comment-card">
+            <div class="comment-card-top">
+                <div class="comment-author">
+                    <div class="comment-avatar">${esc(initials(c.name))}</div>
+                    <div>
+                        <div class="comment-name">${esc(c.name || 'Anonymous')}</div>
+                        <div class="comment-date">${timeAgo(c.created_at)}</div>
+                    </div>
+                </div>
+                ${c.rating ? `<div class="comment-stars">${starsHTML(c.rating)}</div>` : ''}
+                <div class="comment-menu">
+                    <button class="menu-dots" onclick="toggleMenu(this)" title="Options">
+                        <span></span><span></span>
+                    </button>
+                    <div class="menu-dropdown">
+                        <button onclick="deleteComment('${c.id}', this)">🗑 Delete</button>
+                    </div>
+                </div>
+            </div>
+            <div class="comment-body">${esc(c.message)}</div>
+        </div>`).join('');
 }
 
-async function submitComment() {
+function submitComment() {
     const nameEl    = document.getElementById('nameInput');
     const msgEl     = document.getElementById('messageInput');
     const submitBtn = document.getElementById('submitBtn');
@@ -204,41 +215,48 @@ async function submitComment() {
     const name    = nameEl.value.trim();
     const message = msgEl.value.trim();
     const rating  = ratingEl ? parseInt(ratingEl.value) : null;
-    if (!name)    { showToast('Please enter your name.', 'error');    nameEl.focus(); return; }
-    if (!message) { showToast('Please write a message.', 'error');    msgEl.focus();  return; }
+    if (!name)    { showToast('Please enter your name.', 'error');  nameEl.focus(); return; }
+    if (!message) { showToast('Please write a message.', 'error');  msgEl.focus();  return; }
+
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<span>⏳</span> Posting…';
-    try {
-        const { error } = await window.supabaseClient
-            .from('page_comments')
-            .insert([{ name, message, rating }]);
-        if (error) throw new Error(error.message || error.details || JSON.stringify(error));
-        nameEl.value = '';
-        msgEl.value  = '';
-        if (ratingEl) ratingEl.checked = false;
-        showToast('Comment posted! Thank you 🎉', 'success');
-        await loadComments();
-    } catch (err) {
-        console.error('submitComment:', err);
-        showToast('Failed: ' + (err.message || 'Unknown error'), 'error');
-    } finally {
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = '<span>🚀</span> Post Comment';
-    }
+
+    const comments = getComments();
+    comments.push({ id: generateId(), name, message, rating, created_at: new Date().toISOString() });
+    saveComments(comments);
+
+    nameEl.value = '';
+    msgEl.value  = '';
+    if (ratingEl) ratingEl.checked = false;
+    showToast('Comment posted! Thank you 🎉', 'success');
+    loadComments();
+
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = '<span>🚀</span> Post Comment';
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    const t = setInterval(() => {
-        if (window.supabaseClient) { clearInterval(t); loadComments(); }
-    }, 50);
-    setTimeout(() => {
-        clearInterval(t);
-        if (!window.supabaseClient) {
-            document.getElementById('commentsArea').innerHTML =
-                '<div class="comments-empty"><div class="empty-icon">⚠️</div><p>Could not connect to database. Check your internet and refresh.</p></div>';
-        }
-    }, 3000);
+function toggleMenu(btn) {
+    const dropdown = btn.nextElementSibling;
+    const isOpen = dropdown.classList.contains('open');
+    document.querySelectorAll('.menu-dropdown.open').forEach(d => d.classList.remove('open'));
+    if (!isOpen) dropdown.classList.add('open');
+}
+document.addEventListener('click', e => {
+    if (!e.target.closest('.comment-menu')) {
+        document.querySelectorAll('.menu-dropdown.open').forEach(d => d.classList.remove('open'));
+    }
 });
+
+function deleteComment(id, btn) {
+    if (!confirm('Delete this comment?')) return;
+    btn.closest('.menu-dropdown').classList.remove('open');
+    const updated = getComments().filter(c => c.id !== id);
+    saveComments(updated);
+    showToast('Comment deleted.', 'success');
+    loadComments();
+}
+
+document.addEventListener('DOMContentLoaded', loadComments);
 </script>
 </body>
 </html>

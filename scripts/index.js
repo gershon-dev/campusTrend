@@ -130,6 +130,18 @@ document.addEventListener('DOMContentLoaded', async function() {
  }
  async function loadPosts() {
  try {
+ // ── Show cached posts instantly so the feed is visible immediately ──
+ try {
+     const cached = localStorage.getItem(POSTS_CACHE_KEY);
+     if (cached) {
+         const { data: cachedPosts, ts } = JSON.parse(cached);
+         if (cachedPosts && Array.isArray(cachedPosts) && Date.now() - ts < POSTS_CACHE_TTL) {
+             posts = cachedPosts;
+             renderPosts();
+         }
+     }
+ } catch(e) { /* ignore cache errors */ }
+
  showLoading();
  let query = window.supabaseClient
  .from('posts')
@@ -157,8 +169,7 @@ document.addEventListener('DOMContentLoaded', async function() {
  throw error;
  }
  posts = data || [];
- if (currentUser && posts.length > 0) {
- const postIds = posts.map(p => p.id);
+ if (currentUser && posts.length > 0) { const postIds = posts.map(p => p.id);
  const userIds = [...new Set(posts.map(p => p.user_id))].filter(id => id !== currentUser.id);
  const { data: likes } = await window.supabaseClient
  .from('likes')
@@ -179,6 +190,10 @@ document.addEventListener('DOMContentLoaded', async function() {
  }));
  }
  renderPosts();
+ // Save to cache so the feed loads instantly on next visit
+ try {
+     localStorage.setItem(POSTS_CACHE_KEY, JSON.stringify({ data: posts, ts: Date.now() }));
+ } catch(e) { /* storage full */ }
  } catch (error) {
  console.error('Error loading posts:', error);
  showError('Failed to load posts. Please try refreshing the page.');
@@ -845,6 +860,10 @@ document.addEventListener('DOMContentLoaded', async function() {
      newPost._localBlobUrl = URL.createObjectURL(imageFile);
  }
  posts.unshift(newPost);
+ // Persist the updated posts array to cache so new post survives a refresh
+ try {
+     localStorage.setItem(POSTS_CACHE_KEY, JSON.stringify({ data: posts, ts: Date.now() }));
+ } catch(e) { /* storage full */ }
  const tempHTML = createPostHTML(newPost, 0);
  const tempDiv = document.createElement('div');
  tempDiv.innerHTML = tempHTML;
@@ -1063,6 +1082,9 @@ function extractDriveFileId(url) {
 
 const TUT_CACHE_KEY = 'ct_tutorials_strip';
 const TUT_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+const POSTS_CACHE_KEY = 'ct_posts_cache';
+const POSTS_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
 
 async function loadTutorialsStrip() {
     const scroll = document.getElementById('tutorialsScroll');

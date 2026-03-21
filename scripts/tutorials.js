@@ -509,13 +509,15 @@ function attachCardListeners(t) {
         }
     });
 
-    // View count — fire when user clicks on the video wrap to start it.
-    // Google Drive iframes are cross-origin so play events are not accessible
-    // from the parent page — clicking the wrap is the only reliable signal.
+    // View count — only on explicit play overlay click (not iframe load)
+    // This prevents false counts from iframes loading on page render
+    const playOverlay = document.querySelector(`#card-${t.id} .tc-play-overlay`);
+    if (playOverlay) {
+        playOverlay.addEventListener('click', () => incrementViews(t.id), { once: true });
+    }
+    // Also count for native <video> elements on actual play
     const videoWrap = document.getElementById(`video-wrap-${t.id}`);
     if (videoWrap) {
-        videoWrap.addEventListener('click', () => incrementViews(t.id), { once: true });
-        // Also handle native <video> elements
         const vid = videoWrap.querySelector('video');
         if (vid) {
             vid.addEventListener('play', () => incrementViews(t.id), { once: true });
@@ -802,18 +804,22 @@ window.submitComment = submitComment;
 
 // ─── View Count ───────────────────────────────────────────────────────────────
 const VIEWED_KEY = 'ct_viewed_tutorials';
+function getViewedKey() {
+    // Per-user key so switching accounts on same device counts correctly
+    const uid = currentUser?.id || 'guest';
+    return `${VIEWED_KEY}_${uid}`;
+}
 function getViewedSet() {
-    // Use localStorage so views persist across sessions per device
-    try { return new Set(JSON.parse(localStorage.getItem(VIEWED_KEY) || '[]')); }
+    try { return new Set(JSON.parse(localStorage.getItem(getViewedKey()) || '[]')); }
     catch { return new Set(); }
 }
 function saveViewedSet(s) {
-    try { localStorage.setItem(VIEWED_KEY, JSON.stringify([...s])); } catch {}
+    try { localStorage.setItem(getViewedKey(), JSON.stringify([...s])); } catch {}
 }
 async function incrementViews(tutorialId) {
-    const id = String(tutorialId); // always string for consistent localStorage comparison
+    const id = String(tutorialId);
     const viewed = getViewedSet();
-    if (viewed.has(id)) return; // already counted on this device
+    if (viewed.has(id)) return; // already counted for this user on this device
     viewed.add(id);
     saveViewedSet(viewed);
     try {

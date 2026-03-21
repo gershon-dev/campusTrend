@@ -3,7 +3,6 @@ function viewUserProfile(userId) {
  window.location.href = `user-profile.html?userId=${userId}`;
 }
 document.addEventListener('DOMContentLoaded', async function() {
- console.log('DOM loaded, initializing app...');
  let currentUser = null;
  let currentProfile = null;
  let posts = [];
@@ -22,7 +21,6 @@ document.addEventListener('DOMContentLoaded', async function() {
  await init();
  async function init() {
  try {
- console.log('Checking authentication...');
  const isLoggedIn = await window.isLoggedIn();
  if (!isLoggedIn) {
  // Only redirect if we're online — offline failures should not kick user out
@@ -31,14 +29,11 @@ document.addEventListener('DOMContentLoaded', async function() {
  showError('You are offline. Please check your internet connection.');
  return;
  }
- console.log('Not logged in, redirecting to sign-in...');
  window.location.href = 'sign-in.html';
  return;
  }
  currentUser = await window.getCurrentUser();
  currentProfile = await window.getCurrentProfile();
- console.log('Current user:', currentUser);
- console.log('Current profile:', currentProfile);
  if (!currentUser || !currentProfile) {
  // Don't redirect if offline — the fetch just failed due to no network
  if (!navigator.onLine) {
@@ -57,7 +52,6 @@ document.addEventListener('DOMContentLoaded', async function() {
  await loadNotifications();
  await loadTrends();
  setupEventListeners();
- console.log('App initialized successfully!');
  } catch (error) {
  console.error('Initialization error:', error);
  alert('Failed to load app. Please try refreshing the page.');
@@ -65,7 +59,6 @@ document.addEventListener('DOMContentLoaded', async function() {
  }
  function updateUserUI() {
  if (!currentProfile) return;
- console.log('Updating UI with profile:', currentProfile);
  const initials = getInitials(currentProfile.full_name);
  if (currentUserAvatar) {
  if (currentProfile.avatar_url) {
@@ -91,7 +84,6 @@ document.addEventListener('DOMContentLoaded', async function() {
  if (modalUserName) {
  modalUserName.textContent = currentProfile.full_name;
  }
- console.log('UI updated with user info');
  }
  function getInitials(name) {
  if (!name) return 'U';
@@ -138,7 +130,6 @@ document.addEventListener('DOMContentLoaded', async function() {
  }
  async function loadPosts() {
  try {
- console.log('Loading posts...');
  showLoading();
  let query = window.supabaseClient
  .from('posts')
@@ -166,7 +157,6 @@ document.addEventListener('DOMContentLoaded', async function() {
  throw error;
  }
  posts = data || [];
- console.log('Loaded posts:', posts.length);
  if (currentUser && posts.length > 0) {
  const postIds = posts.map(p => p.id);
  const userIds = [...new Set(posts.map(p => p.user_id))].filter(id => id !== currentUser.id);
@@ -566,9 +556,7 @@ document.addEventListener('DOMContentLoaded', async function() {
  }
  async function handleReply(postId, commentId, content) {
  try {
- console.log('Sending reply:', { postId, commentId, content });
  const result = await window.addComment(postId, content, commentId);
- console.log('Reply result:', result);
  if (result.success) {
  const replyContainer = document.querySelector(`.reply-input-container[data-comment-id="${commentId}"]`);
  if (replyContainer) {
@@ -590,7 +578,6 @@ document.addEventListener('DOMContentLoaded', async function() {
  try {
  const result = await window.getComments(postId);
  if (result.success) {
- console.log('All comments for post', postId, ':', result.comments);
  const commentsList = document.querySelector(`.comments-list[data-post-id="${postId}"]`);
  if (commentsList) {
  renderComments(commentsList, result.comments, postId);
@@ -602,7 +589,6 @@ document.addEventListener('DOMContentLoaded', async function() {
  }
  function renderComments(container, comments, postId) {
  if (!container || !comments) return;
- console.log('renderComments called with', comments.length, 'comments');
  if (comments.length === 0) {
  container.innerHTML = '<p class="no-comments-text" style="text-align: center; color: #65676b; padding: 10px;">No comments yet. Be the first to comment!</p>';
  return;

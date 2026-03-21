@@ -118,7 +118,7 @@ async function recordPayment(paymentData) {
             payment_status: 'pending'
         };
 
-        console.log('Recording payment (guest mode):', paymentRecord);
+       
 
         const { data, error } = await window.supabaseClient
             .from('payments')
@@ -131,8 +131,7 @@ async function recordPayment(paymentData) {
             throw error;
         }
 
-        console.log('Payment recorded successfully:', data);
-        return { success: true, data };
+        
     } catch (error) {
         console.error('Error recording payment:', error);
         return { success: false, error: error.message, details: error };

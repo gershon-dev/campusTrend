@@ -275,10 +275,7 @@ async function loadTutorials() {
 
 function updateHeroStats() {
     const uniqueTutors = new Set(allTutorials.map(t => t.user_id)).size;
-    const totalViews   = allTutorials.reduce((s, t) => s + (t.views_count || 0), 0);
-    document.getElementById('heroTotalVideos').textContent = formatCount(allTutorials.length);
     document.getElementById('heroTotalTutors').textContent = formatCount(uniqueTutors);
-    document.getElementById('heroTotalViews').textContent  = formatCount(totalViews);
 
     // week stats (approximate using created_at in last 7 days)
     const weekAgo = Date.now() - 7 * 24 * 3600 * 1000;
@@ -512,18 +509,18 @@ function attachCardListeners(t) {
         }
     });
 
-    // View count on video play
+    // View count — only on explicit play overlay click (not iframe load)
+    // This prevents false counts from iframes loading on page render
+    const playOverlay = document.querySelector(`#card-${t.id} .tc-play-overlay`);
+    if (playOverlay) {
+        playOverlay.addEventListener('click', () => incrementViews(t.id), { once: true });
+    }
+    // Also count for native <video> elements on actual play
     const videoWrap = document.getElementById(`video-wrap-${t.id}`);
     if (videoWrap) {
         const vid = videoWrap.querySelector('video');
         if (vid) {
             vid.addEventListener('play', () => incrementViews(t.id), { once: true });
-        }
-        const iframe = videoWrap.querySelector('iframe');
-        if (iframe) {
-            iframe.addEventListener('load', () => {
-                setTimeout(() => incrementViews(t.id), 2000);
-            }, { once: true });
         }
     }
 }
@@ -808,21 +805,29 @@ window.submitComment = submitComment;
 // ─── View Count ───────────────────────────────────────────────────────────────
 const VIEWED_KEY = 'ct_viewed_tutorials';
 function getViewedSet() {
-    try { return new Set(JSON.parse(sessionStorage.getItem(VIEWED_KEY) || '[]')); }
+    // Use localStorage so views persist across sessions per device
+    try { return new Set(JSON.parse(localStorage.getItem(VIEWED_KEY) || '[]')); }
     catch { return new Set(); }
 }
 function saveViewedSet(s) {
-    try { sessionStorage.setItem(VIEWED_KEY, JSON.stringify([...s])); } catch {}
+    try { localStorage.setItem(VIEWED_KEY, JSON.stringify([...s])); } catch {}
 }
 async function incrementViews(tutorialId) {
     const viewed = getViewedSet();
-    if (viewed.has(tutorialId)) return;
+    if (viewed.has(tutorialId)) return; // already counted on this device
     viewed.add(tutorialId);
     saveViewedSet(viewed);
     try {
-        const tut = allTutorials.find(t => t.id === tutorialId);
+        // Fetch the true current count from DB to avoid stale read-modify-write
+        const { data: tut } = await window.supabaseClient
+            .from('tutorials')
+            .select('views_count')
+            .eq('id', tutorialId)
+            .single();
         const newCount = (tut?.views_count || 0) + 1;
-        if (tut) tut.views_count = newCount;
+        // Update local data array
+        const local = allTutorials.find(t => t.id === tutorialId);
+        if (local) local.views_count = newCount;
         const viewEl = document.querySelector(`#card-${tutorialId} .tc-views span`);
         if (viewEl) viewEl.textContent = formatCount(newCount);
         await window.supabaseClient

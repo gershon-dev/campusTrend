@@ -450,7 +450,10 @@ const state = {
 
 let currentView = 'home';
 let viewHistory = [];          // for back-navigation
-let isAdmin = false;
+// ── Put YOUR admin email here ──────────────────────────────────────────
+    const ADMIN_EMAIL = 'gershonn767@gmail.com';
+    // ────────────────────────────────────────────────────────────────────────
+    let isAdmin = false;
 let pendingDeleteId   = null;
 let pendingDeletePath = null;
 
@@ -675,7 +678,7 @@ async function loadQuestions() {
     // Check admin status
     try {
         const userResult = await window.authFunctions.getCurrentUser();
-        isAdmin = userResult.user?.profile?.is_admin === true;
+        isAdmin = !!(userResult.user && userResult.user.email === ADMIN_EMAIL);
     } catch(e) { isAdmin = false; }
 
     // Build filters
@@ -720,7 +723,7 @@ function renderQuestions(questions) {
                     ${q.course_code ? q.course_code + ' — ' : ''}${q.course_name || ''}
                 </div>
                 <div class="question-meta">
-                    Year: ${q.year || 'N/A'}
+                    Year: ${q.year || 'N/A'}${isAdmin ? ' &nbsp;|&nbsp; Downloads: ' + (q.download_count || 0) : ''}
                 </div>
                 ${q.is_free
                     ? '<span class="free-badge">FREE</span>'

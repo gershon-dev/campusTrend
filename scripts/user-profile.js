@@ -531,9 +531,12 @@ async function renderPosts(posts) {
                 ${post.content ? `<div class="post-description">${escapeHtml(post.content)}</div>` : ''}
 
                 <div class="post-image-container">
-                    ${post.image_url ? 
-                        `<img src="${post.image_url}" alt="Post image" class="post-image" loading="lazy">` :
-                        '<div style="padding:60px;text-align:center;color:#65676b"><i class="fas fa-image" style="font-size:48px"></i></div>'
+                    ${(() => {
+                        const src = post.media_url || post.image_url;
+                        if (!src) return '<div style="padding:60px;text-align:center;color:#65676b"><i class="fas fa-image" style="font-size:48px"></i></div>';
+                        if (post.media_type === 'video') return `<video src="${src}" class="post-image" controls playsinline preload="metadata" style="width:100%;display:block;background:#000;"></video>`;
+                        return `<img src="${src}" alt="Post image" class="post-image" loading="lazy">`;
+                    })()
                     }
                     ${rating.stars > 0 ? `
                         <div class="post-star-badge">

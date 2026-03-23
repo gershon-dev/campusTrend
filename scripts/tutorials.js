@@ -128,7 +128,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
-// Show cached tutorials immediately — zero network requests
+// Show cached tutorials immediately — zero network requests.
+// IMPORTANT: do NOT call renderTutorials/applyFilters here because
+// buildTutorialCard uses currentUser.id which is null at this point.
+// Cards are rendered after auth completes in loadTutorials().
 function showCachedTutorials() {
     try {
         const raw = localStorage.getItem(TUT_PAGE_CACHE_KEY);
@@ -136,12 +139,10 @@ function showCachedTutorials() {
         const { tutorials: cached, ts } = JSON.parse(raw);
         if (!cached || Date.now() - ts > TUT_PAGE_CACHE_TTL) return;
 
-        // Render cached data instantly
         allTutorials = cached;
         filteredList = [...cached];
-        document.getElementById('skeletonCard')?.remove();
+        // Only safe to update stat widgets here — no card rendering yet
         updateHeroStats();
-        applyFilters();
         renderTopTutors();
         renderTrendingTopics();
     } catch (e) { /* ignore cache errors */ }
@@ -275,15 +276,15 @@ async function loadTutorials() {
 
 function updateHeroStats() {
     const uniqueTutors = new Set(allTutorials.map(t => t.user_id)).size;
-    document.getElementById('heroTotalTutors').textContent = formatCount(uniqueTutors);
+    const el = id => document.getElementById(id);
+    if (el('heroTotalTutors')) el('heroTotalTutors').textContent = formatCount(uniqueTutors);
 
-    // week stats (approximate using created_at in last 7 days)
-    const weekAgo = Date.now() - 7 * 24 * 3600 * 1000;
+    const weekAgo  = Date.now() - 7 * 24 * 3600 * 1000;
     const weekTuts = allTutorials.filter(t => new Date(t.created_at) > weekAgo);
-    document.getElementById('weekUploads').textContent = weekTuts.length;
-    document.getElementById('weekLikes').textContent   = formatCount(weekTuts.reduce((s,t)=>s+(t.likes_count||0),0));
-    document.getElementById('weekTutors').textContent  = new Set(weekTuts.map(t=>t.user_id)).size;
-    document.getElementById('countAll').textContent    = allTutorials.length;
+    if (el('weekUploads')) el('weekUploads').textContent = weekTuts.length;
+    if (el('weekLikes'))   el('weekLikes').textContent   = formatCount(weekTuts.reduce((s,t)=>s+(t.likes_count||0),0));
+    if (el('weekTutors'))  el('weekTutors').textContent  = new Set(weekTuts.map(t=>t.user_id)).size;
+    if (el('countAll'))    el('countAll').textContent    = allTutorials.length;
 }
 
 // ─── Filtering & Search ───────────────────────────────────────────────────────
@@ -369,7 +370,7 @@ function buildTutorialCard(t) {
         : initials;
     const isLiked     = myLikes.has(t.id);
     const isFollowing = myFollowing.has(t.user_id);
-    const isOwn       = t.user_id === currentUser.id;
+    const isOwn       = currentUser && t.user_id === currentUser.id;
     const tags        = (t.tags || []).slice(0, 4);
 
     const videoEmbed = buildVideoEmbed(t.video_url);
@@ -447,7 +448,7 @@ function buildTutorialCard(t) {
         <!-- Comments -->
         <div class="tc-comments" id="comments-${t.id}">
             <div class="tc-comment-input-wrap">
-                <div class="tc-comment-avatar">${getInitials(currentProfile.full_name)}</div>
+                <div class="tc-comment-avatar">${getInitials(currentProfile?.full_name || '')}</div>
                 <input class="tc-comment-input" id="comment-input-${t.id}"
                        placeholder="Write a comment…" type="text"
                        onkeypress="handleCommentKey(event, '${t.id}')">
@@ -470,6 +471,14 @@ function buildVideoEmbed(url) {
         <div class="tc-video-thumb" style="background:#1a1a2e;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;">
             <i class="fas fa-video" style="font-size:2.5rem;color:rgba(255,255,255,0.2);"></i>
         </div>`;
+    }
+
+    // Cloudinary video — render as native <video> element
+    if (url.includes('res.cloudinary.com')) {
+        return `<video src="${escHtml(url)}"
+                       controls playsinline preload="metadata"
+                       style="width:100%;aspect-ratio:16/9;background:#000;display:block;border-radius:0;">
+                </video>`;
     }
 
     // Google Drive — extract file ID and build /preview embed URL
@@ -877,32 +886,91 @@ function isValidDriveUrl(url) {
     return !!extractDriveId(url);
 }
 
-// Live preview: watch the URL input and show embed as student types
-function initYouTubePreview() {
-    const input    = document.getElementById('videoUrlInput');
-    const preview  = document.getElementById('ytPreview');
-    const frame    = document.getElementById('ytPreviewFrame');
-    const clearBtn = document.getElementById('clearYtUrl');
-    let debounce;
+// ─── Cloudinary File Picker ───────────────────────────────────────────────────
+const CLOUDINARY_CLOUD_NAME   = 'deyu6uccg';
+const CLOUDINARY_UPLOAD_PRESET = 'campus_app_uploads';
 
-    input?.addEventListener('input', () => {
-        clearTimeout(debounce);
-        debounce = setTimeout(() => {
-            const driveId = extractDriveId(input.value.trim());
-            if (driveId) {
-                frame.src = buildDriveEmbedUrl(driveId);
-                preview.classList.add('show');
-            } else {
-                preview.classList.remove('show');
-                frame.src = '';
-            }
-        }, 700);
+let selectedVideoFile = null; // holds the File chosen by the user
+
+function initVideoFilePicker() {
+    const input       = document.getElementById('videoFileInput');
+    const dropZone    = document.getElementById('videoDropZone');
+    const content     = document.getElementById('dropZoneContent');
+    const selected    = document.getElementById('dropZoneSelected');
+    const nameEl      = document.getElementById('selectedFileName');
+    const sizeEl      = document.getElementById('selectedFileSize');
+    const clearBtn    = document.getElementById('clearVideoFile');
+
+    if (!input) return;
+
+    function formatBytes(bytes) {
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function applyFile(file) {
+        if (!file || !file.type.startsWith('video/')) {
+            showToast('Please select a valid video file', 'error');
+            return;
+        }
+        if (file.size > 500 * 1024 * 1024) {
+            showToast('Video must be under 500 MB', 'error');
+            return;
+        }
+        selectedVideoFile = file;
+        nameEl.textContent = file.name;
+        sizeEl.textContent = formatBytes(file.size);
+        content.style.display  = 'none';
+        selected.style.display = 'flex';
+    }
+
+    input.addEventListener('change', () => { if (input.files[0]) applyFile(input.files[0]); });
+
+    // Drag-and-drop
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+    dropZone.addEventListener('drop', e => {
+        e.preventDefault();
+        dropZone.classList.remove('drag-over');
+        const file = e.dataTransfer.files[0];
+        if (file) applyFile(file);
     });
 
-    clearBtn?.addEventListener('click', () => {
+    clearBtn?.addEventListener('click', e => {
+        e.stopPropagation();
+        selectedVideoFile = null;
         input.value = '';
-        preview.classList.remove('show');
-        frame.src = '';
+        content.style.display  = '';
+        selected.style.display = 'none';
+    });
+}
+
+async function uploadVideoToCloudinary(file, onProgress) {
+    const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/video/upload`;
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        const fd  = new FormData();
+        fd.append('file', file);
+        fd.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+        fd.append('resource_type', 'video');
+
+        xhr.upload.addEventListener('progress', e => {
+            if (e.lengthComputable && typeof onProgress === 'function') {
+                onProgress(Math.round((e.loaded / e.total) * 100));
+            }
+        });
+        xhr.addEventListener('load', () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                const data = JSON.parse(xhr.responseText);
+                resolve(data.secure_url);
+            } else {
+                const err = JSON.parse(xhr.responseText);
+                reject(new Error(err.error?.message || 'Upload failed'));
+            }
+        });
+        xhr.addEventListener('error', () => reject(new Error('Network error during upload')));
+        xhr.open('POST', url);
+        xhr.send(fd);
     });
 }
 
@@ -916,40 +984,71 @@ function closeUploadModal() {
 }
 
 function resetUploadForm() {
-    ['videoTitle','videoDesc','videoTags','videoCourse','videoUrlInput'].forEach(id => {
+    ['videoTitle','videoDesc','videoTags','videoCourse'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
     });
     document.getElementById('videoDepartment').value = '';
-    
-    // Clear YouTube preview
-    const preview = document.getElementById('ytPreview');
-    const frame   = document.getElementById('ytPreviewFrame');
-    if (preview) preview.classList.remove('show');
-    if (frame)   frame.src = '';
+
+    // Reset file picker
+    selectedVideoFile = null;
+    const input = document.getElementById('videoFileInput');
+    if (input) input.value = '';
+    const content  = document.getElementById('dropZoneContent');
+    const selected = document.getElementById('dropZoneSelected');
+    if (content)  content.style.display  = '';
+    if (selected) selected.style.display = 'none';
+
+    // Hide progress bar
+    const progressWrap = document.getElementById('uploadProgressWrap');
+    if (progressWrap) progressWrap.style.display = 'none';
+    const bar = document.getElementById('uploadProgressBar');
+    if (bar) bar.style.width = '0%';
 }
 
 async function submitTutorial() {
-    const videoUrl = (document.getElementById('videoUrlInput')?.value || '').trim();
-    const title    = (document.getElementById('videoTitle')?.value || '').trim();
-    const dept     = document.getElementById('videoDepartment')?.value || '';
-    const desc     = (document.getElementById('videoDesc')?.value || '').trim();
-    const tags     = (document.getElementById('videoTags')?.value || '').split(',').map(t => t.trim()).filter(Boolean);
-    const course   = (document.getElementById('videoCourse')?.value || '').trim();
+    const title  = (document.getElementById('videoTitle')?.value || '').trim();
+    const dept   = document.getElementById('videoDepartment')?.value || '';
+    const desc   = (document.getElementById('videoDesc')?.value || '').trim();
+    const tags   = (document.getElementById('videoTags')?.value || '').split(',').map(t => t.trim()).filter(Boolean);
+    const course = (document.getElementById('videoCourse')?.value || '').trim();
+
     // Validation
-    if (!videoUrl || !isValidDriveUrl(videoUrl)) {
-        showToast('Please paste a valid Google Drive link', 'error');
-        document.getElementById('videoUrlInput')?.focus();
+    if (!selectedVideoFile) {
+        showToast('Please select a video file to upload', 'error');
         return;
     }
     if (!title) { showToast('Please enter a video title', 'error'); return; }
     if (!dept)  { showToast('Please select a department', 'error'); return; }
-    
+
     const btn = document.getElementById('submitTutorialBtn');
     btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Publishing…';
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading…';
+
+    // Show progress bar
+    const progressWrap = document.getElementById('uploadProgressWrap');
+    const progressBar  = document.getElementById('uploadProgressBar');
+    const percentEl    = document.getElementById('uploadPercent');
+    const statusEl     = document.getElementById('uploadStatusText');
+    if (progressWrap) progressWrap.style.display = 'block';
 
     try {
+        // ── Step 1: Upload video to Cloudinary ──────────────────────────────
+        let videoUrl;
+        try {
+            videoUrl = await uploadVideoToCloudinary(selectedVideoFile, (pct) => {
+                if (progressBar) progressBar.style.width = pct + '%';
+                if (percentEl)   percentEl.textContent   = pct + '%';
+            });
+        } catch (uploadErr) {
+            showToast('Upload failed: ' + uploadErr.message, 'error');
+            return;
+        }
+
+        // ── Step 2: Save tutorial record to Supabase ────────────────────────
+        if (statusEl) statusEl.textContent = 'Saving tutorial…';
+        if (progressBar) progressBar.style.width = '100%';
+
         const { data, error } = await window.supabaseClient
             .from('tutorials')
             .insert({
@@ -962,7 +1061,7 @@ async function submitTutorial() {
                 tags,
                 video_url:      videoUrl,
                 likes_count:    0,
-                views_count:    50,
+                views_count:    0,
                 comments_count: 0,
             })
             .select('id, title, course_name, course_code, department, description, tags, video_url, likes_count, views_count, comments_count, created_at, user_id')
@@ -998,6 +1097,8 @@ async function submitTutorial() {
     } finally {
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-paper-plane"></i> Publish Tutorial';
+        if (progressWrap) progressWrap.style.display = 'none';
+        if (progressBar)  progressBar.style.width = '0%';
     }
 }
 
@@ -1100,8 +1201,8 @@ function setupEventListeners() {
     // Submit
     document.getElementById('submitTutorialBtn')?.addEventListener('click', submitTutorial);
 
-    // YouTube live preview
-    initYouTubePreview();
+    // Video file picker
+    initVideoFilePicker();
 
 
 

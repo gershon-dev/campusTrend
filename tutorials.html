@@ -20,6 +20,28 @@
     <meta name="theme-color" content="#1877f2">
 
     <link rel="stylesheet" href="styles/tutorials.css">
+    <style>
+        .video-drop-zone {
+            position: relative;
+            border: 2px dashed var(--border, #ddd);
+            border-radius: 12px;
+            padding: 28px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.2s, background 0.2s;
+            background: var(--bg-secondary, #f8f9fa);
+        }
+        .video-drop-zone:hover, .video-drop-zone.drag-over {
+            border-color: var(--brand, #1877f2);
+            background: rgba(24,119,242,0.04);
+        }
+        .drop-zone-selected {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-align: left;
+        }
+    </style>
 </head>
 <body>
 
@@ -233,64 +255,48 @@
     <div class="modal-box">
         <div class="modal-head">
             <h2 class="modal-title">
-                <i class="fab fa-google-drive" style="color:#1a73e8;margin-right:8px;"></i>Post a Tutorial
+                <i class="fas fa-video" style="color:var(--brand);margin-right:8px;"></i>Post a Tutorial
             </h2>
             <button class="modal-close-btn" id="closeUploadModal"><i class="fas fa-times"></i></button>
         </div>
         <div class="modal-body">
 
-            <!-- ① Google Drive How-To Guide -->
-            <div class="yt-guide">
-                <div class="yt-guide-title">
-                    <i class="fab fa-google-drive"></i> How to share your video in 3 steps
-                </div>
-                <div class="yt-steps">
-                    <div class="yt-step">
-                        <div class="yt-step-num">1</div>
-                        <div class="yt-step-text">
-                            Go to <strong>drive.google.com</strong> and upload your video file.
-                            Any format works — MP4, MOV, AVI, etc.
-                        </div>
-                    </div>
-                    <div class="yt-step">
-                        <div class="yt-step-num">2</div>
-                        <div class="yt-step-text">
-                            Right-click the uploaded video → <strong>Share</strong> →
-                            under <em>General access</em> change it to
-                            <code>Anyone with the link</code>, then click <strong>Done</strong>.
-                        </div>
-                    </div>
-                    <div class="yt-step">
-                        <div class="yt-step-num">3</div>
-                        <div class="yt-step-text">
-                            Click <strong>Copy link</strong> and paste it below ↓
-                            (e.g. <code>https://drive.google.com/file/d/…/view</code>)
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ② Google Drive URL + live preview -->
+            <!-- ① Video File Upload -->
             <div class="form-group">
-                <label class="form-label" for="videoUrlInput">
-                    Google Drive Link <span>*</span>
-                </label>
-                <div class="yt-url-wrap">
-                    <i class="fab fa-google-drive yt-icon"></i>
-                    <input type="url" class="yt-url-input" id="videoUrlInput"
-                           placeholder="https://drive.google.com/file/d/…/view?usp=sharing">
-                </div>
-                <!-- Live embed preview -->
-                <div class="yt-preview" id="ytPreview">
-                    <iframe id="ytPreviewFrame" allowfullscreen loading="lazy"
-                            allow="autoplay">
-                    </iframe>
-                    <div class="yt-preview-info">
-                        <i class="fab fa-google-drive"></i>
-                        <span>Preview looks good? Fill in the details below and publish.</span>
-                        <button class="yt-preview-clear" id="clearYtUrl" title="Remove">
-                            <i class="fas fa-times"></i> Clear
+                <label class="form-label">Video File <span>*</span></label>
+
+                <!-- Drop zone -->
+                <div class="video-drop-zone" id="videoDropZone">
+                    <input type="file" id="videoFileInput" accept="video/*"
+                           style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;">
+                    <div class="drop-zone-content" id="dropZoneContent">
+                        <i class="fas fa-cloud-upload-alt" style="font-size:2.2rem;color:var(--brand);margin-bottom:10px;"></i>
+                        <div style="font-weight:600;font-size:0.95rem;margin-bottom:4px;">Click or drag a video here</div>
+                        <div style="font-size:0.8rem;color:var(--text-muted);">MP4, MOV, AVI, MKV · Max 500 MB</div>
+                    </div>
+                    <!-- Selected file name -->
+                    <div class="drop-zone-selected" id="dropZoneSelected" style="display:none;">
+                        <i class="fas fa-film" style="color:var(--brand);font-size:1.4rem;"></i>
+                        <div>
+                            <div id="selectedFileName" style="font-weight:600;font-size:0.9rem;word-break:break-all;"></div>
+                            <div id="selectedFileSize" style="font-size:0.78rem;color:var(--text-muted);margin-top:2px;"></div>
+                        </div>
+                        <button type="button" id="clearVideoFile"
+                                style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:1.1rem;">
+                            <i class="fas fa-times"></i>
                         </button>
+                    </div>
+                </div>
+
+                <!-- Upload progress bar (hidden until upload starts) -->
+                <div id="uploadProgressWrap" style="display:none;margin-top:10px;">
+                    <div style="display:flex;justify-content:space-between;font-size:0.8rem;color:var(--text-muted);margin-bottom:4px;">
+                        <span id="uploadStatusText">Uploading…</span>
+                        <span id="uploadPercent">0%</span>
+                    </div>
+                    <div style="background:var(--border);border-radius:99px;height:7px;overflow:hidden;">
+                        <div id="uploadProgressBar"
+                             style="height:100%;background:linear-gradient(90deg,#1877f2,#00c6ff);border-radius:99px;width:0%;transition:width 0.3s ease;"></div>
                     </div>
                 </div>
             </div>
@@ -368,9 +374,9 @@
 </div>
 
 <!-- Scripts -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
-<script src="supabase-config.js" defer></script>
-<script src="scripts/tutorials.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" ></script>
+<script src="supabase-config.js" ></script>
+<script src="scripts/tutorials.js" ></script>
 
 </body>
 </html>

@@ -322,7 +322,7 @@
                     <textarea
                         class="form-textarea"
                         id="postDescription"
-                        placeholder="Write something about your image..."
+                        placeholder="Write something about your photo or video..."
                         maxlength="2000"
                         aria-describedby="charCountLabel"
                     ></textarea>
@@ -332,27 +332,43 @@
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label" for="imageInput">Image <span aria-hidden="true">*</span><span class="sr-only">required</span></label>
+                    <label class="form-label" for="imageInput">Photo / Video <span aria-hidden="true">*</span><span class="sr-only">required</span></label>
                     <div
                         class="image-upload-area"
                         id="imageUploadArea"
                         role="group"
                         tabindex="0"
-                        aria-label="Click to upload an image"
+                        aria-label="Click to upload an image or video"
                     >
                         <div class="upload-placeholder" id="uploadPlaceholder">
                             <i class="fas fa-cloud-upload-alt upload-icon" aria-hidden="true"></i>
-                            <div class="upload-text">Click to upload image</div>
-                            <div class="upload-subtext">JPG, PNG or GIF (Max 10MB)</div>
+                            <div class="upload-text">Click to upload photo or video</div>
+                            <div class="upload-subtext">JPG, PNG, GIF, MP4, MOV (Max 100MB)</div>
+                            <div class="upload-type-badges">
+                                <span class="upload-badge"><i class="fas fa-image"></i> Photo</span>
+                                <span class="upload-badge"><i class="fas fa-video"></i> Video</span>
+                            </div>
                         </div>
-                        <div class="image-preview-container" id="imagePreviewContainer">
-                            <img src="#" alt="Selected image preview" class="image-preview" id="imagePreview">
-                            <button class="remove-image-btn" id="removeImageBtn" aria-label="Remove selected image">
+                        <div class="image-preview-container" id="imagePreviewContainer" style="display:none;">
+                            <img src="#" alt="Selected image preview" class="image-preview" id="imagePreview" style="display:none;">
+                            <video id="videoPreview" class="image-preview" controls playsinline style="display:none; background:#000;"></video>
+                            <button class="remove-image-btn" id="removeImageBtn" aria-label="Remove selected file">
                                 <i class="fas fa-times" aria-hidden="true"></i>
                             </button>
                         </div>
                     </div>
-                    <input type="file" class="hidden-input" id="imageInput" accept="image/*" aria-label="Upload image file">
+                    <input type="file" class="hidden-input" id="imageInput" accept="image/*,video/*" aria-label="Upload image or video file">
+                </div>
+
+                <!-- Upload Progress Bar -->
+                <div id="uploadProgressContainer" style="display:none; margin-top: 8px;">
+                    <div style="display:flex; justify-content:space-between; font-size:12px; color:#65676b; margin-bottom:4px;">
+                        <span>Uploading to cloud...</span>
+                        <span id="uploadProgressText">0%</span>
+                    </div>
+                    <div style="background:#e4e6eb; border-radius:99px; height:6px; overflow:hidden;">
+                        <div id="uploadProgressBar" style="background: linear-gradient(90deg,#667eea,#764ba2); height:6px; border-radius:99px; width:0%; transition:width 0.2s ease;"></div>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">

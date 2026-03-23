@@ -1463,6 +1463,35 @@
             color: #5f6368;
         }
 
+        .upload-type-badges {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            margin-top: 12px;
+        }
+
+        .upload-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 12px;
+            border-radius: 99px;
+            background: #e7f3ff;
+            color: #1877f2;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .upload-badge i {
+            font-size: 11px;
+        }
+
+        video.image-preview {
+            object-fit: contain;
+            background: #000;
+            max-height: 280px;
+        }
+
         .image-preview-container {
             position: relative;
             display: none;

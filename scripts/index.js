@@ -271,7 +271,8 @@ document.addEventListener('DOMContentLoaded', async function() {
  const initials = getInitials(profile.full_name || 'User');
  const timeAgo = window.timeAgo(post.created_at);
  const isOwnPost = currentUser && post.user_id === currentUser.id;
- const starRating = window.getStarRating(post.likes_count);
+ // STAR RATING LOCKED: const starRating = window.getStarRating(post.likes_count);
+ const starRating = { stars: 0, label: '' }; // locked
  const isLCP = index === 0;
  const avatarHTML = profile.avatar_url
  ? `<img src="${profile.avatar_url}" alt="${escapeHTML(profile.full_name || 'User')}" width="40" height="40" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" loading="${isLCP ? 'eager' : 'lazy'}" decoding="async">`
@@ -310,21 +311,27 @@ document.addEventListener('DOMContentLoaded', async function() {
  <p class="description-text ${needsTruncation ? 'truncated' : ''}" data-full-text="${escapeHTML(description)}">${escapeHTML(truncatedDescription)}${needsTruncation ? ` <button class="see-more-btn" data-action="expand" aria-expanded="false">See more</button>` : ''}</p>
  </div>
  ` : ''}
- ${post.image_url ? `
+ ${(post.image_url || post.media_url) ? `
  <div class="post-image-container">
+ ${(post.media_type === 'video') ? `
+ <video
+ src="${post.media_url || post.image_url}"
+ class="post-video"
+ controls
+ playsinline
+ preload="metadata"
+ style="width:100%;max-height:500px;border-radius:12px;background:#000;"
+ ></video>
+ ` : `
  <img
- src="${post.image_url}"
+ src="${post.image_url || post.media_url}"
  alt="Post by ${escapeHTML(profile.full_name || 'user')}${description ? ': ' + escapeHTML(description.substring(0, 100)) : ''}"
  class="post-image"
  ${isLCP ? 'fetchpriority="high" loading="eager"' : 'loading="lazy"'}
  decoding="${isLCP ? 'sync' : 'async'}"
  >
- ${starRating.stars > 0 ? `
- <div class="star-rating-badge stars-${starRating.stars}" aria-label="${starRating.stars} star${starRating.stars > 1 ? 's' : ''} - ${starRating.label}">
- ${Array(starRating.stars).fill('<i class="fas fa-star" aria-hidden="true"></i>').join('')}
- <span class="star-rating-label">${starRating.label}</span>
- </div>
- ` : ''}
+ `}
+ /* STAR RATING LOCKED */
  </div>
  ` : ''}
  <div class="post-stats" aria-label="Post statistics">
@@ -473,6 +480,7 @@ document.addEventListener('DOMContentLoaded', async function() {
  if (likesCount) {
  likesCount.textContent = post.likes_count;
  }
+ /* STAR RATING LOCKED — uncomment to re-enable
  const starRating = window.getStarRating(post.likes_count);
  const imageContainer = postCard.querySelector('.post-image-container');
  if (imageContainer) {
@@ -499,6 +507,7 @@ document.addEventListener('DOMContentLoaded', async function() {
  starBadge.remove();
  }
  }
+ END STAR RATING LOCKED */
  }
  }
  } catch (error) {
@@ -786,17 +795,27 @@ document.addEventListener('DOMContentLoaded', async function() {
  });
  }
  if (imageInput) {
+ // Accept images AND videos
+ imageInput.setAttribute('accept', 'image/*,video/*');
  imageInput.addEventListener('change', (e) => {
  const file = e.target.files[0];
  if (file) {
+ const isVideo = file.type.startsWith('video/');
+ const videoPreviewEl = document.getElementById('videoPreview');
+ if (isVideo) {
+ if (videoPreviewEl) { videoPreviewEl.src = URL.createObjectURL(file); videoPreviewEl.style.display = 'block'; }
+ if (imagePreview) { imagePreview.src = ''; imagePreview.style.display = 'none'; }
+ } else {
  const reader = new FileReader();
- reader.onload = (e) => {
- if (imagePreview) imagePreview.src = e.target.result;
+ reader.onload = (evt) => {
+ if (imagePreview) { imagePreview.src = evt.target.result; imagePreview.style.display = 'block'; }
+ if (videoPreviewEl) { videoPreviewEl.src = ''; videoPreviewEl.style.display = 'none'; }
+ };
+ reader.readAsDataURL(file);
+ }
  if (uploadPlaceholder) uploadPlaceholder.style.display = 'none';
  if (imagePreviewContainer) imagePreviewContainer.style.display = 'block';
  checkFormValidity();
- };
- reader.readAsDataURL(file);
  }
  });
  }
@@ -804,6 +823,9 @@ document.addEventListener('DOMContentLoaded', async function() {
  removeImageBtn.addEventListener('click', (e) => {
  e.stopPropagation();
  if (imageInput) imageInput.value = '';
+ if (imagePreview) { imagePreview.src = ''; imagePreview.style.display = 'none'; }
+ const videoPreviewEl = document.getElementById('videoPreview');
+ if (videoPreviewEl) { videoPreviewEl.src = ''; videoPreviewEl.style.display = 'none'; }
  if (uploadPlaceholder) uploadPlaceholder.style.display = 'flex';
  if (imagePreviewContainer) imagePreviewContainer.style.display = 'none';
  checkFormValidity();
@@ -834,33 +856,50 @@ document.addEventListener('DOMContentLoaded', async function() {
  const department = currentProfile?.department || '';
  const imageFile = imageInput?.files[0];
  if (!imageFile) {
- showToast('Please select an image', 'error');
+ showToast('Please select an image or video', 'error');
  return;
  }
+ const isVideo = imageFile.type.startsWith('video/');
  const submitBtnText = document.getElementById('submitBtnText');
  if (submitPostBtn) submitPostBtn.disabled = true;
- if (submitBtnText) submitBtnText.textContent = 'Posting...';
- const result = await window.createPost(description, imageFile, department);
+ if (submitBtnText) submitBtnText.textContent = isVideo ? 'Uploading video...' : 'Uploading...';
+
+ // Show progress bar if it exists in the DOM
+ const progressBar = document.getElementById('uploadProgressBar');
+ const progressContainer = document.getElementById('uploadProgressContainer');
+ if (progressContainer) progressContainer.style.display = 'block';
+ if (progressBar) progressBar.style.width = '0%';
+
+ const result = await window.createPost(description, imageFile, department, 'public', (percent) => {
+ if (progressBar) progressBar.style.width = percent + '%';
+ const progressText = document.getElementById('uploadProgressText');
+ if (progressText) progressText.textContent = percent + '%';
+ if (submitBtnText) submitBtnText.textContent = `Uploading... ${percent}%`;
+ });
+
+ if (progressContainer) progressContainer.style.display = 'none';
+
  if (result.success) {
  showToast('Post created successfully!', 'success');
  if (postDescription) postDescription.value = '';
  if (charCount) charCount.textContent = '0';
  if (imageInput) imageInput.value = '';
+ if (imagePreview) { imagePreview.src = ''; imagePreview.style.display = 'none'; }
+ const videoPreviewEl = document.getElementById('videoPreview');
+ if (videoPreviewEl) { videoPreviewEl.src = ''; videoPreviewEl.style.display = 'none'; }
  if (uploadPlaceholder) uploadPlaceholder.style.display = 'flex';
  if (imagePreviewContainer) imagePreviewContainer.style.display = 'none';
  uploadModal.classList.remove('show');
 
- // Prepend the new post directly from the returned data so the image
- // shows immediately without waiting for the CDN to propagate.
- // Use a local blob URL for the image so it renders instantly.
  const newPost = result.post;
  newPost.isLiked = false;
  newPost.isFollowing = false;
- if (imageFile && newPost.image_url) {
+ // Use local blob URL so media shows instantly before CDN propagates
+ if (imageFile && (newPost.image_url || newPost.media_url)) {
      newPost._localBlobUrl = URL.createObjectURL(imageFile);
+     newPost._localIsVideo = isVideo;
  }
  posts.unshift(newPost);
- // Persist the updated posts array to cache so new post survives a refresh
  try {
      localStorage.setItem(POSTS_CACHE_KEY, JSON.stringify({ data: posts, ts: Date.now() }));
  } catch(e) { /* storage full */ }
@@ -868,10 +907,14 @@ document.addEventListener('DOMContentLoaded', async function() {
  const tempDiv = document.createElement('div');
  tempDiv.innerHTML = tempHTML;
  const newCard = tempDiv.firstElementChild;
- // Swap in the local blob URL so the image shows before CDN is ready
  if (newPost._localBlobUrl) {
-     const img = newCard.querySelector('.post-image');
-     if (img) img.src = newPost._localBlobUrl;
+     if (isVideo) {
+         const vid = newCard.querySelector('.post-video');
+         if (vid) { vid.src = newPost._localBlobUrl; }
+     } else {
+         const img = newCard.querySelector('.post-image');
+         if (img) img.src = newPost._localBlobUrl;
+     }
  }
  if (postsContainer.firstChild) {
      postsContainer.insertBefore(newCard, postsContainer.firstChild);
@@ -879,14 +922,14 @@ document.addEventListener('DOMContentLoaded', async function() {
      postsContainer.appendChild(newCard);
  }
  setupPostEventListeners(newPost.id);
-
- // Post card already prepended above — no feed reload needed.
  } else {
  showToast(result.error || 'Failed to create post', 'error');
  }
  } catch (error) {
  console.error('Error creating post:', error);
  showToast('Failed to create post', 'error');
+ const progressContainer = document.getElementById('uploadProgressContainer');
+ if (progressContainer) progressContainer.style.display = 'none';
  } finally {
  const submitBtnText = document.getElementById('submitBtnText');
  if (submitPostBtn) submitPostBtn.disabled = false;

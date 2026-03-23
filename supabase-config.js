@@ -1,1298 +1,497 @@
-// Check if supabase client is already initialized to prevent re-declaration
-if (typeof window.supabaseClient === 'undefined') {
-    // IMPORTANT: Replace these with your actual Supabase credentials
-    // Your anon key should look like: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-  
-     const SUPABASE_URL = 'https://kkvelbfcwaydxiwzsnpb.supabase.co';
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrdmVsYmZjd2F5ZHhpd3pzbnBiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkzNzMxMjUsImV4cCI6MjA4NDk0OTEyNX0.bc7CweVNAWSsKevkCfL3d2aadEJ4Qay5kWMLhq8H3Nc'; 
-    // Initialize Supabase client and store globally
-    window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-        auth: {
-            autoRefreshToken: true,
-            persistSession: true,
-            detectSessionInUrl: true,
-            storageKey: 'campustrend-auth',
-            storage: window.localStorage
-        },
-        global: {
-            headers: {
-                'X-Client-Info': 'campustrend-web'
-            }
-        }
-    });
-    console.log('Supabase client initialized successfully!');
+// ============================================================
+// SUPABASE + CLOUDINARY CONFIG
+// Supabase → database & auth
+// Cloudinary → all media storage (images & videos)
+// ============================================================
 
-    // Handle auth state changes and clear invalid sessions
-    window.supabaseClient.auth.onAuthStateChange((event, session) => {
-        console.log('Auth state changed:', event);
-        if (event === 'TOKEN_REFRESHED') {
-            console.log('Token refreshed successfully');
-        }
-        // Only clear session on explicit SIGNED_OUT — never when offline/no internet
-        // Supabase fires SIGNED_OUT when token refresh fails due to no network,
-        // which would incorrectly wipe a valid local session
-        if (event === 'SIGNED_OUT' && navigator.onLine) {
-            console.log('User signed out');
-            window.clearInvalidSession();
-        }
+const SUPABASE_URL = 'https://kkvelbfcwaydxiwzsnpb.supabase.co';           // 🔁 Replace
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrdmVsYmZjd2F5ZHhpd3pzbnBiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkzNzMxMjUsImV4cCI6MjA4NDk0OTEyNX0.bc7CweVNAWSsKevkCfL3d2aadEJ4Qay5kWMLhq8H3Nc'; // 🔁 Replace
+
+const CLOUDINARY_CLOUD_NAME = 'deyu6uccg';
+const CLOUDINARY_UPLOAD_PRESET = 'campus_app_uploads';
+
+// ============================================================
+// CLOUDINARY UPLOAD FUNCTION
+// Supports images and videos with optional progress callback
+// ============================================================
+async function uploadToCloudinary(file, onProgress) {
+    const resourceType = file.type.startsWith('video/') ? 'video' : 'image';
+    const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${resourceType}/upload`;
+
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+
+        // Progress tracking
+        xhr.upload.addEventListener('progress', (e) => {
+            if (e.lengthComputable && typeof onProgress === 'function') {
+                const percent = Math.round((e.loaded / e.total) * 100);
+                onProgress(percent);
+            }
+        });
+
+        xhr.addEventListener('load', () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                const data = JSON.parse(xhr.responseText);
+                resolve({
+                    url: data.secure_url,
+                    publicId: data.public_id,
+                    resourceType: data.resource_type, // 'image' or 'video'
+                });
+            } else {
+                const err = JSON.parse(xhr.responseText);
+                reject(new Error(err.error?.message || 'Cloudinary upload failed'));
+            }
+        });
+
+        xhr.addEventListener('error', () => reject(new Error('Network error during upload')));
+        xhr.open('POST', url);
+        xhr.send(formData);
     });
 }
 
-// ============================================
-// SESSION MANAGEMENT
-// ============================================
+// ============================================================
+// SUPABASE CLIENT INIT
+// ============================================================
+const { createClient } = supabase;
+const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+window.supabaseClient = supabaseClient;
 
-// Clear invalid session
-window.clearInvalidSession = async function() {
-    try {
-        // Clear local storage items related to Supabase
-        const keysToRemove = [];
-        for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (key && (key.includes('supabase') || key.includes('sb-'))) {
-                keysToRemove.push(key);
-            }
-        }
-        keysToRemove.forEach(key => localStorage.removeItem(key));
-        
-        // Also clear session storage
-        const sessionKeysToRemove = [];
-        for (let i = 0; i < sessionStorage.length; i++) {
-            const key = sessionStorage.key(i);
-            if (key && (key.includes('supabase') || key.includes('sb-'))) {
-                sessionKeysToRemove.push(key);
-            }
-        }
-        sessionKeysToRemove.forEach(key => sessionStorage.removeItem(key));
-        
-        console.log('Cleared invalid session data');
-        return true;
-    } catch (error) {
-        console.error('Error clearing session:', error);
-        return false;
-    }
-};
+// Departments list
+window.DEPARTMENTS = [
+    'Computer Science', 'Mathematics', 'Physics', 'Chemistry', 'Biology',
+    'English', 'History', 'Geography', 'Economics', 'Business Administration',
+    'Accounting', 'Marketing', 'Education', 'Psychology', 'Sociology',
+    'Political Science', 'Law', 'Medicine', 'Nursing', 'Engineering',
+    'Architecture', 'Agriculture', 'Environmental Science', 'Communication Studies',
+    'Information Technology', 'Library Science', 'Physical Education', 'Music',
+    'Fine Arts', 'Drama', 'French', 'Arabic', 'Religious Studies', 'Philosophy'
+];
 
-// ============================================
-// AUTHENTICATION FUNCTIONS
-// ============================================
-
-// Sign Up (with trigger approach - profile created automatically)
+// ============================================================
+// AUTH FUNCTIONS
+// ============================================================
 window.signUp = async function(email, password, fullName, indexNumber, department) {
     try {
-        // Validate inputs
-        if (!email || !password || !fullName || !indexNumber || !department) {
-            return { success: false, error: 'All fields are required' };
-        }
-
-        // Validate email format
-        if (!email.includes('@')) {
-            return { success: false, error: 'Invalid email format' };
-        }
-
-        // Clear any existing invalid session first
-        await window.clearInvalidSession();
-        
-        // Create auth user with metadata (trigger will auto-create profile)
-        const { data: authData, error: authError } = await window.supabaseClient.auth.signUp({
-            email: email,
-            password: password,
+        const { data, error } = await supabaseClient.auth.signUp({
+            email,
+            password,
             options: {
-                data: {
-                    full_name: fullName,
-                    index_number: indexNumber,
-                    email: email,
-                    department: department
-                },
-                emailRedirectTo: `${window.location.origin}/index.html`
+                data: { full_name: fullName, index_number: indexNumber, department }
             }
         });
-
-        if (authError) {
-            console.error('Signup error:', authError);
-            
-            // Handle network errors
-            if (authError.message.includes('Failed to fetch') || 
-                authError.message.includes('ERR_CONNECTION') ||
-                authError.name === 'AuthRetryableFetchError') {
-                return { 
-                    success: false, 
-                    error: 'Network connection error. Please check your internet connection and try again.' 
-                };
-            }
-            
-            // Handle rate limiting
-            if (authError.message.includes('429') || authError.message.includes('rate limit')) {
-                return { success: false, error: 'Too many signup attempts. Please wait a few minutes and try again.' };
-            }
-            
-            // Handle user already registered - UPDATED TO CATCH MORE CASES
-            if (authError.message.includes('already registered') || 
-                authError.message.includes('User already registered') ||
-                authError.message.includes('already been registered') ||
-                authError.status === 422 ||
-                authError.code === 'user_already_exists') {
-                return { 
-                    success: false, 
-                    error: 'This index number/email is already registered. Please sign in instead or use a different index number.',
-                    alreadyExists: true 
-                };
-            }
-            
-            // Handle weak password
-            if (authError.message.includes('Password')) {
-                return { success: false, error: 'Password should be at least 6 characters long.' };
-            }
-            
-            // For any other error, return the actual error message
-            return { success: false, error: authError.message };
-        }
-
-        if (!authData.user) {
-            return { success: false, error: 'Failed to create user account' };
-        }
-
-        // Profile is automatically created by database trigger
-        return { success: true, user: authData.user };
-    } catch (error) {
-        console.error('Sign up error:', error);
-        
-        // Check if it's a user already exists error
-        if (error.message && (
-            error.message.includes('already registered') || 
-            error.message.includes('User already registered') ||
-            error.message.includes('already been registered')
-        )) {
-            return { 
-                success: false, 
-                error: 'This index number/email is already registered. Please sign in instead or use a different index number.',
-                alreadyExists: true 
-            };
-        }
-        
-        return { success: false, error: error.message || 'An unexpected error occurred' };
-    }
-};
-
-// Sign In
-window.signIn = async function(email, password) {
-    try {
-        // Validate inputs
-        if (!email || !password) {
-            return { success: false, error: 'Email and password are required' };
-        }
-
-        // Clear any existing invalid session first
-        await window.clearInvalidSession();
-        
-        const { data, error } = await window.supabaseClient.auth.signInWithPassword({
-            email: email,
-            password: password
-        });
-
         if (error) {
-            console.error('Sign in error:', error);
-            // Handle specific error types
-            if (error.message.includes('Invalid Refresh Token') || 
-                error.message.includes('Refresh Token Not Found')) {
-                // Clear session and retry
-                await window.clearInvalidSession();
-                return { success: false, error: 'Session expired. Please try signing in again.' };
-            }
-            if (error.message.includes('Email not confirmed')) {
-                return { success: false, error: 'Please confirm your email before signing in. Check your inbox for the confirmation link.' };
-            }
-            if (error.message.includes('Invalid login credentials')) {
-                return { success: false, error: 'Invalid email or password. Please check your credentials and try again.' };
+            if (error.message.includes('already registered') || error.message.includes('already exists')) {
+                return { success: false, error: 'This index number is already registered.', alreadyExists: true };
             }
             return { success: false, error: error.message };
         }
-
-        if (!data.user) {
-            return { success: false, error: 'Sign in failed. Please try again.' };
+        if (data.user) {
+            const { error: profileError } = await supabaseClient
+                .from('profiles')
+                .upsert({
+                    id: data.user.id,
+                    full_name: fullName,
+                    index_number: indexNumber,
+                    department,
+                    email,
+                    created_at: new Date().toISOString()
+                });
+            if (profileError) console.error('Profile creation error:', profileError);
         }
-
-        return { success: true, user: data.user, session: data.session };
-    } catch (error) {
-        console.error('Sign in error:', error);
-        // If it's a refresh token error, clear and notify
-        if (error.message && error.message.includes('Refresh Token')) {
-            await window.clearInvalidSession();
-            return { success: false, error: 'Session expired. Please try signing in again.' };
-        }
-        return { success: false, error: error.message || 'An unexpected error occurred' };
+        return { success: true, user: data.user };
+    } catch (err) {
+        return { success: false, error: err.message };
     }
 };
 
-// Sign Out
+window.signIn = async function(email, password) {
+    try {
+        const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+        if (error) {
+            if (error.message.includes('Invalid login credentials')) {
+                return { success: false, error: 'Invalid index number or password. Please try again.' };
+            }
+            if (error.message.includes('Email not confirmed')) {
+                return { success: false, error: 'Please verify your email before signing in.' };
+            }
+            return { success: false, error: error.message };
+        }
+        return { success: true, user: data.user, session: data.session };
+    } catch (err) {
+        return { success: false, error: err.message };
+    }
+};
+
 window.signOut = async function() {
     try {
-        const { error } = await window.supabaseClient.auth.signOut();
-        
-        // Clear all session data regardless of error
-        await window.clearInvalidSession();
-        
-        if (error) {
-            console.warn('Sign out had an error, but session was cleared:', error.message);
-        }
-        
+        const { error } = await supabaseClient.auth.signOut();
+        if (error) return { success: false, error: error.message };
         return { success: true };
-    } catch (error) {
-        console.error('Sign out error:', error);
-        // Still clear session even if signOut fails
-        await window.clearInvalidSession();
-        return { success: true }; // Return success since we cleared the session
+    } catch (err) {
+        return { success: false, error: err.message };
     }
 };
 
-// Get Current User
+window.isLoggedIn = async function() {
+    try {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        return !!session;
+    } catch { return false; }
+};
+
 window.getCurrentUser = async function() {
     try {
-        const { data: { user }, error } = await window.supabaseClient.auth.getUser();
-        
-        if (error) {
-            // Handle CORS errors
-            if (error.message.includes('Failed to fetch') || 
-                error.message.includes('CORS') ||
-                error.name === 'AuthRetryableFetchError') {
-                console.warn('CORS error detected. Please configure your Supabase URL settings.');
-                console.warn('Add http://127.0.0.1:5500 to your allowed redirect URLs in Supabase Dashboard.');
-                
-                // Try to get user from session instead
-                const { data: { session } } = await window.supabaseClient.auth.getSession();
-                return session?.user || null;
-            }
-            
-            // Handle refresh token errors — but only clear if we're online
-            // When offline, these errors are just network failures, not real invalidity
-            if (error.message.includes('Refresh Token') || 
-                error.message.includes('Invalid') ||
-                error.message.includes('expired')) {
-                if (navigator.onLine) {
-                    console.warn('Invalid session detected, clearing...');
-                    await window.clearInvalidSession();
-                    return null;
-                }
-                // Offline — use local session as fallback
-                const { data: { session } } = await window.supabaseClient.auth.getSession();
-                return session?.user || null;
-            }
-            console.error('Get user error:', error);
-            return null;
-        }
-        
+        const { data: { user } } = await supabaseClient.auth.getUser();
         return user;
-    } catch (error) {
-        console.error('Get current user error:', error);
-        
-        // Try fallback method for CORS issues
-        if (error.message && error.message.includes('fetch')) {
-            try {
-                const { data: { session } } = await window.supabaseClient.auth.getSession();
-                return session?.user || null;
-            } catch (fallbackError) {
-                console.error('Fallback also failed:', fallbackError);
-            }
-        }
-        
-        // Check if it's a token error
-        if (error.message && (error.message.includes('Refresh Token') || error.message.includes('Invalid'))) {
-            await window.clearInvalidSession();
-        }
-        return null;
-    }
+    } catch { return null; }
 };
 
-// Get Current User Profile
 window.getCurrentProfile = async function() {
     try {
-        const user = await window.getCurrentUser();
-        if (!user) {
-            console.log('No user logged in, cannot fetch profile');
-            return null;
-        }
-
-        const { data, error } = await window.supabaseClient
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        if (!user) return null;
+        const { data, error } = await supabaseClient
             .from('profiles')
             .select('*')
             .eq('id', user.id)
-            .maybeSingle();
-
-        if (error) {
-            console.error('Get profile error:', error);
-            
-            // If profile doesn't exist, try to create it
-            if (error.code === 'PGRST116' || error.message.includes('no rows')) {
-                console.log('Profile not found, attempting to create...');
-                
-                // Get user metadata
-                const metadata = user.user_metadata || {};
-                
-                // Create profile
-                const { data: newProfile, error: createError } = await window.supabaseClient
-                    .from('profiles')
-                    .insert({
-                        id: user.id,
-                        full_name: metadata.full_name || 'User',
-                        email: user.email,
-                        index_number: metadata.index_number || null,
-                        department: metadata.department || 'Unknown',
-                        avatar_url: null,
-                        bio: null,
-                        location: null
-                    })
-                    .select()
-                    .single();
-                
-                if (createError) {
-                    console.error('Error creating profile:', createError);
-                    // Return a basic profile object even if creation fails
-                    return {
-                        id: user.id,
-                        full_name: metadata.full_name || user.email?.split('@')[0] || 'User',
-                        email: user.email,
-                        department: metadata.department || 'Unknown',
-                        index_number: metadata.index_number || null
-                    };
-                }
-                
-                return newProfile;
-            }
-            
-            // Return null for other errors
-            return null;
-        }
-
-        // If no profile found, create one
-        if (!data) {
-            console.log('No profile data, creating new profile...');
-            const metadata = user.user_metadata || {};
-            
-            const { data: newProfile, error: createError } = await window.supabaseClient
-                .from('profiles')
-                .insert({
-                    id: user.id,
-                    full_name: metadata.full_name || 'User',
-                    email: user.email,
-                    index_number: metadata.index_number || null,
-                    department: metadata.department || 'Unknown'
-                })
-                .select()
-                .single();
-            
-            if (createError) {
-                console.error('Error creating profile:', createError);
-                return {
-                    id: user.id,
-                    full_name: metadata.full_name || user.email?.split('@')[0] || 'User',
-                    email: user.email,
-                    department: metadata.department || 'Unknown',
-                    index_number: metadata.index_number || null
-                };
-            }
-            
-            return newProfile;
-        }
-
+            .single();
+        if (error) return null;
         return data;
-    } catch (error) {
-        console.error('Get current profile error:', error);
-        
-        // Return a fallback profile
-        const user = await window.getCurrentUser();
-        if (user) {
-            return {
-                id: user.id,
-                full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
-                email: user.email,
-                department: user.user_metadata?.department || 'Unknown',
-                index_number: user.user_metadata?.index_number || null
-            };
-        }
-        
-        return null;
-    }
+    } catch { return null; }
 };
 
-// Check if user is logged in
-window.isLoggedIn = async function() {
-    try {
-        const { data: { session }, error } = await window.supabaseClient.auth.getSession();
-
-        if (error) {
-            // Only clear session for token errors when we're actually online
-            // When offline, token refresh fails but the local session is still valid
-            if ((error.message.includes('Refresh Token') || error.message.includes('Invalid')) && navigator.onLine) {
-                await window.clearInvalidSession();
-                return false;
-            }
-            // Offline or network error — trust the local session
-            if (!navigator.onLine) {
-                return session !== null;
-            }
-            console.error('Session check error:', error);
-            return false;
-        }
-
-        return session !== null;
-    } catch (error) {
-        console.error('Check login status error:', error);
-        // If offline, fall back to local session rather than returning false
-        if (!navigator.onLine) {
-            try {
-                const { data: { session } } = await window.supabaseClient.auth.getSession();
-                return session !== null;
-            } catch (e) {
-                return false;
-            }
-        }
-        if (error.message && error.message.includes('Refresh Token')) {
-            await window.clearInvalidSession();
-        }
-        return false;
-    }
-};
-
-// ============================================
-// DEPARTMENT LIST
-// ============================================
-
-window.DEPARTMENTS = [
-    'Computer Science',
-    'Mathematics',
-    'Basic Education',
-    'Business Administration',
-    'Graphic Design',
-    'Music Education',
-    'Health Education',
-    'Social Studies',
-    'English Education',
-    'Science Education',
-    'Physical Education',
-    'Special Education'
-];
-
-// ============================================
+// ============================================================
 // POST FUNCTIONS
-// ============================================
+// ============================================================
 
-// Create Post
-window.createPost = async function(content, imageFile, department, visibility = 'public') {
+/**
+ * createPost — uploads media to Cloudinary, saves post to Supabase
+ * @param {string} content - post text/description
+ * @param {File} mediaFile - image or video file
+ * @param {string} department - user's department
+ * @param {string} visibility - 'public' or 'department'
+ * @param {Function} onProgress - optional callback(percent)
+ */
+window.createPost = async function(content, mediaFile, department, visibility = 'public', onProgress) {
     try {
-        const user = await window.getCurrentUser();
-        if (!user) return { success: false, error: 'Not logged in' };
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        if (!user) return { success: false, error: 'Not authenticated' };
 
-        let imageUrl = null;
+        let mediaUrl = null;
+        let mediaType = null;
+        let publicId = null;
 
-        // Upload image if provided
-        if (imageFile) {
-            const fileName = `${user.id}/${Date.now()}_${imageFile.name}`;
-            const { data: uploadData, error: uploadError } = await window.supabaseClient.storage
-                .from('post-images')
-                .upload(fileName, imageFile);
-
-            if (uploadError) {
-                console.error('Image upload error:', uploadError);
-                return { success: false, error: uploadError.message };
+        if (mediaFile) {
+            try {
+                const uploaded = await uploadToCloudinary(mediaFile, onProgress);
+                mediaUrl = uploaded.url;
+                mediaType = uploaded.resourceType; // 'image' or 'video'
+                publicId = uploaded.publicId;
+            } catch (uploadErr) {
+                return { success: false, error: `Upload failed: ${uploadErr.message}` };
             }
-
-            // Get public URL
-            const { data: urlData } = window.supabaseClient.storage
-                .from('post-images')
-                .getPublicUrl(fileName);
-
-            imageUrl = urlData.publicUrl;
         }
 
-        // Insert post
-        const { data, error } = await window.supabaseClient
+        const { data, error } = await supabaseClient
             .from('posts')
-            .insert({
+            .insert([{
                 user_id: user.id,
-                content: content || null,
-                image_url: imageUrl,
-                department: department,
-                visibility: visibility
-            })
-            .select(`
-                *,
-                profiles:user_id (
-                    id,
-                    full_name,
-                    avatar_url,
-                    department
-                )
-            `)
+                content,
+                image_url: mediaUrl,      // kept as image_url for backward compatibility
+                media_url: mediaUrl,      // also saved as media_url
+                media_type: mediaType,    // 'image' or 'video'
+                public_id: publicId,      // for future deletion
+                department,
+                visibility,
+                likes_count: 0,
+                comments_count: 0,
+                created_at: new Date().toISOString()
+            }])
+            .select('*, profiles(*)')
             .single();
 
-        if (error) {
-            console.error('Post creation error:', error);
-            return { success: false, error: error.message };
-        }
-
+        if (error) return { success: false, error: error.message };
         return { success: true, post: data };
-    } catch (error) {
-        console.error('Create post error:', error);
-        return { success: false, error: error.message };
+    } catch (err) {
+        return { success: false, error: err.message };
     }
 };
 
-// Get Posts (with user info)
-window.getPosts = async function(filter = 'all', limit = 50) {
+window.getPosts = async function(filter = 'all', department = null) {
     try {
-        let query = window.supabaseClient
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        let query = supabaseClient
             .from('posts')
-            .select(`
-                *,
-                profiles:user_id (
-                    id,
-                    full_name,
-                    avatar_url,
-                    department
-                )
-            `)
+            .select('*, profiles(*)')
             .order('created_at', { ascending: false })
-            .limit(limit);
+            .limit(50);
 
-        // Apply filters
-        if (filter === 'popular') {
-            query = query.gte('likes_count', 5).order('likes_count', { ascending: false });
-        } else if (filter === 'recent') {
-            // Already ordered by created_at
+        if (filter === 'department' && department) {
+            query = query.eq('department', department);
         }
 
         const { data, error } = await query;
+        if (error) return { success: false, error: error.message };
 
-        if (error) {
-            console.error('Get posts error:', error);
-            return { success: false, error: error.message, posts: [] };
-        }
-
-        return { success: true, posts: data || [] };
-    } catch (error) {
-        console.error('Get posts error:', error);
-        return { success: false, error: error.message, posts: [] };
-    }
-};
-
-// Get Posts by Department
-window.getPostsByDepartment = async function(department) {
-    try {
-        const { data, error } = await window.supabaseClient
-            .from('posts')
-            .select(`
-                *,
-                profiles:user_id (
-                    id,
-                    full_name,
-                    avatar_url,
-                    department
-                )
-            `)
-            .eq('department', department)
-            .order('created_at', { ascending: false });
-
-        if (error) {
-            console.error('Get posts by department error:', error);
-            return { success: false, error: error.message };
+        // Check liked status for current user
+        if (user && data) {
+            const postIds = data.map(p => p.id);
+            const { data: likes } = await supabaseClient
+                .from('likes')
+                .select('post_id')
+                .eq('user_id', user.id)
+                .in('post_id', postIds);
+            const likedSet = new Set((likes || []).map(l => l.post_id));
+            data.forEach(p => { p.isLiked = likedSet.has(p.id); });
         }
 
         return { success: true, posts: data };
-    } catch (error) {
-        console.error('Get posts by department error:', error);
-        return { success: false, error: error.message };
+    } catch (err) {
+        return { success: false, error: err.message };
     }
 };
 
-// Delete Post
-window.deletePost = async function(postId) {
+window.deletePost = async function(postId, publicId, mediaType) {
     try {
-        const { error } = await window.supabaseClient
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        if (!user) return { success: false, error: 'Not authenticated' };
+
+        // Delete from Supabase
+        const { error } = await supabaseClient
             .from('posts')
             .delete()
-            .eq('id', postId);
-
-        if (error) {
-            return { success: false, error: error.message };
-        }
-
-        return { success: true };
-    } catch (error) {
-        console.error('Delete post error:', error);
-        return { success: false, error: error.message };
-    }
-};
-
-// ============================================
-// LIKE FUNCTIONS
-// ============================================
-
-// Toggle Like
-window.toggleLike = async function(postId) {
-    try {
-        const user = await window.getCurrentUser();
-        if (!user) return { success: false, error: 'Not logged in' };
-
-        // Check if already liked
-        const { data: existingLike } = await window.supabaseClient
-            .from('likes')
-            .select('id')
-            .eq('user_id', user.id)
-            .eq('post_id', postId)
-            .maybeSingle();
-
-        if (existingLike) {
-            // Unlike
-            const { error } = await window.supabaseClient
-                .from('likes')
-                .delete()
-                .eq('id', existingLike.id);
-
-            if (error) return { success: false, error: error.message };
-            return { success: true, liked: false };
-        } else {
-            // Like
-            const { error } = await window.supabaseClient
-                .from('likes')
-                .insert({ user_id: user.id, post_id: postId });
-
-            if (error) return { success: false, error: error.message };
-            return { success: true, liked: true };
-        }
-    } catch (error) {
-        console.error('Toggle like error:', error);
-        return { success: false, error: error.message };
-    }
-};
-
-// Check if user liked a post
-window.hasUserLiked = async function(postId) {
-    try {
-        const user = await window.getCurrentUser();
-        if (!user) return false;
-
-        const { data } = await window.supabaseClient
-            .from('likes')
-            .select('id')
-            .eq('user_id', user.id)
-            .eq('post_id', postId)
-            .maybeSingle();
-
-        return data !== null;
-    } catch (error) {
-        console.error('Check user liked error:', error);
-        return false;
-    }
-};
-
-// ============================================
-// COMMENT FUNCTIONS
-// ============================================
-
-// Add Comment
-// Add Comment (with optional parent_comment_id for replies)
-window.addComment = async function(postId, content, parentCommentId = null) {
-    try {
-        const user = await window.getCurrentUser();
-        if (!user) return { success: false, error: 'Not logged in' };
-
-        const commentData = {
-            user_id: user.id,
-            post_id: postId,
-            content: content
-        };
-
-        // Add parent_comment_id if this is a reply
-        if (parentCommentId) {
-            commentData.parent_comment_id = parentCommentId;
-        }
-
-        const { data, error } = await window.supabaseClient
-            .from('comments')
-            .insert(commentData)
-            .select(`
-                *,
-                profiles:user_id (
-                    full_name,
-                    avatar_url
-                )
-            `)
-            .single();
-
-        if (error) {
-            return { success: false, error: error.message };
-        }
-
-        return { success: true, comment: data };
-    } catch (error) {
-        console.error('Add comment error:', error);
-        return { success: false, error: error.message };
-    }
-};
-
-// Get Comments for Post (including parent_comment_id for threading)
-window.getComments = async function(postId) {
-    try {
-        const { data, error } = await window.supabaseClient
-            .from('comments')
-            .select(`
-                *,
-                profiles:user_id (
-                    full_name,
-                    avatar_url
-                )
-            `)
-            .eq('post_id', postId)
-            .order('created_at', { ascending: true });
-
-        if (error) {
-            return { success: false, error: error.message };
-        }
-
-        return { success: true, comments: data };
-    } catch (error) {
-        console.error('Get comments error:', error);
-        return { success: false, error: error.message };
-    }
-};
-
-// ============================================
-// FOLLOW FUNCTIONS
-// ============================================
-
-// Toggle Follow
-window.toggleFollow = async function(targetUserId) {
-    try {
-        const user = await window.getCurrentUser();
-        if (!user) return { success: false, error: 'Not logged in' };
-
-        // Check if already following
-        const { data: existingFollow } = await window.supabaseClient
-            .from('followers')
-            .select('id')
-            .eq('follower_id', user.id)
-            .eq('following_id', targetUserId)
-            .maybeSingle();
-
-        const nowFollowing = !existingFollow;
-
-        if (existingFollow) {
-            // Unfollow
-            const { error } = await window.supabaseClient
-                .from('followers')
-                .delete()
-                .eq('id', existingFollow.id);
-            if (error) return { success: false, error: error.message };
-        } else {
-            // Follow
-            const { error } = await window.supabaseClient
-                .from('followers')
-                .insert({ follower_id: user.id, following_id: targetUserId });
-            if (error) return { success: false, error: error.message };
-        }
-
-        // ── Update followers_count on target user's profile ──────────────────
-        // Count actual rows to avoid stale read-modify-write drift
-        const { count: actualFollowers } = await window.supabaseClient
-            .from('followers')
-            .select('id', { count: 'exact', head: true })
-            .eq('following_id', targetUserId);
-        await window.supabaseClient
-            .from('profiles')
-            .update({ followers_count: actualFollowers || 0 })
-            .eq('id', targetUserId);
-
-        // ── Update following_count on current user's profile ─────────────────
-        const { count: actualFollowing } = await window.supabaseClient
-            .from('followers')
-            .select('id', { count: 'exact', head: true })
-            .eq('follower_id', user.id);
-        await window.supabaseClient
-            .from('profiles')
-            .update({ following_count: actualFollowing || 0 })
-            .eq('id', user.id);
-
-        return { success: true, following: nowFollowing };
-    } catch (error) {
-        console.error('Toggle follow error:', error);
-        return { success: false, error: error.message };
-    }
-};
-
-// Check if following
-window.isFollowing = async function(targetUserId) {
-    try {
-        const user = await window.getCurrentUser();
-        if (!user) return false;
-
-        const { data } = await window.supabaseClient
-            .from('followers')
-            .select('id')
-            .eq('follower_id', user.id)
-            .eq('following_id', targetUserId)
-            .maybeSingle();
-
-        return data !== null;
-    } catch (error) {
-        console.error('Check following error:', error);
-        return false;
-    }
-};
-
-// ============================================
-// NOTIFICATION FUNCTIONS
-// ============================================
-
-// Get Notifications
-window.getNotifications = async function() {
-    try {
-        const user = await window.getCurrentUser();
-        if (!user) return { success: false, error: 'Not logged in' };
-
-        const { data, error } = await window.supabaseClient
-            .from('notifications')
-            .select(`
-                *,
-                from_user:from_user_id (
-                    full_name,
-                    avatar_url
-                )
-            `)
-            .eq('user_id', user.id)
-            .order('created_at', { ascending: false })
-            .limit(20);
-
-        if (error) {
-            return { success: false, error: error.message };
-        }
-
-        return { success: true, notifications: data };
-    } catch (error) {
-        console.error('Get notifications error:', error);
-        return { success: false, error: error.message };
-    }
-};
-
-// Mark Notification as Read
-window.markNotificationRead = async function(notificationId) {
-    try {
-        const { error } = await window.supabaseClient
-            .from('notifications')
-            .update({ is_read: true })
-            .eq('id', notificationId);
-
-        if (error) return { success: false, error: error.message };
-        return { success: true };
-    } catch (error) {
-        console.error('Mark notification read error:', error);
-        return { success: false, error: error.message };
-    }
-};
-
-// Mark All Notifications as Read
-window.markAllNotificationsRead = async function() {
-    try {
-        const user = await window.getCurrentUser();
-        if (!user) return { success: false, error: 'Not logged in' };
-
-        const { error } = await window.supabaseClient
-            .from('notifications')
-            .update({ is_read: true })
+            .eq('id', postId)
             .eq('user_id', user.id);
 
         if (error) return { success: false, error: error.message };
+
+        // Note: Cloudinary deletion from the client requires a signed request.
+        // For unsigned deletion, set up a Supabase Edge Function or backend endpoint.
+        // The post is removed from your DB — the Cloudinary file will remain until
+        // you clean it up from the Cloudinary dashboard or via a server-side function.
+        console.log(`Post ${postId} deleted. Cloudinary asset (${publicId}) can be cleaned via dashboard.`);
+
         return { success: true };
-    } catch (error) {
-        console.error('Mark all notifications read error:', error);
-        return { success: false, error: error.message };
+    } catch (err) {
+        return { success: false, error: err.message };
     }
 };
 
-// Get Unread Notification Count
-window.getUnreadNotificationCount = async function() {
+window.likePost = async function(postId) {
     try {
-        const user = await window.getCurrentUser();
-        if (!user) return 0;
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        if (!user) return { success: false, error: 'Not authenticated' };
 
-        const { count } = await window.supabaseClient
-            .from('notifications')
-            .select('*', { count: 'exact', head: true })
+        const { data: existing } = await supabaseClient
+            .from('likes')
+            .select('id')
+            .eq('post_id', postId)
             .eq('user_id', user.id)
-            .eq('is_read', false);
+            .single();
 
-        return count || 0;
-    } catch (error) {
-        console.error('Get unread notification count error:', error);
-        return 0;
+        if (existing) {
+            await supabaseClient.from('likes').delete().eq('id', existing.id);
+            await supabaseClient.rpc('decrement_likes', { post_id: postId });
+            return { success: true, liked: false };
+        } else {
+            await supabaseClient.from('likes').insert([{ post_id: postId, user_id: user.id }]);
+            await supabaseClient.rpc('increment_likes', { post_id: postId });
+            return { success: true, liked: true };
+        }
+    } catch (err) {
+        return { success: false, error: err.message };
     }
 };
 
-// ============================================
-// PROFILE FUNCTIONS
-// ============================================
-
-// Get Profile by ID
-window.getProfile = async function(userId) {
+window.addComment = async function(postId, content, parentCommentId = null) {
     try {
-        const { data, error } = await window.supabaseClient
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        if (!user) return { success: false, error: 'Not authenticated' };
+
+        const record = { post_id: postId, user_id: user.id, content };
+        if (parentCommentId) record.parent_comment_id = parentCommentId;
+
+        const { data, error } = await supabaseClient
+            .from('comments')
+            .insert([record])
+            .select('*, profiles(*)')
+            .single();
+        if (error) return { success: false, error: error.message };
+
+        // Only increment top-level comment count, not replies
+        if (!parentCommentId) {
+            await supabaseClient.rpc('increment_comments', { post_id: postId });
+        }
+        return { success: true, comment: data };
+    } catch (err) {
+        return { success: false, error: err.message };
+    }
+};
+
+window.getComments = async function(postId) {
+    try {
+        const { data, error } = await supabaseClient
+            .from('comments')
+            .select('*, profiles(*)')
+            .eq('post_id', postId)
+            .order('created_at', { ascending: true });
+        if (error) return { success: false, error: error.message };
+        return { success: true, comments: data };
+    } catch (err) {
+        return { success: false, error: err.message };
+    }
+};
+
+// ============================================================
+// PROFILE / AVATAR FUNCTIONS
+// ============================================================
+
+/**
+ * uploadAvatar — uploads profile picture to Cloudinary
+ */
+window.uploadAvatar = async function(file) {
+    try {
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        if (!user) return { success: false, error: 'Not authenticated' };
+
+        const { url } = await uploadToCloudinary(file);
+
+        const { error } = await supabaseClient
+            .from('profiles')
+            .update({ avatar_url: url })
+            .eq('id', user.id);
+
+        if (error) return { success: false, error: error.message };
+        return { success: true, url };
+    } catch (err) {
+        return { success: false, error: err.message };
+    }
+};
+
+window.updateProfile = async function(updates) {
+    try {
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        if (!user) return { success: false, error: 'Not authenticated' };
+        const { error } = await supabaseClient
+            .from('profiles')
+            .update(updates)
+            .eq('id', user.id);
+        if (error) return { success: false, error: error.message };
+        return { success: true };
+    } catch (err) {
+        return { success: false, error: err.message };
+    }
+};
+
+window.getUserProfile = async function(userId) {
+    try {
+        const { data, error } = await supabaseClient
             .from('profiles')
             .select('*')
             .eq('id', userId)
             .single();
-
-        if (error) {
-            return { success: false, error: error.message };
-        }
-
+        if (error) return { success: false, error: error.message };
         return { success: true, profile: data };
-    } catch (error) {
-        console.error('Get profile error:', error);
-        return { success: false, error: error.message };
+    } catch (err) {
+        return { success: false, error: err.message };
     }
 };
 
-// Update Profile
-window.updateProfile = async function(updates) {
+// ============================================================
+// FOLLOW FUNCTIONS
+// ============================================================
+window.followUser = async function(targetUserId) {
     try {
-        const user = await window.getCurrentUser();
-        if (!user) return { success: false, error: 'Not logged in' };
-
-        const { data, error } = await window.supabaseClient
-            .from('profiles')
-            .update(updates)
-            .eq('id', user.id)
-            .select()
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        if (!user) return { success: false, error: 'Not authenticated' };
+        const { data: existing } = await supabaseClient
+            .from('follows')
+            .select('id')
+            .eq('follower_id', user.id)
+            .eq('following_id', targetUserId)
             .single();
-
-        if (error) {
-            return { success: false, error: error.message };
+        if (existing) {
+            await supabaseClient.from('follows').delete().eq('id', existing.id);
+            return { success: true, following: false };
+        } else {
+            await supabaseClient.from('follows').insert([{ follower_id: user.id, following_id: targetUserId }]);
+            return { success: true, following: true };
         }
-
-        return { success: true, profile: data };
-    } catch (error) {
-        console.error('Update profile error:', error);
-        return { success: false, error: error.message };
+    } catch (err) {
+        return { success: false, error: err.message };
     }
 };
 
-// ============================================
-// UTILITY FUNCTIONS
-// ============================================
-
-// Get Star Rating based on likes
-window.getStarRating = function(likesCount) {
-    if (likesCount >= 100) return { stars: 5, label: 'Legendary', color: '#FFD700' };
-    if (likesCount >= 50) return { stars: 4, label: 'Viral', color: '#FF6B6B' };
-    if (likesCount >= 15) return { stars: 3, label: 'Popular', color: '#4ECDC4' };
-    if (likesCount >= 10) return { stars: 2, label: 'Rising', color: '#95E1D3' };
-    if (likesCount >= 5) return { stars: 1, label: 'Trending', color: '#A8E6CF' };
-    return { stars: 0, label: '', color: '' };
+// ============================================================
+// NOTIFICATIONS
+// ============================================================
+window.getNotifications = async function() {
+    try {
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        if (!user) return { success: false, error: 'Not authenticated' };
+        const { data, error } = await supabaseClient
+            .from('notifications')
+            .select('*, profiles!notifications_sender_id_fkey(*)')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false })
+            .limit(20);
+        if (error) return { success: false, error: error.message };
+        return { success: true, notifications: data };
+    } catch (err) {
+        return { success: false, error: err.message };
+    }
 };
 
-// Format time ago
-window.timeAgo = function(dateString) {
-    const now = new Date();
-    const date = new Date(dateString);
-    const seconds = Math.floor((now - date) / 1000);
+window.markNotificationsRead = async function() {
+    try {
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        if (!user) return { success: false };
+        await supabaseClient
+            .from('notifications')
+            .update({ is_read: true })
+            .eq('user_id', user.id)
+            .eq('is_read', false);
+        return { success: true };
+    } catch (err) {
+        return { success: false, error: err.message };
+    }
+};
 
-    if (seconds < 60) return 'Just now';
-    if (seconds < 3600) return Math.floor(seconds / 60) + 'm ago';
-    if (seconds < 86400) return Math.floor(seconds / 3600) + 'h ago';
-    if (seconds < 604800) return Math.floor(seconds / 86400) + 'd ago';
+// ============================================================
+// UTILITY
+// ============================================================
+window.timeAgo = function(dateString) {
+    const date = new Date(dateString);
+    const now = new Date();
+    const seconds = Math.floor((now - date) / 1000);
+    if (seconds < 60) return 'just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days}d ago`;
     return date.toLocaleDateString();
 };
 
-// Generate initials from name
-window.getInitials = function(name) {
-    if (!name) return 'U';
-    return name
-        .split(' ')
-        .map(word => word[0])
-        .join('')
-        .toUpperCase()
-        .slice(0, 2);
+window.getStarRating = function(likesCount) {
+    if (likesCount >= 100) return { stars: 5, label: 'Viral' };
+    if (likesCount >= 50) return { stars: 4, label: 'Popular' };
+    if (likesCount >= 20) return { stars: 3, label: 'Trending' };
+    if (likesCount >= 5) return { stars: 2, label: 'Rising' };
+    if (likesCount >= 1) return { stars: 1, label: 'New' };
+    return { stars: 0, label: '' };
 };
 
-// Toast notification helper
-window.showToast = window.showToast || function(message, type = 'success') {
-    const toast = document.getElementById('toast');
-    const toastMessage = document.getElementById('toastMessage');
-    
-    if (toast && toastMessage) {
-        const icon = toast.querySelector('i');
-        toastMessage.textContent = message;
-        toast.className = `toast ${type}`;
-        if (icon) {
-            icon.className = type === 'success' ? 'fas fa-check-circle' : 'fas fa-exclamation-circle';
-        }
-        toast.classList.add('show');
-        setTimeout(() => {
-            toast.classList.remove('show');
-        }, 3000);
-    } else {
-        console.log(`Toast (${type}): ${message}`);
-    }
-};
+// ============================================================
+// ALIASES — index.js and user-profile.js call these names
+// ============================================================
+window.toggleLike               = window.likePost;
+window.toggleFollow             = window.followUser;
+window.markAllNotificationsRead = window.markNotificationsRead;
+window.getProfile               = window.getUserProfile;
 
-// ============================================
-// AVATAR UPLOAD
-// ============================================
-window.uploadAvatar = async function(file) {
-    try {
-        const user = await window.getCurrentUser();
-        if (!user) return { success: false, error: 'Not logged in' };
-
-        // Create unique file name
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${user.id}-${Date.now()}.${fileExt}`;
-        const filePath = fileName;
-
-        // Upload file to storage
-        const { data: uploadData, error: uploadError } = await window.supabaseClient.storage
-            .from('avatar')
-            .upload(filePath, file, {
-                cacheControl: '3600',
-                upsert: true
-            });
-
-        if (uploadError) {
-            console.error('Upload error:', uploadError);
-            return { success: false, error: uploadError.message };
-        }
-
-        // Get public URL
-        const { data: urlData } = window.supabaseClient.storage
-            .from('avatar')
-            .getPublicUrl(filePath);
-
-        const avatarUrl = urlData.publicUrl;
-
-        // Update profile with new avatar URL
-        const { data: profileData, error: updateError } = await window.supabaseClient
-            .from('profiles')
-            .update({ avatar_url: avatarUrl })
-            .eq('id', user.id)
-            .select()
-            .single();
-
-        if (updateError) {
-            console.error('Profile update error:', updateError);
-            return { success: false, error: updateError.message };
-        }
-
-        return { success: true, avatarUrl: avatarUrl };
-    } catch (error) {
-        console.error('Upload avatar error:', error);
-        return { success: false, error: error.message };
-    }
-};
-
-// ============================================
-// LIKE/UNLIKE POST (Alternative names for toggleLike)
-// ============================================
-window.likePost = async function(postId) {
-    return await window.toggleLike(postId);
-};
-
-window.unlikePost = async function(postId) {
-    return await window.toggleLike(postId);
-};
-
-console.log('Supabase config loaded successfully!');
-
-// ============================================
-// TUTORIALS FUNCTIONS
-// Added for tutorials.html page
-// ============================================
-
-// Get all tutorials (with profiles joined separately to avoid FK name issues)
-window.getTutorials = async function(limit = 50) {
-    try {
-        const { data: tutorials, error } = await window.supabaseClient
-            .from('tutorials')
-            .select('id, title, course_name, course_code, department, description, tags, video_url, likes_count, views_count, comments_count, created_at, user_id')
-            .order('created_at', { ascending: false })
-            .limit(limit);
-
-        if (error) return { success: false, error: error.message, tutorials: [] };
-
-        // Fetch profiles separately — avoids FK name dependency
-        const userIds = [...new Set((tutorials || []).map(t => t.user_id))];
-        let profileMap = {};
-        if (userIds.length > 0) {
-            const { data: profiles } = await window.supabaseClient
-                .from('profiles')
-                .select('id, full_name, avatar_url, department, followers_count')
-                .in('id', userIds);
-            (profiles || []).forEach(p => { profileMap[p.id] = p; });
-        }
-
-        const result = (tutorials || []).map(t => ({
-            ...t,
-            tags: t.tags || [],
-            profiles: profileMap[t.user_id] || {},
-        }));
-
-        return { success: true, tutorials: result };
-    } catch (error) {
-        console.error('getTutorials error:', error);
-        return { success: false, error: error.message, tutorials: [] };
-    }
-};
-
-// Create a tutorial
-window.createTutorial = async function({ title, course_name, course_code, department, description, tags, video_url }) {
-    try {
-        const user = await window.getCurrentUser();
-        if (!user) return { success: false, error: 'Not logged in' };
-
-        const { data, error } = await window.supabaseClient
-            .from('tutorials')
-            .insert({
-                user_id: user.id,
-                title,
-                course_name,
-                course_code,
-                department,
-                description,
-                tags: tags || [],
-                video_url,
-                likes_count:    0,
-                views_count:    0,
-                comments_count: 0,
-            })
-            .select('id, title, course_name, course_code, department, description, tags, video_url, likes_count, views_count, comments_count, created_at, user_id')
-            .single();
-
-        if (error) return { success: false, error: error.message };
-        return { success: true, tutorial: { ...data, tags: data.tags || [] } };
-    } catch (error) {
-        console.error('createTutorial error:', error);
-        return { success: false, error: error.message };
-    }
-};
-
-// Delete a tutorial (owner only — enforced by RLS)
-window.deleteTutorial = async function(tutorialId) {
-    try {
-        const { error } = await window.supabaseClient
-            .from('tutorials')
-            .delete()
-            .eq('id', tutorialId);
-
-        if (error) return { success: false, error: error.message };
-        return { success: true };
-    } catch (error) {
-        console.error('deleteTutorial error:', error);
-        return { success: false, error: error.message };
-    }
-};
-
-// Toggle like on a tutorial
-window.toggleTutorialLike = async function(tutorialId) {
-    try {
-        const user = await window.getCurrentUser();
-        if (!user) return { success: false, error: 'Not logged in' };
-
-        const { data: existing } = await window.supabaseClient
-            .from('tutorial_likes')
-            .select('id')
-            .eq('tutorial_id', tutorialId)
-            .eq('user_id', user.id)
-            .maybeSingle();
-
-        if (existing) {
-            const { error } = await window.supabaseClient
-                .from('tutorial_likes')
-                .delete()
-                .eq('id', existing.id);
-            if (error) return { success: false, error: error.message };
-            return { success: true, liked: false };
-        } else {
-            const { error } = await window.supabaseClient
-                .from('tutorial_likes')
-                .insert({ tutorial_id: tutorialId, user_id: user.id });
-            if (error) return { success: false, error: error.message };
-            return { success: true, liked: true };
-        }
-    } catch (error) {
-        console.error('toggleTutorialLike error:', error);
-        return { success: false, error: error.message };
-    }
-};
-
-// Get all tutorial IDs liked by current user
-window.getMyTutorialLikes = async function() {
-    try {
-        const user = await window.getCurrentUser();
-        if (!user) return [];
-
-        const { data } = await window.supabaseClient
-            .from('tutorial_likes')
-            .select('tutorial_id')
-            .eq('user_id', user.id);
-
-        return (data || []).map(r => r.tutorial_id);
-    } catch (error) {
-        console.error('getMyTutorialLikes error:', error);
-        return [];
-    }
-};
-
-// Get comments for a tutorial
-window.getTutorialComments = async function(tutorialId) {
-    try {
-        const { data, error } = await window.supabaseClient
-            .from('tutorial_comments')
-            .select('id, content, created_at, user_id')
-            .eq('tutorial_id', tutorialId)
-            .order('created_at', { ascending: true })
-            .limit(20);
-
-        if (error) return { success: false, error: error.message, comments: [] };
-
-        // Fetch commenter profiles
-        const uids = [...new Set((data || []).map(c => c.user_id))];
-        let profileMap = {};
-        if (uids.length > 0) {
-            const { data: profiles } = await window.supabaseClient
-                .from('profiles')
-                .select('id, full_name, avatar_url')
-                .in('id', uids);
-            (profiles || []).forEach(p => { profileMap[p.id] = p; });
-        }
-
-        const comments = (data || []).map(c => ({
-            ...c,
-            profiles: profileMap[c.user_id] || {},
-        }));
-
-        return { success: true, comments };
-    } catch (error) {
-        console.error('getTutorialComments error:', error);
-        return { success: false, error: error.message, comments: [] };
-    }
-};
-
-// Add a comment to a tutorial
-window.addTutorialComment = async function(tutorialId, content) {
-    try {
-        const user = await window.getCurrentUser();
-        if (!user) return { success: false, error: 'Not logged in' };
-        if (!content?.trim()) return { success: false, error: 'Comment cannot be empty' };
-
-        const { data, error } = await window.supabaseClient
-            .from('tutorial_comments')
-            .insert({ tutorial_id: tutorialId, user_id: user.id, content: content.trim() })
-            .select('id, content, created_at, user_id')
-            .single();
-
-        if (error) return { success: false, error: error.message };
-        return { success: true, comment: data };
-    } catch (error) {
-        console.error('addTutorialComment error:', error);
-        return { success: false, error: error.message };
-    }
-};
-
-console.log('Tutorials config functions loaded!');
+console.log('✅ supabase-config.js loaded — Cloudinary + Supabase ready');

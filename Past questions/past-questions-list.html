@@ -520,35 +520,58 @@
         list.style.display = 'block';
     }
 
+    /* ── Update download count chip + stat card in the UI ── */
+    function updateCountUI(questionId, newCount) {
+        const card = document.getElementById(`question-${questionId}`);
+        if (card) {
+            const chip = card.querySelector('.meta-chip.dls');
+            if (chip) chip.textContent = `⬇ ${newCount}`;
+        }
+        const statEl = document.getElementById('statDls');
+        if (statEl && statEl.textContent !== '—') {
+            statEl.textContent = parseInt(statEl.textContent) + 1;
+        }
+    }
+
     /* ── Download ── */
     async function downloadQuestion(questionId, fileName) {
         openDownloadModal('loading');
 
         // ── Increment download count immediately on button click ──────────
         try {
-            const { data: current } = await window.supabaseClient
-                .from('past_questions')
-                .select('download_count')
-                .eq('id', questionId)
-                .single();
+            // Try Supabase RPC first (needs function created in DB — see README)
+            const { error: rpcErr } = await window.supabaseClient
+                .rpc('increment_download_count', { question_id: questionId });
 
-            const newCount = (current?.download_count || 0) + 1;
+            if (rpcErr) {
+                // RPC not set up yet — fall back to direct read → write
+                console.warn('RPC not found, using direct update:', rpcErr.message);
+                const { data: row } = await window.supabaseClient
+                    .from('past_questions')
+                    .select('download_count')
+                    .eq('id', questionId)
+                    .single();
 
-            await window.supabaseClient
-                .from('past_questions')
-                .update({ download_count: newCount })
-                .eq('id', questionId);
+                const newCount = (row?.download_count || 0) + 1;
 
-            // Update the counter chip on the card in real-time (admin view)
-            const card = document.getElementById(`question-${questionId}`);
-            if (card) {
-                const chip = card.querySelector('.meta-chip.dls');
-                if (chip) chip.textContent = `⬇ ${newCount}`;
-            }
-            // Update the total downloads stat card
-            const statEl = document.getElementById('statDls');
-            if (statEl && statEl.textContent !== '—') {
-                statEl.textContent = parseInt(statEl.textContent) + 1;
+                const { error: updateErr } = await window.supabaseClient
+                    .from('past_questions')
+                    .update({ download_count: newCount })
+                    .eq('id', questionId);
+
+                if (updateErr) {
+                    console.error('Count update blocked (check RLS policy):', updateErr.message);
+                } else {
+                    updateCountUI(questionId, newCount);
+                }
+            } else {
+                // RPC worked — fetch fresh count for UI
+                const { data: row } = await window.supabaseClient
+                    .from('past_questions')
+                    .select('download_count')
+                    .eq('id', questionId)
+                    .single();
+                updateCountUI(questionId, row?.download_count || 0);
             }
         } catch (countErr) {
             console.warn('Download count update failed:', countErr);

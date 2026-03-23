@@ -523,6 +523,38 @@
     /* ── Download ── */
     async function downloadQuestion(questionId, fileName) {
         openDownloadModal('loading');
+
+        // ── Increment download count immediately on button click ──────────
+        try {
+            const { data: current } = await window.supabaseClient
+                .from('past_questions')
+                .select('download_count')
+                .eq('id', questionId)
+                .single();
+
+            const newCount = (current?.download_count || 0) + 1;
+
+            await window.supabaseClient
+                .from('past_questions')
+                .update({ download_count: newCount })
+                .eq('id', questionId);
+
+            // Update the counter chip on the card in real-time (admin view)
+            const card = document.getElementById(`question-${questionId}`);
+            if (card) {
+                const chip = card.querySelector('.meta-chip.dls');
+                if (chip) chip.textContent = `⬇ ${newCount}`;
+            }
+            // Update the total downloads stat card
+            const statEl = document.getElementById('statDls');
+            if (statEl && statEl.textContent !== '—') {
+                statEl.textContent = parseInt(statEl.textContent) + 1;
+            }
+        } catch (countErr) {
+            console.warn('Download count update failed:', countErr);
+        }
+        // ─────────────────────────────────────────────────────────────────
+
         try {
             const result = await window.dbOperations.generateDownloadUrl(questionId);
             if (!result.success) { openDownloadModal('error', result.error || 'Failed'); return; }

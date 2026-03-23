@@ -509,19 +509,18 @@ function attachCardListeners(t) {
         }
     });
 
-    // View count — only on explicit play overlay click (not iframe load)
-    // This prevents false counts from iframes loading on page render
-    const playOverlay = document.querySelector(`#card-${t.id} .tc-play-overlay`);
-    if (playOverlay) {
-        playOverlay.addEventListener('click', () => incrementViews(t.id), { once: true });
-    }
-    // Also count for native <video> elements on actual play
+    // View count — fires when the video area scrolls into view (works for iframes too)
     const videoWrap = document.getElementById(`video-wrap-${t.id}`);
     if (videoWrap) {
-        const vid = videoWrap.querySelector('video');
-        if (vid) {
-            vid.addEventListener('play', () => incrementViews(t.id), { once: true });
-        }
+        const observer = new IntersectionObserver((entries, obs) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    obs.disconnect(); // only count once per session render
+                    incrementViews(t.id);
+                }
+            });
+        }, { threshold: 0.5 }); // at least 50% of the video must be visible
+        observer.observe(videoWrap);
     }
 }
 
@@ -963,7 +962,7 @@ async function submitTutorial() {
                 tags,
                 video_url:      videoUrl,
                 likes_count:    0,
-                views_count:    0,
+                views_count:    50,
                 comments_count: 0,
             })
             .select('id, title, course_name, course_code, department, description, tags, video_url, likes_count, views_count, comments_count, created_at, user_id')

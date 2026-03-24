@@ -18,30 +18,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles/index.css">
     <meta name="theme-color" content="#1877f2">
-
     <link rel="stylesheet" href="styles/tutorials.css">
-    <style>
-        .video-drop-zone {
-            position: relative;
-            border: 2px dashed var(--border, #ddd);
-            border-radius: 12px;
-            padding: 28px 20px;
-            text-align: center;
-            cursor: pointer;
-            transition: border-color 0.2s, background 0.2s;
-            background: var(--bg-secondary, #f8f9fa);
-        }
-        .video-drop-zone:hover, .video-drop-zone.drag-over {
-            border-color: var(--brand, #1877f2);
-            background: rgba(24,119,242,0.04);
-        }
-        .drop-zone-selected {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            text-align: left;
-        }
-    </style>
+
+
 </head>
 <body>
 
@@ -168,7 +147,7 @@
             <button class="feed-tab" data-tab="his">History</button>
             <button class="feed-tab" data-tab="econs">Economics</button>
             <button class="feed-tab" data-tab="edu">Education</button>
-            <button class="feed-tab" data-tab="science">Science</button> 
+            <button class="feed-tab" data-tab="science">Science</button>
             <button class="feed-tab" data-tab="soc">Social Studies</button>
             <button class="feed-tab" data-tab="Geo">Geography</button>
             <button class="feed-tab" data-tab="poli">Political science</button>
@@ -186,7 +165,7 @@
 
         <!-- Posts Container -->
         <div id="tutorialsContainer">
-            <!-- Loading skeletons -->
+            <!-- Loading skeleton -->
             <div class="tutorial-card" id="skeletonCard">
                 <div style="padding: 14px 16px; display:flex; gap:10px; align-items:center;">
                     <div class="skeleton" style="width:42px;height:42px;border-radius:50%;flex-shrink:0;"></div>
@@ -250,7 +229,7 @@
     </aside>
 </div>
 
-<!-- ===== UPLOAD TUTORIAL MODAL ===== -->
+<!-- ===== POST TUTORIAL MODAL ===== -->
 <div class="modal-overlay" id="uploadModal">
     <div class="modal-box">
         <div class="modal-head">
@@ -261,55 +240,50 @@
         </div>
         <div class="modal-body">
 
-            <!-- ① Video File Upload -->
-            <div class="form-group">
-                <label class="form-label">Video File <span>*</span></label>
+            <!-- How to upload steps -->
+            <div style="background:var(--bg-secondary,#f4f6fb);border-radius:10px;padding:12px 16px;margin-bottom:18px;border-left:3px solid var(--brand,#1877f2);">
+                <div style="font-weight:600;font-size:0.85rem;margin-bottom:8px;color:var(--text-primary);">
+                    <i class="fas fa-circle-info" style="color:var(--brand);margin-right:6px;"></i>How to post a tutorial
+                </div>
+                <ol style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px;">
+                    <li style="font-size:0.82rem;color:var(--text-secondary);">Go to <strong>Google Drive</strong> and upload your video</li>
+                    <li style="font-size:0.82rem;color:var(--text-secondary);">Right-click the video → <strong>Share</strong> → set access to <strong>"Anyone with the link"</strong> → <strong>Copy link</strong></li>
+                    <li style="font-size:0.82rem;color:var(--text-secondary);">Paste the link below, fill in the details, and hit <strong>Publish</strong> 🎉</li>
+                </ol>
+            </div>
 
-                <!-- Drop zone -->
-                <div class="video-drop-zone" id="videoDropZone">
-                    <input type="file" id="videoFileInput" accept="video/*"
-                           style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;">
-                    <div class="drop-zone-content" id="dropZoneContent">
-                        <i class="fas fa-cloud-upload-alt" style="font-size:2.2rem;color:var(--brand);margin-bottom:10px;"></i>
-                        <div style="font-weight:600;font-size:0.95rem;margin-bottom:4px;">Click or drag a video here</div>
-                        <div style="font-size:0.8rem;color:var(--text-muted);">MP4, MOV, AVI, MKV · Max 500 MB</div>
-                    </div>
-                    <!-- Selected file name -->
-                    <div class="drop-zone-selected" id="dropZoneSelected" style="display:none;">
-                        <i class="fas fa-film" style="color:var(--brand);font-size:1.4rem;"></i>
-                        <div>
-                            <div id="selectedFileName" style="font-weight:600;font-size:0.9rem;word-break:break-all;"></div>
-                            <div id="selectedFileSize" style="font-size:0.78rem;color:var(--text-muted);margin-top:2px;"></div>
-                        </div>
-                        <button type="button" id="clearVideoFile"
-                                style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:1.1rem;">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
+            <!-- ① Google Drive Link -->
+            <div class="form-group">
+                <label class="form-label" for="videoUrlInput">
+                    Google Drive Link <span>*</span>
+                </label>
+                <div class="drive-url-wrap">
+                    <i class="fas fa-brands fa-google-drive drive-icon"></i>
+                    <input type="url" class="form-input" id="videoUrlInput"
+                           placeholder="Paste your Google Drive share link here…">
+                    <button type="button" class="clear-url-btn" id="clearYtUrl" title="Clear">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="drive-hint">
+                    <i class="fas fa-info-circle"></i>
+                    Open your video in Drive → Share → "Anyone with the link" → Copy link
                 </div>
 
-                <!-- Upload progress bar (hidden until upload starts) -->
-                <div id="uploadProgressWrap" style="display:none;margin-top:10px;">
-                    <div style="display:flex;justify-content:space-between;font-size:0.8rem;color:var(--text-muted);margin-bottom:4px;">
-                        <span id="uploadStatusText">Uploading…</span>
-                        <span id="uploadPercent">0%</span>
-                    </div>
-                    <div style="background:var(--border);border-radius:99px;height:7px;overflow:hidden;">
-                        <div id="uploadProgressBar"
-                             style="height:100%;background:linear-gradient(90deg,#1877f2,#00c6ff);border-radius:99px;width:0%;transition:width 0.3s ease;"></div>
-                    </div>
+                <!-- Live preview -->
+                <div class="yt-preview" id="ytPreview">
+                    <iframe id="ytPreviewFrame" allow="autoplay" allowfullscreen></iframe>
                 </div>
             </div>
 
-            <!-- ③ Video Title (auto-detects course) -->
+            <!-- ② Video Title -->
             <div class="form-group">
                 <label class="form-label" for="videoTitle">Video Title <span>*</span></label>
                 <input type="text" class="form-input" id="videoTitle"
                        placeholder="e.g. Introduction to Calculus – Derivatives Explained">
-
             </div>
 
-            <!-- ④ Department / Course Code -->
+            <!-- ③ Department / Course Code -->
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
                 <div class="form-group">
                     <label class="form-label" for="videoDepartment">Department <span>*</span></label>
@@ -341,14 +315,17 @@
                 </div>
             </div>
 
-            <!-- ⑤ Description -->
+            <!-- ④ Description -->
             <div class="form-group">
-                <label class="form-label" for="videoDesc">Description <span style="color:#aaa;font-size:0.8rem;font-weight:400;">(optional)</span></label>
+                <label class="form-label" for="videoDesc">
+                    Description
+                    <span style="color:#aaa;font-size:0.8rem;font-weight:400;">(optional)</span>
+                </label>
                 <textarea class="form-textarea" id="videoDesc"
                           placeholder="What will students learn? Include key topics, prerequisites, and why this tutorial is helpful…"></textarea>
             </div>
 
-            <!-- ⑥ Tags -->
+            <!-- ⑤ Tags -->
             <div class="form-group">
                 <label class="form-label" for="videoTags">
                     Tags <span style="color:var(--text-muted);font-weight:400;">(comma separated)</span>
@@ -373,10 +350,10 @@
     <span id="toastMsg">Done!</span>
 </div>
 
-<!-- Scripts -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" ></script>
-<script src="supabase-config.js" ></script>
-<script src="scripts/tutorials.js" ></script>
+<!-- Scripts — NO defer so DOMContentLoaded fires correctly -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+<script src="scripts/tutorials.js"></script>
 
 </body>
 </html>

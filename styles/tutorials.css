@@ -605,81 +605,36 @@
         .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--border-focus); }
         .form-textarea { resize: vertical; min-height: 90px; }
 
-        /* Google Drive guide steps */
-        .yt-guide {
-            background: linear-gradient(135deg, #f0f7ff 0%, #e8f3ff 100%);
-            border: 1.5px solid #c2d9f8;
-            border-radius: var(--radius);
-            padding: 16px 18px;
-            margin-bottom: 16px;
+        /* ===== GOOGLE DRIVE URL INPUT ===== */
+        .drive-url-wrap { position: relative; }
+        .drive-url-wrap .drive-icon {
+            position: absolute; left: 13px; top: 50%; transform: translateY(-50%);
+            color: #4285f4; font-size: 1rem; pointer-events: none;
         }
-        .yt-guide-title {
-            display: flex; align-items: center; gap: 8px;
-            font-family: var(--font-display); font-size: 0.88rem; font-weight: 700;
-            color: #1a73e8; margin-bottom: 12px;
+        .drive-url-wrap .form-input { padding-left: 38px; padding-right: 38px; }
+        .drive-url-wrap .clear-url-btn {
+            position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+            background: none; border: none; cursor: pointer;
+            color: var(--text-muted); font-size: 1rem; display: none;
         }
-        .yt-guide-title i { font-size: 1rem; }
-        .yt-steps { display: flex; flex-direction: column; gap: 10px; }
-        .yt-step {
-            display: flex; align-items: flex-start; gap: 12px;
-        }
-        .yt-step-num {
-            width: 24px; height: 24px; border-radius: 50%;
-            background: #1a73e8; color: #fff;
-            font-size: 0.72rem; font-weight: 800;
-            display: flex; align-items: center; justify-content: center;
-            flex-shrink: 0; margin-top: 1px;
-        }
-        .yt-step-text { font-size: 0.82rem; color: var(--text-secondary); line-height: 1.5; }
-        .yt-step-text strong { color: var(--text-primary); }
-        .yt-step-text code {
-            background: rgba(26,115,232,0.1); color: #1a73e8;
-            padding: 1px 6px; border-radius: 4px; font-size: 0.78rem;
-            font-family: monospace;
-        }
+        .drive-url-wrap .clear-url-btn.visible { display: block; }
 
-        /* URL input with Drive icon */
-        .yt-url-wrap { position: relative; }
-        .yt-url-wrap .yt-icon {
-            position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
-            color: #1a73e8; font-size: 1.1rem; user-select: none;
-        }
-        .yt-url-input {
-            width: 100%; padding: 11px 14px 11px 42px;
-            border: 2px solid var(--border);
-            border-radius: var(--radius-sm); outline: none;
-            font-family: var(--font-body); font-size: 0.9rem;
-            color: var(--text-primary); background: var(--surface);
-            transition: border-color var(--transition), box-shadow var(--transition);
-        }
-        .yt-url-input:focus {
-            border-color: #1a73e8;
-            box-shadow: 0 0 0 3px rgba(26,115,232,0.1);
-        }
-        .yt-url-input::placeholder { color: var(--text-muted); }
-
-        /* URL preview card */
+        /* ===== DRIVE LIVE PREVIEW ===== */
         .yt-preview {
-            display: none; margin-top: 10px;
-            border-radius: var(--radius-sm); overflow: hidden;
-            border: 1px solid var(--border);
+            margin-top: 10px; border-radius: 10px;
+            overflow: hidden; display: none;
+            aspect-ratio: 16/9; background: #000;
         }
         .yt-preview.show { display: block; }
-        .yt-preview iframe {
-            width: 100%; aspect-ratio: 16/9; border: none; display: block;
+        .yt-preview iframe { width: 100%; height: 100%; border: none; }
+
+        /* ===== DRIVE HINT TEXT ===== */
+        .drive-hint {
+            margin-top: 6px; font-size: 0.78rem;
+            color: var(--text-muted);
+            display: flex; align-items: center; gap: 5px;
         }
-        .yt-preview-info {
-            padding: 10px 14px; background: var(--surface-2);
-            display: flex; align-items: center; gap: 8px;
-        }
-        .yt-preview-info i { color: #1a73e8; }
-        .yt-preview-info span { font-size: 0.8rem; color: var(--text-secondary); font-weight: 500; }
-        .yt-preview-clear {
-            margin-left: auto; background: none; border: none; cursor: pointer;
-            color: var(--text-muted); font-size: 0.8rem;
-            transition: color var(--transition);
-        }
-        .yt-preview-clear:hover { color: #e53935; }
+        .drive-hint a { color: var(--brand); text-decoration: none; }
 
         .modal-foot {
             padding: 14px 22px 18px;
@@ -814,16 +769,6 @@
             .tutorial-hero { flex-direction: column; align-items: flex-start; }
             .hero-stats { align-self: stretch; justify-content: space-around; }
         }
-        @media (max-width: 720px) {
-            .page-wrapper { grid-template-columns: 1fr; padding: 14px 10px 50px; }
-            .sidebar-left { display: none; }
-            .tutorial-hero { padding: 24px 20px; }
-            .hero-title { font-size: 1.4rem; }
-            .hero-stats { gap: 16px; }
-            .hero-stat-num { font-size: 1.3rem; }
-        }
-
-
         /* ===== MOBILE HORIZONTAL OVERFLOW FIX ===== */
 
         /*
@@ -853,11 +798,15 @@
                 grid-template-columns: 1fr;
                 padding: 14px 10px 50px;
             }
+            .sidebar-left { display: none; }
 
             .tutorial-hero {
                 padding: 24px 16px;
                 box-sizing: border-box;
             }
+            .hero-title { font-size: 1.4rem; }
+            .hero-stats { gap: 16px; }
+            .hero-stat-num { font-size: 1.3rem; }
 
             /* feed-tabs has 6 white-space:nowrap buttons — let it scroll internally */
             .feed-tabs {

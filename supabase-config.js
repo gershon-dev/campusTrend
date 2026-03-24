@@ -408,16 +408,16 @@ window.followUser = async function(targetUserId) {
         const { data: { user } } = await supabaseClient.auth.getUser();
         if (!user) return { success: false, error: 'Not authenticated' };
         const { data: existing } = await supabaseClient
-            .from('follows')
+            .from('followers')
             .select('id')
             .eq('follower_id', user.id)
             .eq('following_id', targetUserId)
             .single();
         if (existing) {
-            await supabaseClient.from('follows').delete().eq('id', existing.id);
+            await supabaseClient.from('followers').delete().eq('id', existing.id);
             return { success: true, following: false };
         } else {
-            await supabaseClient.from('follows').insert([{ follower_id: user.id, following_id: targetUserId }]);
+            await supabaseClient.from('followers').insert([{ follower_id: user.id, following_id: targetUserId }]);
             return { success: true, following: true };
         }
     } catch (err) {
@@ -487,6 +487,23 @@ window.getStarRating = function(likesCount) {
 };
 
 // ============================================================
+// FOLLOW CHECK
+// ============================================================
+window.isFollowing = async function(targetUserId) {
+    try {
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        if (!user) return false;
+        const { data } = await supabaseClient
+            .from('followers')
+            .select('id')
+            .eq('follower_id', user.id)
+            .eq('following_id', targetUserId)
+            .maybeSingle();
+        return !!data;
+    } catch { return false; }
+};
+
+// ============================================================
 // ALIASES — index.js and user-profile.js call these names
 // ============================================================
 window.toggleLike               = window.likePost;
@@ -494,4 +511,4 @@ window.toggleFollow             = window.followUser;
 window.markAllNotificationsRead = window.markNotificationsRead;
 window.getProfile               = window.getUserProfile;
 
-console.log('✅ supabase-config.js loaded — Cloudinary + Supabase ready');
+//console.log('✅ supabase-config.js loaded — Cloudinary + Supabase ready');

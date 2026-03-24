@@ -116,7 +116,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         populateDepartmentFilter();
 
         // ── Step 3: fetch likes + following + tutorials ALL in parallel ────────
-        await Promise.all([
+        await Promise.allSettled([
             loadMyFollowing(),
             loadMyLikes(),
             loadTutorials()   // will overwrite cache render with fresh data
@@ -128,10 +128,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
-// Show cached tutorials immediately — zero network requests.
-// IMPORTANT: do NOT call renderTutorials/applyFilters here because
-// buildTutorialCard uses currentUser.id which is null at this point.
-// Cards are rendered after auth completes in loadTutorials().
+// Show cached tutorials immediately — zero network requests
 function showCachedTutorials() {
     try {
         const raw = localStorage.getItem(TUT_PAGE_CACHE_KEY);
@@ -139,10 +136,12 @@ function showCachedTutorials() {
         const { tutorials: cached, ts } = JSON.parse(raw);
         if (!cached || Date.now() - ts > TUT_PAGE_CACHE_TTL) return;
 
+        // Render cached data instantly
         allTutorials = cached;
         filteredList = [...cached];
-        // Only safe to update stat widgets here — no card rendering yet
+        document.getElementById('skeletonCard')?.remove();
         updateHeroStats();
+        applyFilters();
         renderTopTutors();
         renderTrendingTopics();
     } catch (e) { /* ignore cache errors */ }
@@ -276,15 +275,15 @@ async function loadTutorials() {
 
 function updateHeroStats() {
     const uniqueTutors = new Set(allTutorials.map(t => t.user_id)).size;
-    const el = id => document.getElementById(id);
-    if (el('heroTotalTutors')) el('heroTotalTutors').textContent = formatCount(uniqueTutors);
+    document.getElementById('heroTotalTutors').textContent = formatCount(uniqueTutors);
 
-    const weekAgo  = Date.now() - 7 * 24 * 3600 * 1000;
+    // week stats (approximate using created_at in last 7 days)
+    const weekAgo = Date.now() - 7 * 24 * 3600 * 1000;
     const weekTuts = allTutorials.filter(t => new Date(t.created_at) > weekAgo);
-    if (el('weekUploads')) el('weekUploads').textContent = weekTuts.length;
-    if (el('weekLikes'))   el('weekLikes').textContent   = formatCount(weekTuts.reduce((s,t)=>s+(t.likes_count||0),0));
-    if (el('weekTutors'))  el('weekTutors').textContent  = new Set(weekTuts.map(t=>t.user_id)).size;
-    if (el('countAll'))    el('countAll').textContent    = allTutorials.length;
+    document.getElementById('weekUploads').textContent = weekTuts.length;
+    document.getElementById('weekLikes').textContent   = formatCount(weekTuts.reduce((s,t)=>s+(t.likes_count||0),0));
+    document.getElementById('weekTutors').textContent  = new Set(weekTuts.map(t=>t.user_id)).size;
+    document.getElementById('countAll').textContent    = allTutorials.length;
 }
 
 // ─── Filtering & Search ───────────────────────────────────────────────────────
@@ -370,7 +369,7 @@ function buildTutorialCard(t) {
         : initials;
     const isLiked     = myLikes.has(t.id);
     const isFollowing = myFollowing.has(t.user_id);
-    const isOwn       = currentUser && t.user_id === currentUser.id;
+    const isOwn       = t.user_id === currentUser.id;
     const tags        = (t.tags || []).slice(0, 4);
 
     const videoEmbed = buildVideoEmbed(t.video_url);
@@ -448,7 +447,7 @@ function buildTutorialCard(t) {
         <!-- Comments -->
         <div class="tc-comments" id="comments-${t.id}">
             <div class="tc-comment-input-wrap">
-                <div class="tc-comment-avatar">${getInitials(currentProfile?.full_name || '')}</div>
+                <div class="tc-comment-avatar">${getInitials(currentProfile.full_name)}</div>
                 <input class="tc-comment-input" id="comment-input-${t.id}"
                        placeholder="Write a comment…" type="text"
                        onkeypress="handleCommentKey(event, '${t.id}')">
@@ -471,14 +470,6 @@ function buildVideoEmbed(url) {
         <div class="tc-video-thumb" style="background:#1a1a2e;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;">
             <i class="fas fa-video" style="font-size:2.5rem;color:rgba(255,255,255,0.2);"></i>
         </div>`;
-    }
-
-    // Cloudinary video — render as native <video> element
-    if (url.includes('res.cloudinary.com')) {
-        return `<video src="${escHtml(url)}"
-                       controls playsinline preload="metadata"
-                       style="width:100%;aspect-ratio:16/9;background:#000;display:block;border-radius:0;">
-                </video>`;
     }
 
     // Google Drive — extract file ID and build /preview embed URL
@@ -632,9 +623,18 @@ async function toggleFollow(targetUserId, cardId) {
                 .eq('follower_id', currentUser.id)
                 .eq('following_id', targetUserId);
         } else {
-            await window.supabaseClient
+            // Check first to avoid 409 Conflict on duplicate insert
+            const { data: existing } = await window.supabaseClient
                 .from('followers')
-                .insert({ follower_id: currentUser.id, following_id: targetUserId });
+                .select('follower_id')
+                .eq('follower_id', currentUser.id)
+                .eq('following_id', targetUserId)
+                .maybeSingle();
+            if (!existing) {
+                await window.supabaseClient
+                    .from('followers')
+                    .insert({ follower_id: currentUser.id, following_id: targetUserId });
+            }
         }
 
         // ── Update followers_count on the target user's profile ──────────────
@@ -727,23 +727,33 @@ async function loadComments(tutorialId) {
     if (!list) return;
 
     try {
-        const { data, error } = await window.supabaseClient
+        // Step 1: fetch comments without FK join (avoids schema cache error)
+        const { data: comments, error } = await window.supabaseClient
             .from('tutorial_comments')
-            .select(`id, content, created_at, user_id,
-                     profiles!tutorial_comments_user_id_fkey(full_name, avatar_url)`)
+            .select('id, content, created_at, user_id')
             .eq('tutorial_id', tutorialId)
             .order('created_at', { ascending: true })
             .limit(20);
 
         if (error) throw error;
 
-        if (!data || data.length === 0) {
+        if (!comments || comments.length === 0) {
             list.innerHTML = '<p style="font-size:0.8rem;color:var(--text-muted);text-align:center;padding:8px;">No comments yet. Be the first!</p>';
             return;
         }
 
-        list.innerHTML = data.map(c => {
-            const p = c.profiles || {};
+        // Step 2: fetch profiles for comment authors separately
+        const userIds = [...new Set(comments.map(c => c.user_id))];
+        const { data: profiles } = await window.supabaseClient
+            .from('profiles')
+            .select('id, full_name, avatar_url')
+            .in('id', userIds);
+
+        const profileMap = {};
+        (profiles || []).forEach(p => { profileMap[p.id] = p; });
+
+        list.innerHTML = comments.map(c => {
+            const p = profileMap[c.user_id] || {};
             const initials = getInitials(p.full_name);
             const avatarHtml = p.avatar_url
                 ? `<img src="${escHtml(p.avatar_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" alt="">`
@@ -886,91 +896,37 @@ function isValidDriveUrl(url) {
     return !!extractDriveId(url);
 }
 
-// ─── Cloudinary File Picker ───────────────────────────────────────────────────
-const CLOUDINARY_CLOUD_NAME   = 'deyu6uccg';
-const CLOUDINARY_UPLOAD_PRESET = 'campus_app_uploads';
+// Live preview: watch the URL input and show embed as student types
+function initYouTubePreview() {
+    const input    = document.getElementById('videoUrlInput');
+    const preview  = document.getElementById('ytPreview');
+    const frame    = document.getElementById('ytPreviewFrame');
+    const clearBtn = document.getElementById('clearYtUrl');
+    let debounce;
 
-let selectedVideoFile = null; // holds the File chosen by the user
-
-function initVideoFilePicker() {
-    const input       = document.getElementById('videoFileInput');
-    const dropZone    = document.getElementById('videoDropZone');
-    const content     = document.getElementById('dropZoneContent');
-    const selected    = document.getElementById('dropZoneSelected');
-    const nameEl      = document.getElementById('selectedFileName');
-    const sizeEl      = document.getElementById('selectedFileSize');
-    const clearBtn    = document.getElementById('clearVideoFile');
-
-    if (!input) return;
-
-    function formatBytes(bytes) {
-        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-        return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-    }
-
-    function applyFile(file) {
-        if (!file || !file.type.startsWith('video/')) {
-            showToast('Please select a valid video file', 'error');
-            return;
+    input?.addEventListener('input', () => {
+        // Show/hide clear button
+        if (clearBtn) {
+            clearBtn.classList.toggle('visible', input.value.length > 0);
         }
-        if (file.size > 500 * 1024 * 1024) {
-            showToast('Video must be under 500 MB', 'error');
-            return;
-        }
-        selectedVideoFile = file;
-        nameEl.textContent = file.name;
-        sizeEl.textContent = formatBytes(file.size);
-        content.style.display  = 'none';
-        selected.style.display = 'flex';
-    }
-
-    input.addEventListener('change', () => { if (input.files[0]) applyFile(input.files[0]); });
-
-    // Drag-and-drop
-    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
-    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
-    dropZone.addEventListener('drop', e => {
-        e.preventDefault();
-        dropZone.classList.remove('drag-over');
-        const file = e.dataTransfer.files[0];
-        if (file) applyFile(file);
-    });
-
-    clearBtn?.addEventListener('click', e => {
-        e.stopPropagation();
-        selectedVideoFile = null;
-        input.value = '';
-        content.style.display  = '';
-        selected.style.display = 'none';
-    });
-}
-
-async function uploadVideoToCloudinary(file, onProgress) {
-    const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/video/upload`;
-    return new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        const fd  = new FormData();
-        fd.append('file', file);
-        fd.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-        fd.append('resource_type', 'video');
-
-        xhr.upload.addEventListener('progress', e => {
-            if (e.lengthComputable && typeof onProgress === 'function') {
-                onProgress(Math.round((e.loaded / e.total) * 100));
-            }
-        });
-        xhr.addEventListener('load', () => {
-            if (xhr.status >= 200 && xhr.status < 300) {
-                const data = JSON.parse(xhr.responseText);
-                resolve(data.secure_url);
+        clearTimeout(debounce);
+        debounce = setTimeout(() => {
+            const driveId = extractDriveId(input.value.trim());
+            if (driveId) {
+                frame.src = buildDriveEmbedUrl(driveId);
+                preview.classList.add('show');
             } else {
-                const err = JSON.parse(xhr.responseText);
-                reject(new Error(err.error?.message || 'Upload failed'));
+                preview.classList.remove('show');
+                frame.src = '';
             }
-        });
-        xhr.addEventListener('error', () => reject(new Error('Network error during upload')));
-        xhr.open('POST', url);
-        xhr.send(fd);
+        }, 700);
+    });
+
+    clearBtn?.addEventListener('click', () => {
+        input.value = '';
+        clearBtn.classList.remove('visible');
+        preview.classList.remove('show');
+        frame.src = '';
     });
 }
 
@@ -984,71 +940,43 @@ function closeUploadModal() {
 }
 
 function resetUploadForm() {
-    ['videoTitle','videoDesc','videoTags','videoCourse'].forEach(id => {
+    ['videoTitle','videoDesc','videoTags','videoCourse','videoUrlInput'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
     });
     document.getElementById('videoDepartment').value = '';
 
-    // Reset file picker
-    selectedVideoFile = null;
-    const input = document.getElementById('videoFileInput');
-    if (input) input.value = '';
-    const content  = document.getElementById('dropZoneContent');
-    const selected = document.getElementById('dropZoneSelected');
-    if (content)  content.style.display  = '';
-    if (selected) selected.style.display = 'none';
+    // Hide clear button
+    document.getElementById('clearYtUrl')?.classList.remove('visible');
 
-    // Hide progress bar
-    const progressWrap = document.getElementById('uploadProgressWrap');
-    if (progressWrap) progressWrap.style.display = 'none';
-    const bar = document.getElementById('uploadProgressBar');
-    if (bar) bar.style.width = '0%';
+    // Clear Drive preview
+    const preview = document.getElementById('ytPreview');
+    const frame   = document.getElementById('ytPreviewFrame');
+    if (preview) preview.classList.remove('show');
+    if (frame)   frame.src = '';
 }
 
 async function submitTutorial() {
-    const title  = (document.getElementById('videoTitle')?.value || '').trim();
-    const dept   = document.getElementById('videoDepartment')?.value || '';
-    const desc   = (document.getElementById('videoDesc')?.value || '').trim();
-    const tags   = (document.getElementById('videoTags')?.value || '').split(',').map(t => t.trim()).filter(Boolean);
-    const course = (document.getElementById('videoCourse')?.value || '').trim();
-
+    const videoUrl = (document.getElementById('videoUrlInput')?.value || '').trim();
+    const title    = (document.getElementById('videoTitle')?.value || '').trim();
+    const dept     = document.getElementById('videoDepartment')?.value || '';
+    const desc     = (document.getElementById('videoDesc')?.value || '').trim();
+    const tags     = (document.getElementById('videoTags')?.value || '').split(',').map(t => t.trim()).filter(Boolean);
+    const course   = (document.getElementById('videoCourse')?.value || '').trim();
     // Validation
-    if (!selectedVideoFile) {
-        showToast('Please select a video file to upload', 'error');
+    if (!videoUrl || !isValidDriveUrl(videoUrl)) {
+        showToast('Please paste a valid Google Drive link', 'error');
+        document.getElementById('videoUrlInput')?.focus();
         return;
     }
     if (!title) { showToast('Please enter a video title', 'error'); return; }
     if (!dept)  { showToast('Please select a department', 'error'); return; }
-
+    
     const btn = document.getElementById('submitTutorialBtn');
     btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading…';
-
-    // Show progress bar
-    const progressWrap = document.getElementById('uploadProgressWrap');
-    const progressBar  = document.getElementById('uploadProgressBar');
-    const percentEl    = document.getElementById('uploadPercent');
-    const statusEl     = document.getElementById('uploadStatusText');
-    if (progressWrap) progressWrap.style.display = 'block';
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Publishing…';
 
     try {
-        // ── Step 1: Upload video to Cloudinary ──────────────────────────────
-        let videoUrl;
-        try {
-            videoUrl = await uploadVideoToCloudinary(selectedVideoFile, (pct) => {
-                if (progressBar) progressBar.style.width = pct + '%';
-                if (percentEl)   percentEl.textContent   = pct + '%';
-            });
-        } catch (uploadErr) {
-            showToast('Upload failed: ' + uploadErr.message, 'error');
-            return;
-        }
-
-        // ── Step 2: Save tutorial record to Supabase ────────────────────────
-        if (statusEl) statusEl.textContent = 'Saving tutorial…';
-        if (progressBar) progressBar.style.width = '100%';
-
         const { data, error } = await window.supabaseClient
             .from('tutorials')
             .insert({
@@ -1090,6 +1018,13 @@ async function submitTutorial() {
         renderTrendingTopics();
         closeUploadModal();
         showToast('Tutorial published! 🎉');
+        // ── View boosts are handled server-side by Supabase ───────────────────
+        // A DB trigger (trg_schedule_view_boosts) automatically creates two
+        // jobs in view_boost_jobs when this tutorial was inserted:
+        //   • +100 views after 30 minutes
+        //   • +1 000 views after 1 day
+        // The Edge Function "run-view-boosts" (called every minute by pg_cron)
+        // picks up and applies those boosts — no client-side timers needed.
 
     } catch (err) {
         console.error('submitTutorial:', err);
@@ -1097,8 +1032,6 @@ async function submitTutorial() {
     } finally {
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-paper-plane"></i> Publish Tutorial';
-        if (progressWrap) progressWrap.style.display = 'none';
-        if (progressBar)  progressBar.style.width = '0%';
     }
 }
 
@@ -1201,8 +1134,8 @@ function setupEventListeners() {
     // Submit
     document.getElementById('submitTutorialBtn')?.addEventListener('click', submitTutorial);
 
-    // Video file picker
-    initVideoFilePicker();
+    // YouTube live preview
+    initYouTubePreview();
 
 
 

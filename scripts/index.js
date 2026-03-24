@@ -760,182 +760,429 @@ document.addEventListener('DOMContentLoaded', async function() {
  return `linear-gradient(135deg, hsl(${hue}, 70%, 50%), hsl(${(hue + 40) % 360}, 70%, 40%))`;
  }
  function setupCreatePostModal() {
- const openUploadModal = document.getElementById('openUploadModal');
- const closeUploadModal = document.getElementById('closeUploadModal');
- const imageUploadArea = document.getElementById('imageUploadArea');
- const imageInput = document.getElementById('imageInput');
- const imagePreview = document.getElementById('imagePreview');
+ const openUploadModal       = document.getElementById('openUploadModal');
+ const closeUploadModal      = document.getElementById('closeUploadModal');
+ const imageUploadArea       = document.getElementById('imageUploadArea');
+ const imageInput            = document.getElementById('imageInput');
+ const imagePreview          = document.getElementById('imagePreview');
  const imagePreviewContainer = document.getElementById('imagePreviewContainer');
- const uploadPlaceholder = document.getElementById('uploadPlaceholder');
- const removeImageBtn = document.getElementById('removeImageBtn');
- const postDescription = document.getElementById('postDescription');
- const charCount = document.getElementById('charCount');
- const submitPostBtn = document.getElementById('submitPostBtn');
+ const uploadPlaceholder     = document.getElementById('uploadPlaceholder');
+ const removeImageBtn        = document.getElementById('removeImageBtn');
+ const postDescription       = document.getElementById('postDescription');
+ const charCount             = document.getElementById('charCount');
+ const submitPostBtn         = document.getElementById('submitPostBtn');
+
+ // ── Trim state ────────────────────────────────────────────────────────────
+ let _rawFile     = null;
+ let _trimmedBlob = null;   // result of trim — used for upload if set
+ let _vidDuration = 0;
+ let _trimStart   = 0;
+ let _trimEnd     = 0;
+ let _dragging    = null;
+ const MB100      = 100 * 1024 * 1024;
+
+ function fmtTime(s) {
+  const m = Math.floor(s / 60), sec = Math.floor(s % 60);
+  return m + ':' + (sec < 10 ? '0' : '') + sec;
+ }
+
+ // ── Trim UI ───────────────────────────────────────────────────────────────
+ function initTrimBar(file, videoEl) {
+  const bar = document.getElementById('trimBar');
+  if (bar) bar.style.display = 'block';
+  _trimStart = 0;
+  const limitT = _vidDuration * (MB100 / file.size);
+  _trimEnd = (file.size > MB100) ? Math.min(limitT, _vidDuration) : _vidDuration;
+  _trimmedBlob = null;
+  renderTrimUI();
+  drawThumbs(videoEl);
+ }
+
+ function renderTrimUI() {
+  const track = document.getElementById('trimTrack');
+  if (!track || _vidDuration <= 0) return;
+  const W  = track.offsetWidth || 400;
+  const pS = (_trimStart / _vidDuration) * W;
+  const pE = (_trimEnd   / _vidDuration) * W;
+  const hW = 20;
+  const hS  = document.getElementById('handleStart');
+  const hE  = document.getElementById('handleEnd');
+  const rng = document.getElementById('trimRange');
+  const sL  = document.getElementById('shadeLeft');
+  const sR  = document.getElementById('shadeRight');
+  if (hS)  hS.style.left   = pS + 'px';
+  if (hE)  hE.style.left   = (pE - hW) + 'px';
+  if (rng) { rng.style.left = pS + 'px'; rng.style.width = (pE - pS) + 'px'; }
+  if (sL)  sL.style.width  = pS + 'px';
+  if (sR)  sR.style.width  = (W - pE) + 'px';
+  const sl = document.getElementById('trimStartLabel');
+  const el = document.getElementById('trimEndLabel');
+  const dl = document.getElementById('trimDurLabel');
+  if (sl) sl.textContent = fmtTime(_trimStart);
+  if (el) el.textContent = fmtTime(_trimEnd);
+  if (dl) dl.textContent = fmtTime(_trimEnd - _trimStart) + ' selected';
+  // 100MB limit line
+  if (_rawFile && _rawFile.size > MB100) {
+   const line = document.getElementById('limitLine');
+   const lbl  = document.getElementById('trim100mbLabel');
+   const limitT = _vidDuration * (MB100 / _rawFile.size);
+   const lx   = (limitT / _vidDuration) * W;
+   if (line) { line.style.display = 'block'; line.style.left = lx + 'px'; }
+   if (lbl)  lbl.style.display = 'inline';
+  }
+ }
+
+ async function drawThumbs(videoEl) {
+  const canvas = document.getElementById('trimCanvas');
+  const track  = document.getElementById('trimTrack');
+  if (!canvas || !track) return;
+  const W = track.offsetWidth || 400, H = track.offsetHeight || 44;
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  const n   = Math.min(10, Math.floor(W / 40));
+  const tw  = W / n;
+  const tmp = document.createElement('video');
+  tmp.src = videoEl.src; tmp.muted = true; tmp.preload = 'auto';
+  for (let i = 0; i < n; i++) {
+   const t = (i / n) * _vidDuration;
+   await new Promise(res => {
+    tmp.currentTime = t;
+    tmp.onseeked = () => { ctx.drawImage(tmp, i * tw, 0, tw, H); res(); };
+    tmp.onerror  = res;
+    setTimeout(res, 600);
+   });
+  }
+ }
+
+ function initHandles() {
+  const track = document.getElementById('trimTrack');
+  const hS    = document.getElementById('handleStart');
+  const hE    = document.getElementById('handleEnd');
+  const video = document.getElementById('videoPreview');
+  const MIN   = 0.5;
+
+  function toTime(x) {
+   return Math.max(0, Math.min((x / (track.offsetWidth || 400)) * _vidDuration, _vidDuration));
+  }
+  function cx(e) { return e.touches ? e.touches[0].clientX : e.clientX; }
+
+  hS?.addEventListener('mousedown',  e => { _dragging = 'start'; e.preventDefault(); });
+  hE?.addEventListener('mousedown',  e => { _dragging = 'end';   e.preventDefault(); });
+  hS?.addEventListener('touchstart', e => { _dragging = 'start'; e.preventDefault(); }, { passive:false });
+  hE?.addEventListener('touchstart', e => { _dragging = 'end';   e.preventDefault(); }, { passive:false });
+
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('touchmove', onMove, { passive:false });
+  document.addEventListener('mouseup',   () => { _dragging = null; });
+  document.addEventListener('touchend',  () => { _dragging = null; });
+
+  function onMove(e) {
+   if (!_dragging || !track) return;
+   e.preventDefault();
+   const rect = track.getBoundingClientRect();
+   const t    = toTime(cx(e) - rect.left);
+   if (_dragging === 'start') {
+    _trimStart = Math.max(0, Math.min(t, _trimEnd - MIN));
+   } else {
+    const limitT = (_rawFile && _rawFile.size > MB100) ? _vidDuration * (MB100 / _rawFile.size) : _vidDuration;
+    _trimEnd = Math.min(t, limitT);
+    _trimEnd = Math.max(_trimEnd, _trimStart + MIN);
+   }
+   _trimmedBlob = null; // invalidate any previous trim
+   if (video) video.currentTime = _dragging === 'start' ? _trimStart : _trimEnd;
+   renderTrimUI();
+  }
+
+  // Seek on track click
+  track?.addEventListener('click', e => {
+   if (_dragging) return;
+   const rect = track.getBoundingClientRect();
+   if (video) video.currentTime = toTime(e.clientX - rect.left);
+  });
+
+  // Playhead
+  document.getElementById('videoPreview')?.addEventListener('timeupdate', () => {
+   const v  = document.getElementById('videoPreview');
+   const ph = document.getElementById('trimPlayhead');
+   const tk = document.getElementById('trimTrack');
+   if (!v || !ph || !tk || !_vidDuration) return;
+   ph.style.left = ((v.currentTime / _vidDuration) * (tk.offsetWidth || 400)) + 'px';
+   if (v.currentTime > _trimEnd + 0.2) { v.currentTime = _trimStart; }
+  });
+ }
+
+ // ── Trim via MediaRecorder (no FFmpeg, works everywhere) ──────────────────
+ function trimVideo(file, start, end) {
+  return new Promise((resolve, reject) => {
+   const statusText = document.getElementById('trimStatusText');
+   const bar        = document.getElementById('trimProgressBar');
+   const statusBox  = document.getElementById('trimStatus');
+   if (statusBox) statusBox.style.display = 'block';
+   if (statusText) statusText.textContent = 'Trimming video…';
+   if (bar) bar.style.width = '0%';
+
+   const video  = document.createElement('video');
+   const blobUrl = URL.createObjectURL(file);
+   video.src    = blobUrl;
+   video.muted  = false;
+   video.preload = 'auto';
+
+   video.onloadedmetadata = () => {
+    const canvas  = document.createElement('canvas');
+    const stream  = canvas.captureStream(30);
+    // Also capture audio if available
+    let combined = stream;
+    try {
+     const audioCtx = new AudioContext();
+     const src = audioCtx.createMediaElementSource(video);
+     const dest = audioCtx.createMediaStreamDestination();
+     src.connect(dest); src.connect(audioCtx.destination);
+     combined = new MediaStream([...stream.getTracks(), ...dest.stream.getTracks()]);
+    } catch(e) { /* no audio */ }
+
+    const chunks   = [];
+    const mimeType = MediaRecorder.isTypeSupported('video/mp4') ? 'video/mp4'
+                   : MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9'
+                   : 'video/webm';
+    const recorder = new MediaRecorder(combined, { mimeType });
+
+    recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+    recorder.onstop = () => {
+     URL.revokeObjectURL(blobUrl);
+     const blob = new Blob(chunks, { type: mimeType });
+     if (statusBox)  statusBox.style.display = 'none';
+     resolve(blob);
+    };
+
+    const clipLen = end - start;
+    video.currentTime = start;
+    video.onseeked = () => {
+     canvas.width  = video.videoWidth  || 1280;
+     canvas.height = video.videoHeight || 720;
+     const ctx = canvas.getContext('2d');
+     recorder.start(100);
+     video.play();
+     const draw = () => {
+      if (!video.paused && !video.ended) {
+       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+       const elapsed = video.currentTime - start;
+       if (bar) bar.style.width = Math.min(100, (elapsed / clipLen) * 100) + '%';
+       if (video.currentTime >= end - 0.05) {
+        video.pause();
+        recorder.stop();
+       } else {
+        requestAnimationFrame(draw);
+       }
+      }
+     };
+     requestAnimationFrame(draw);
+    };
+   };
+   video.onerror = reject;
+  });
+ }
+
+ // ── Modal open/close ──────────────────────────────────────────────────────
  if (openUploadModal) {
- openUploadModal.addEventListener('click', () => {
- uploadModal.classList.add('show');
- checkFormValidity();
- });
+  openUploadModal.addEventListener('click', () => {
+   uploadModal.classList.add('show'); checkFormValidity();
+  });
  }
  if (closeUploadModal) {
- closeUploadModal.addEventListener('click', () => {
- uploadModal.classList.remove('show');
- });
+  closeUploadModal.addEventListener('click', () => uploadModal.classList.remove('show'));
  }
  if (uploadModal) {
- uploadModal.addEventListener('click', (e) => {
- if (e.target === uploadModal) {
- uploadModal.classList.remove('show');
- }
- });
+  uploadModal.addEventListener('click', e => {
+   if (e.target === uploadModal) uploadModal.classList.remove('show');
+  });
  }
  if (imageUploadArea) {
- imageUploadArea.addEventListener('click', () => {
- if (imageInput) imageInput.click();
- });
+  imageUploadArea.addEventListener('click', e => {
+   const trimBar   = document.getElementById('trimBar');
+   const videoWrap = document.getElementById('videoPreviewWrap');
+   if (trimBar   && trimBar.contains(e.target))   return;
+   if (videoWrap && videoWrap.contains(e.target)) return;
+   if (imageInput) imageInput.click();
+  });
  }
+
+ // ── File select ───────────────────────────────────────────────────────────
  if (imageInput) {
- // Accept images AND videos
- imageInput.setAttribute('accept', 'image/*,video/*');
- imageInput.addEventListener('change', (e) => {
- const file = e.target.files[0];
- if (file) {
- const isVideo = file.type.startsWith('video/');
- const videoPreviewEl = document.getElementById('videoPreview');
- if (isVideo) {
- if (videoPreviewEl) { videoPreviewEl.src = URL.createObjectURL(file); videoPreviewEl.style.display = 'block'; }
- if (imagePreview) { imagePreview.src = ''; imagePreview.style.display = 'none'; }
- } else {
- const reader = new FileReader();
- reader.onload = (evt) => {
- if (imagePreview) { imagePreview.src = evt.target.result; imagePreview.style.display = 'block'; }
- if (videoPreviewEl) { videoPreviewEl.src = ''; videoPreviewEl.style.display = 'none'; }
- };
- reader.readAsDataURL(file);
- }
- if (uploadPlaceholder) uploadPlaceholder.style.display = 'none';
- if (imagePreviewContainer) imagePreviewContainer.style.display = 'block';
- checkFormValidity();
- }
- });
- }
- if (removeImageBtn) {
- removeImageBtn.addEventListener('click', (e) => {
- e.stopPropagation();
- if (imageInput) imageInput.value = '';
- if (imagePreview) { imagePreview.src = ''; imagePreview.style.display = 'none'; }
- const videoPreviewEl = document.getElementById('videoPreview');
- if (videoPreviewEl) { videoPreviewEl.src = ''; videoPreviewEl.style.display = 'none'; }
- if (uploadPlaceholder) uploadPlaceholder.style.display = 'flex';
- if (imagePreviewContainer) imagePreviewContainer.style.display = 'none';
- checkFormValidity();
- });
- }
- if (postDescription) {
- postDescription.addEventListener('input', () => {
- if (charCount) {
- charCount.textContent = postDescription.value.length;
- }
- checkFormValidity();
- });
- }
- if (submitPostBtn) {
- submitPostBtn.addEventListener('click', async () => {
- await handleCreatePost();
- });
- }
- function checkFormValidity() {
- const hasImage = imageInput && imageInput.files.length > 0;
- if (submitPostBtn) {
- submitPostBtn.disabled = !hasImage;
- }
- }
- async function handleCreatePost() {
- try {
- const description = postDescription?.value.trim() || '';
- const department = currentProfile?.department || '';
- const imageFile = imageInput?.files[0];
- if (!imageFile) {
- showToast('Please select an image or video', 'error');
- return;
- }
- const isVideo = imageFile.type.startsWith('video/');
- const submitBtnText = document.getElementById('submitBtnText');
- if (submitPostBtn) submitPostBtn.disabled = true;
- if (submitBtnText) submitBtnText.textContent = isVideo ? 'Uploading video...' : 'Uploading...';
-
- // Show progress bar if it exists in the DOM
- const progressBar = document.getElementById('uploadProgressBar');
- const progressContainer = document.getElementById('uploadProgressContainer');
- if (progressContainer) progressContainer.style.display = 'block';
- if (progressBar) progressBar.style.width = '0%';
-
- const result = await window.createPost(description, imageFile, department, 'public', (percent) => {
- if (progressBar) progressBar.style.width = percent + '%';
- const progressText = document.getElementById('uploadProgressText');
- if (progressText) progressText.textContent = percent + '%';
- if (submitBtnText) submitBtnText.textContent = `Uploading... ${percent}%`;
- });
-
- if (progressContainer) progressContainer.style.display = 'none';
-
- if (result.success) {
- showToast('Post created successfully!', 'success');
- if (postDescription) postDescription.value = '';
- if (charCount) charCount.textContent = '0';
- if (imageInput) imageInput.value = '';
- if (imagePreview) { imagePreview.src = ''; imagePreview.style.display = 'none'; }
- const videoPreviewEl = document.getElementById('videoPreview');
- if (videoPreviewEl) { videoPreviewEl.src = ''; videoPreviewEl.style.display = 'none'; }
- if (uploadPlaceholder) uploadPlaceholder.style.display = 'flex';
- if (imagePreviewContainer) imagePreviewContainer.style.display = 'none';
- uploadModal.classList.remove('show');
-
- const newPost = result.post;
- newPost.isLiked = false;
- newPost.isFollowing = false;
- // Use local blob URL so media shows instantly before CDN propagates
- if (imageFile && (newPost.image_url || newPost.media_url)) {
-     newPost._localBlobUrl = URL.createObjectURL(imageFile);
-     newPost._localIsVideo = isVideo;
- }
- posts.unshift(newPost);
- try {
-     localStorage.setItem(POSTS_CACHE_KEY, JSON.stringify({ data: posts, ts: Date.now() }));
- } catch(e) { /* storage full */ }
- const tempHTML = createPostHTML(newPost, 0);
- const tempDiv = document.createElement('div');
- tempDiv.innerHTML = tempHTML;
- const newCard = tempDiv.firstElementChild;
- if (newPost._localBlobUrl) {
-     if (isVideo) {
-         const vid = newCard.querySelector('.post-video');
-         if (vid) { vid.src = newPost._localBlobUrl; }
-     } else {
-         const img = newCard.querySelector('.post-image');
-         if (img) img.src = newPost._localBlobUrl;
+  imageInput.setAttribute('accept', 'image/*,video/*');
+  imageInput.addEventListener('change', e => {
+   const file = e.target.files[0];
+   _rawFile = null; _trimmedBlob = null;
+   if (file) {
+    const isVideo = file.type.startsWith('video/');
+    const videoWrap = document.getElementById('videoPreviewWrap');
+    const videoEl   = document.getElementById('videoPreview');
+    if (isVideo) {
+     _rawFile = file;
+     if (videoEl) { videoEl.src = URL.createObjectURL(file); videoEl.style.display = 'block'; }
+     if (videoWrap) videoWrap.style.display = 'block';
+     if (imagePreview) { imagePreview.src = ''; imagePreview.style.display = 'none'; }
+     if (uploadPlaceholder) uploadPlaceholder.style.display = 'none';
+     if (imagePreviewContainer) imagePreviewContainer.style.display = 'block';
+     if (videoEl) {
+      videoEl.onloadedmetadata = () => {
+       _vidDuration = videoEl.duration;
+       initTrimBar(file, videoEl);
+      };
      }
+     checkFormValidity();
+    } else {
+     const trimBar = document.getElementById('trimBar');
+     if (trimBar) trimBar.style.display = 'none';
+     const videoWrap = document.getElementById('videoPreviewWrap');
+     if (videoWrap) videoWrap.style.display = 'none';
+     const reader = new FileReader();
+     reader.onload = evt => {
+      if (imagePreview) { imagePreview.src = evt.target.result; imagePreview.style.display = 'block'; }
+     };
+     reader.readAsDataURL(file);
+     if (uploadPlaceholder) uploadPlaceholder.style.display = 'none';
+     if (imagePreviewContainer) imagePreviewContainer.style.display = 'block';
+     checkFormValidity();
+    }
+   }
+  });
  }
- if (postsContainer.firstChild) {
-     postsContainer.insertBefore(newCard, postsContainer.firstChild);
- } else {
-     postsContainer.appendChild(newCard);
+
+ // ── Remove button ─────────────────────────────────────────────────────────
+ if (removeImageBtn) {
+  removeImageBtn.addEventListener('click', e => {
+   e.stopPropagation();
+   _rawFile = null; _trimmedBlob = null;
+   if (imageInput) imageInput.value = '';
+   if (imagePreview) { imagePreview.src = ''; imagePreview.style.display = 'none'; }
+   const videoEl   = document.getElementById('videoPreview');
+   const videoWrap = document.getElementById('videoPreviewWrap');
+   const trimBar   = document.getElementById('trimBar');
+   const trimStatus= document.getElementById('trimStatus');
+   if (videoEl)    { videoEl.pause(); videoEl.src = ''; videoEl.style.display = 'none'; }
+   if (videoWrap)  videoWrap.style.display  = 'none';
+   if (trimBar)    trimBar.style.display    = 'none';
+   if (trimStatus) trimStatus.style.display = 'none';
+   if (uploadPlaceholder)     uploadPlaceholder.style.display = 'flex';
+   if (imagePreviewContainer) imagePreviewContainer.style.display = 'none';
+   checkFormValidity();
+  });
  }
- setupPostEventListeners(newPost.id);
- } else {
- showToast(result.error || 'Failed to create post', 'error');
+
+ if (postDescription) {
+  postDescription.addEventListener('input', () => {
+   if (charCount) charCount.textContent = postDescription.value.length;
+   checkFormValidity();
+  });
  }
- } catch (error) {
- console.error('Error creating post:', error);
- showToast('Failed to create post', 'error');
- const progressContainer = document.getElementById('uploadProgressContainer');
- if (progressContainer) progressContainer.style.display = 'none';
- } finally {
- const submitBtnText = document.getElementById('submitBtnText');
- if (submitPostBtn) submitPostBtn.disabled = false;
- if (submitBtnText) submitBtnText.textContent = 'Post';
+
+ if (submitPostBtn) {
+  submitPostBtn.addEventListener('click', async () => { await handleCreatePost(); });
  }
+
+ function checkFormValidity() {
+  if (submitPostBtn) submitPostBtn.disabled = !(imageInput && imageInput.files.length > 0);
  }
+
+ async function handleCreatePost() {
+  try {
+   const description = postDescription?.value.trim() || '';
+   const department  = currentProfile?.department || '';
+   const rawFile     = imageInput?.files[0];
+   if (!rawFile) { showToast('Please select an image or video', 'error'); return; }
+
+   const isVideo       = rawFile.type.startsWith('video/');
+   const submitBtnText = document.getElementById('submitBtnText');
+   if (submitPostBtn) submitPostBtn.disabled = true;
+
+   let fileToUpload = rawFile;
+
+   // Trim if the user moved handles
+   if (isVideo) {
+    const trimmed = (_trimStart > 0.2) || (_trimEnd < _vidDuration - 0.2);
+    if (trimmed) {
+     if (submitBtnText) submitBtnText.textContent = 'Trimming…';
+     try {
+      const blob = await trimVideo(rawFile, _trimStart, _trimEnd);
+      fileToUpload = new File([blob], 'trimmed.webm', { type: blob.type });
+     } catch(e) {
+      console.error('Trim failed:', e);
+      showToast('Trim failed — uploading full video', 'error');
+     }
+    }
+    if (submitBtnText) submitBtnText.textContent = 'Uploading video…';
+   } else {
+    if (submitBtnText) submitBtnText.textContent = 'Uploading…';
+   }
+
+   const progressBar       = document.getElementById('uploadProgressBar');
+   const progressContainer = document.getElementById('uploadProgressContainer');
+   if (progressContainer) progressContainer.style.display = 'block';
+   if (progressBar)        progressBar.style.width = '0%';
+
+   const result = await window.createPost(description, fileToUpload, department, 'public', percent => {
+    if (progressBar) progressBar.style.width = percent + '%';
+    const progressText = document.getElementById('uploadProgressText');
+    if (progressText) progressText.textContent = percent + '%';
+    if (submitBtnText) submitBtnText.textContent = 'Uploading… ' + percent + '%';
+   });
+
+   if (progressContainer) progressContainer.style.display = 'none';
+
+   if (result.success) {
+    showToast('Post created successfully!', 'success');
+    if (postDescription) postDescription.value = '';
+    if (charCount)       charCount.textContent = '0';
+    if (imageInput)      imageInput.value = '';
+    _rawFile = null; _trimmedBlob = null;
+    if (imagePreview) { imagePreview.src = ''; imagePreview.style.display = 'none'; }
+    const videoEl   = document.getElementById('videoPreview');
+    const videoWrap = document.getElementById('videoPreviewWrap');
+    const trimBar   = document.getElementById('trimBar');
+    const trimStatus= document.getElementById('trimStatus');
+    if (videoEl)    { videoEl.pause(); videoEl.src = ''; videoEl.style.display = 'none'; }
+    if (videoWrap)  videoWrap.style.display  = 'none';
+    if (trimBar)    trimBar.style.display    = 'none';
+    if (trimStatus) trimStatus.style.display = 'none';
+    if (uploadPlaceholder)     uploadPlaceholder.style.display = 'flex';
+    if (imagePreviewContainer) imagePreviewContainer.style.display = 'none';
+    uploadModal.classList.remove('show');
+
+    const newPost = result.post;
+    newPost.isLiked = false; newPost.isFollowing = false;
+    if (fileToUpload && (newPost.image_url || newPost.media_url)) {
+     newPost._localBlobUrl = URL.createObjectURL(fileToUpload);
+     newPost._localIsVideo = isVideo;
+    }
+    posts.unshift(newPost);
+    try { localStorage.setItem(POSTS_CACHE_KEY, JSON.stringify({ data: posts, ts: Date.now() })); } catch(e) {}
+    const tempHTML = createPostHTML(newPost, 0);
+    const tempDiv  = document.createElement('div');
+    tempDiv.innerHTML = tempHTML;
+    const newCard  = tempDiv.firstElementChild;
+    if (newPost._localBlobUrl) {
+     if (isVideo) { const vid = newCard.querySelector('.post-video'); if (vid) vid.src = newPost._localBlobUrl; }
+     else         { const img = newCard.querySelector('.post-image'); if (img) img.src = newPost._localBlobUrl; }
+    }
+    if (postsContainer.firstChild) postsContainer.insertBefore(newCard, postsContainer.firstChild);
+    else postsContainer.appendChild(newCard);
+    setupPostEventListeners(newPost.id);
+   } else {
+    showToast(result.error || 'Failed to create post', 'error');
+   }
+  } catch (error) {
+   console.error('Error creating post:', error);
+   showToast('Failed to create post', 'error');
+   const progressContainer = document.getElementById('uploadProgressContainer');
+   if (progressContainer) progressContainer.style.display = 'none';
+  } finally {
+   const submitBtnText = document.getElementById('submitBtnText');
+   if (submitPostBtn) submitPostBtn.disabled = false;
+   if (submitBtnText) submitBtnText.textContent = 'Post';
+  }
+ }
+
+ initHandles();
  }
  async function loadNotifications() {
  try {

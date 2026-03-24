@@ -772,217 +772,123 @@ document.addEventListener('DOMContentLoaded', async function() {
  const charCount             = document.getElementById('charCount');
  const submitPostBtn         = document.getElementById('submitPostBtn');
 
- // ── Trim state ────────────────────────────────────────────────────────────
- let _rawFile     = null;
- let _trimmedBlob = null;   // result of trim — used for upload if set
- let _vidDuration = 0;
- let _trimStart   = 0;
- let _trimEnd     = 0;
- let _dragging    = null;
- const MB100      = 100 * 1024 * 1024;
+ // ── State ─────────────────────────────────────────────────────────────────
+ let _rawFile = null;
 
- function fmtTime(s) {
-  const m = Math.floor(s / 60), sec = Math.floor(s % 60);
-  return m + ':' + (sec < 10 ? '0' : '') + sec;
- }
+ // ── Video Compression via MediaRecorder ───────────────────────────────────
+ // Compresses video to ~720p at a reduced bitrate before uploading.
+ // Only runs when the file exceeds 90 MB. Falls back to the original if
+ // compression fails or MediaRecorder is not supported.
+ const COMPRESS_THRESHOLD = 90 * 1024 * 1024; // 90 MB
 
- // ── Trim UI ───────────────────────────────────────────────────────────────
- function initTrimBar(file, videoEl) {
-  const bar = document.getElementById('trimBar');
-  if (bar) bar.style.display = 'block';
-  _trimStart = 0;
-  const limitT = _vidDuration * (MB100 / file.size);
-  _trimEnd = (file.size > MB100) ? Math.min(limitT, _vidDuration) : _vidDuration;
-  _trimmedBlob = null;
-  renderTrimUI();
-  drawThumbs(videoEl);
- }
+ function compressVideo(file, onProgress) {
+  return new Promise((resolve) => {
+   const statusBox  = document.getElementById('compressStatus');
+   const statusText = document.getElementById('compressStatusText');
+   const bar        = document.getElementById('compressProgressBar');
+   if (statusBox)  statusBox.style.display = 'block';
+   if (statusText) statusText.textContent  = 'Compressing video…';
+   if (bar)        bar.style.width         = '0%';
 
- function renderTrimUI() {
-  const track = document.getElementById('trimTrack');
-  if (!track || _vidDuration <= 0) return;
-  const W  = track.offsetWidth || 400;
-  const pS = (_trimStart / _vidDuration) * W;
-  const pE = (_trimEnd   / _vidDuration) * W;
-  const hW = 20;
-  const hS  = document.getElementById('handleStart');
-  const hE  = document.getElementById('handleEnd');
-  const rng = document.getElementById('trimRange');
-  const sL  = document.getElementById('shadeLeft');
-  const sR  = document.getElementById('shadeRight');
-  if (hS)  hS.style.left   = pS + 'px';
-  if (hE)  hE.style.left   = (pE - hW) + 'px';
-  if (rng) { rng.style.left = pS + 'px'; rng.style.width = (pE - pS) + 'px'; }
-  if (sL)  sL.style.width  = pS + 'px';
-  if (sR)  sR.style.width  = (W - pE) + 'px';
-  const sl = document.getElementById('trimStartLabel');
-  const el = document.getElementById('trimEndLabel');
-  const dl = document.getElementById('trimDurLabel');
-  if (sl) sl.textContent = fmtTime(_trimStart);
-  if (el) el.textContent = fmtTime(_trimEnd);
-  if (dl) dl.textContent = fmtTime(_trimEnd - _trimStart) + ' selected';
-  // 100MB limit line
-  if (_rawFile && _rawFile.size > MB100) {
-   const line = document.getElementById('limitLine');
-   const lbl  = document.getElementById('trim100mbLabel');
-   const limitT = _vidDuration * (MB100 / _rawFile.size);
-   const lx   = (limitT / _vidDuration) * W;
-   if (line) { line.style.display = 'block'; line.style.left = lx + 'px'; }
-   if (lbl)  lbl.style.display = 'inline';
-  }
- }
-
- async function drawThumbs(videoEl) {
-  const canvas = document.getElementById('trimCanvas');
-  const track  = document.getElementById('trimTrack');
-  if (!canvas || !track) return;
-  const W = track.offsetWidth || 400, H = track.offsetHeight || 44;
-  canvas.width = W; canvas.height = H;
-  const ctx = canvas.getContext('2d');
-  const n   = Math.min(10, Math.floor(W / 40));
-  const tw  = W / n;
-  const tmp = document.createElement('video');
-  tmp.src = videoEl.src; tmp.muted = true; tmp.preload = 'auto';
-  for (let i = 0; i < n; i++) {
-   const t = (i / n) * _vidDuration;
-   await new Promise(res => {
-    tmp.currentTime = t;
-    tmp.onseeked = () => { ctx.drawImage(tmp, i * tw, 0, tw, H); res(); };
-    tmp.onerror  = res;
-    setTimeout(res, 600);
-   });
-  }
- }
-
- function initHandles() {
-  const track = document.getElementById('trimTrack');
-  const hS    = document.getElementById('handleStart');
-  const hE    = document.getElementById('handleEnd');
-  const video = document.getElementById('videoPreview');
-  const MIN   = 0.5;
-
-  function toTime(x) {
-   return Math.max(0, Math.min((x / (track.offsetWidth || 400)) * _vidDuration, _vidDuration));
-  }
-  function cx(e) { return e.touches ? e.touches[0].clientX : e.clientX; }
-
-  hS?.addEventListener('mousedown',  e => { _dragging = 'start'; e.preventDefault(); });
-  hE?.addEventListener('mousedown',  e => { _dragging = 'end';   e.preventDefault(); });
-  hS?.addEventListener('touchstart', e => { _dragging = 'start'; e.preventDefault(); }, { passive:false });
-  hE?.addEventListener('touchstart', e => { _dragging = 'end';   e.preventDefault(); }, { passive:false });
-
-  document.addEventListener('mousemove', onMove);
-  document.addEventListener('touchmove', onMove, { passive:false });
-  document.addEventListener('mouseup',   () => { _dragging = null; });
-  document.addEventListener('touchend',  () => { _dragging = null; });
-
-  function onMove(e) {
-   if (!_dragging || !track) return;
-   e.preventDefault();
-   const rect = track.getBoundingClientRect();
-   const t    = toTime(cx(e) - rect.left);
-   if (_dragging === 'start') {
-    _trimStart = Math.max(0, Math.min(t, _trimEnd - MIN));
-   } else {
-    const limitT = (_rawFile && _rawFile.size > MB100) ? _vidDuration * (MB100 / _rawFile.size) : _vidDuration;
-    _trimEnd = Math.min(t, limitT);
-    _trimEnd = Math.max(_trimEnd, _trimStart + MIN);
-   }
-   _trimmedBlob = null; // invalidate any previous trim
-   if (video) video.currentTime = _dragging === 'start' ? _trimStart : _trimEnd;
-   renderTrimUI();
-  }
-
-  // Seek on track click
-  track?.addEventListener('click', e => {
-   if (_dragging) return;
-   const rect = track.getBoundingClientRect();
-   if (video) video.currentTime = toTime(e.clientX - rect.left);
-  });
-
-  // Playhead
-  document.getElementById('videoPreview')?.addEventListener('timeupdate', () => {
-   const v  = document.getElementById('videoPreview');
-   const ph = document.getElementById('trimPlayhead');
-   const tk = document.getElementById('trimTrack');
-   if (!v || !ph || !tk || !_vidDuration) return;
-   ph.style.left = ((v.currentTime / _vidDuration) * (tk.offsetWidth || 400)) + 'px';
-   if (v.currentTime > _trimEnd + 0.2) { v.currentTime = _trimStart; }
-  });
- }
-
- // ── Trim via MediaRecorder (no FFmpeg, works everywhere) ──────────────────
- function trimVideo(file, start, end) {
-  return new Promise((resolve, reject) => {
-   const statusText = document.getElementById('trimStatusText');
-   const bar        = document.getElementById('trimProgressBar');
-   const statusBox  = document.getElementById('trimStatus');
-   if (statusBox) statusBox.style.display = 'block';
-   if (statusText) statusText.textContent = 'Trimming video…';
-   if (bar) bar.style.width = '0%';
-
-   const video  = document.createElement('video');
+   const video   = document.createElement('video');
    const blobUrl = URL.createObjectURL(file);
-   video.src    = blobUrl;
-   video.muted  = false;
+   video.src     = blobUrl;
+   video.muted   = false;
    video.preload = 'auto';
 
    video.onloadedmetadata = () => {
-    const canvas  = document.createElement('canvas');
-    const stream  = canvas.captureStream(30);
-    // Also capture audio if available
+    const duration = video.duration;
+
+    // Scale down to max 720p
+    const MAX_W = 1280, MAX_H = 720;
+    let w = video.videoWidth  || MAX_W;
+    let h = video.videoHeight || MAX_H;
+    if (w > MAX_W || h > MAX_H) {
+     const ratio = Math.min(MAX_W / w, MAX_H / h);
+     w = Math.round(w * ratio);
+     h = Math.round(h * ratio);
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width  = w;
+    canvas.height = h;
+    const ctx    = canvas.getContext('2d');
+    const stream = canvas.captureStream(24); // 24 fps
+
+    // Capture audio if available
     let combined = stream;
     try {
      const audioCtx = new AudioContext();
-     const src = audioCtx.createMediaElementSource(video);
+     const src  = audioCtx.createMediaElementSource(video);
      const dest = audioCtx.createMediaStreamDestination();
-     src.connect(dest); src.connect(audioCtx.destination);
+     src.connect(dest);
+     src.connect(audioCtx.destination);
      combined = new MediaStream([...stream.getTracks(), ...dest.stream.getTracks()]);
     } catch(e) { /* no audio */ }
 
-    const chunks   = [];
-    const mimeType = MediaRecorder.isTypeSupported('video/mp4') ? 'video/mp4'
-                   : MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9'
-                   : 'video/webm';
-    const recorder = new MediaRecorder(combined, { mimeType });
+    // Pick the best supported codec; target ~1.5 Mbps
+    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+     ? 'video/webm;codecs=vp9'
+     : MediaRecorder.isTypeSupported('video/webm;codecs=vp8')
+     ? 'video/webm;codecs=vp8'
+     : 'video/webm';
 
+    let recorder;
+    try {
+     recorder = new MediaRecorder(combined, { mimeType, videoBitsPerSecond: 1_500_000 });
+    } catch(e) {
+     // MediaRecorder not supported with these options — skip compression
+     URL.revokeObjectURL(blobUrl);
+     if (statusBox) statusBox.style.display = 'none';
+     resolve(file);
+     return;
+    }
+
+    const chunks = [];
     recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
     recorder.onstop = () => {
      URL.revokeObjectURL(blobUrl);
-     const blob = new Blob(chunks, { type: mimeType });
-     if (statusBox)  statusBox.style.display = 'none';
-     resolve(blob);
+     const blob       = new Blob(chunks, { type: mimeType });
+     const ext        = mimeType.includes('mp4') ? 'mp4' : 'webm';
+     const compressed = new File([blob], `compressed.${ext}`, { type: mimeType });
+     // Only use compressed version if it's actually smaller
+     const result     = compressed.size < file.size ? compressed : file;
+     if (statusBox) statusBox.style.display = 'none';
+     resolve(result);
     };
 
-    const clipLen = end - start;
-    video.currentTime = start;
+    video.currentTime = 0;
     video.onseeked = () => {
-     canvas.width  = video.videoWidth  || 1280;
-     canvas.height = video.videoHeight || 720;
-     const ctx = canvas.getContext('2d');
      recorder.start(100);
      video.play();
      const draw = () => {
       if (!video.paused && !video.ended) {
-       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-       const elapsed = video.currentTime - start;
-       if (bar) bar.style.width = Math.min(100, (elapsed / clipLen) * 100) + '%';
-       if (video.currentTime >= end - 0.05) {
-        video.pause();
-        recorder.stop();
-       } else {
-        requestAnimationFrame(draw);
-       }
+       ctx.drawImage(video, 0, 0, w, h);
+       const pct = duration > 0 ? Math.min(100, Math.round((video.currentTime / duration) * 100)) : 0;
+       if (bar) bar.style.width = pct + '%';
+       if (onProgress) onProgress(pct);
+       requestAnimationFrame(draw);
       }
      };
      requestAnimationFrame(draw);
+
+     // Stop recorder when video ends
+     video.onended = () => {
+      if (recorder.state !== 'inactive') recorder.stop();
+     };
     };
    };
-   video.onerror = reject;
+
+   video.onerror = () => {
+    // Compression failed — upload original
+    URL.revokeObjectURL(blobUrl);
+    if (statusBox) statusBox.style.display = 'none';
+    resolve(file);
+   };
   });
  }
 
- // ── Modal open/close ──────────────────────────────────────────────────────
+ // ── Modal open/close ─────────────────────────────────────────────────────
  if (openUploadModal) {
   openUploadModal.addEventListener('click', () => {
    uploadModal.classList.add('show'); checkFormValidity();
@@ -998,9 +904,7 @@ document.addEventListener('DOMContentLoaded', async function() {
  }
  if (imageUploadArea) {
   imageUploadArea.addEventListener('click', e => {
-   const trimBar   = document.getElementById('trimBar');
    const videoWrap = document.getElementById('videoPreviewWrap');
-   if (trimBar   && trimBar.contains(e.target))   return;
    if (videoWrap && videoWrap.contains(e.target)) return;
    if (imageInput) imageInput.click();
   });
@@ -1011,7 +915,7 @@ document.addEventListener('DOMContentLoaded', async function() {
   imageInput.setAttribute('accept', 'image/*,video/*');
   imageInput.addEventListener('change', e => {
    const file = e.target.files[0];
-   _rawFile = null; _trimmedBlob = null;
+   _rawFile = null;
    if (file) {
     const isVideo = file.type.startsWith('video/');
     const videoWrap = document.getElementById('videoPreviewWrap');
@@ -1023,16 +927,8 @@ document.addEventListener('DOMContentLoaded', async function() {
      if (imagePreview) { imagePreview.src = ''; imagePreview.style.display = 'none'; }
      if (uploadPlaceholder) uploadPlaceholder.style.display = 'none';
      if (imagePreviewContainer) imagePreviewContainer.style.display = 'block';
-     if (videoEl) {
-      videoEl.onloadedmetadata = () => {
-       _vidDuration = videoEl.duration;
-       initTrimBar(file, videoEl);
-      };
-     }
      checkFormValidity();
     } else {
-     const trimBar = document.getElementById('trimBar');
-     if (trimBar) trimBar.style.display = 'none';
      const videoWrap = document.getElementById('videoPreviewWrap');
      if (videoWrap) videoWrap.style.display = 'none';
      const reader = new FileReader();
@@ -1052,17 +948,15 @@ document.addEventListener('DOMContentLoaded', async function() {
  if (removeImageBtn) {
   removeImageBtn.addEventListener('click', e => {
    e.stopPropagation();
-   _rawFile = null; _trimmedBlob = null;
+   _rawFile = null;
    if (imageInput) imageInput.value = '';
    if (imagePreview) { imagePreview.src = ''; imagePreview.style.display = 'none'; }
-   const videoEl   = document.getElementById('videoPreview');
-   const videoWrap = document.getElementById('videoPreviewWrap');
-   const trimBar   = document.getElementById('trimBar');
-   const trimStatus= document.getElementById('trimStatus');
+   const videoEl      = document.getElementById('videoPreview');
+   const videoWrap    = document.getElementById('videoPreviewWrap');
+   const compStatus   = document.getElementById('compressStatus');
    if (videoEl)    { videoEl.pause(); videoEl.src = ''; videoEl.style.display = 'none'; }
-   if (videoWrap)  videoWrap.style.display  = 'none';
-   if (trimBar)    trimBar.style.display    = 'none';
-   if (trimStatus) trimStatus.style.display = 'none';
+   if (videoWrap)   videoWrap.style.display  = 'none';
+   if (compStatus)  compStatus.style.display = 'none';
    if (uploadPlaceholder)     uploadPlaceholder.style.display = 'flex';
    if (imagePreviewContainer) imagePreviewContainer.style.display = 'none';
    checkFormValidity();
@@ -1097,22 +991,22 @@ document.addEventListener('DOMContentLoaded', async function() {
 
    let fileToUpload = rawFile;
 
-   // Trim if the user moved handles
-   if (isVideo) {
-    const trimmed = (_trimStart > 0.2) || (_trimEnd < _vidDuration - 0.2);
-    if (trimmed) {
-     if (submitBtnText) submitBtnText.textContent = 'Trimming…';
-     try {
-      const blob = await trimVideo(rawFile, _trimStart, _trimEnd);
-      fileToUpload = new File([blob], 'trimmed.webm', { type: blob.type });
-     } catch(e) {
-      console.error('Trim failed:', e);
-      showToast('Trim failed — uploading full video', 'error');
-     }
+   // Compress video before uploading only if it exceeds 90 MB
+   if (isVideo && rawFile.size > COMPRESS_THRESHOLD) {
+    if (submitBtnText) submitBtnText.textContent = 'Compressing…';
+    try {
+     fileToUpload = await compressVideo(rawFile, pct => {
+      const progressBar = document.getElementById('uploadProgressBar');
+      if (progressBar) progressBar.style.width = pct + '%';
+     });
+    } catch(e) {
+     console.error('Compression failed:', e);
+     showToast('Compression failed — uploading original', 'error');
+     fileToUpload = rawFile;
     }
     if (submitBtnText) submitBtnText.textContent = 'Uploading video…';
    } else {
-    if (submitBtnText) submitBtnText.textContent = 'Uploading…';
+    if (submitBtnText) submitBtnText.textContent = isVideo ? 'Uploading video…' : 'Uploading…';
    }
 
    const progressBar       = document.getElementById('uploadProgressBar');
@@ -1134,16 +1028,14 @@ document.addEventListener('DOMContentLoaded', async function() {
     if (postDescription) postDescription.value = '';
     if (charCount)       charCount.textContent = '0';
     if (imageInput)      imageInput.value = '';
-    _rawFile = null; _trimmedBlob = null;
+    _rawFile = null;
     if (imagePreview) { imagePreview.src = ''; imagePreview.style.display = 'none'; }
-    const videoEl   = document.getElementById('videoPreview');
-    const videoWrap = document.getElementById('videoPreviewWrap');
-    const trimBar   = document.getElementById('trimBar');
-    const trimStatus= document.getElementById('trimStatus');
+    const videoEl    = document.getElementById('videoPreview');
+    const videoWrap  = document.getElementById('videoPreviewWrap');
+    const compStatus = document.getElementById('compressStatus');
     if (videoEl)    { videoEl.pause(); videoEl.src = ''; videoEl.style.display = 'none'; }
-    if (videoWrap)  videoWrap.style.display  = 'none';
-    if (trimBar)    trimBar.style.display    = 'none';
-    if (trimStatus) trimStatus.style.display = 'none';
+    if (videoWrap)   videoWrap.style.display  = 'none';
+    if (compStatus)  compStatus.style.display = 'none';
     if (uploadPlaceholder)     uploadPlaceholder.style.display = 'flex';
     if (imagePreviewContainer) imagePreviewContainer.style.display = 'none';
     uploadModal.classList.remove('show');
@@ -1182,7 +1074,6 @@ document.addEventListener('DOMContentLoaded', async function() {
   }
  }
 
- initHandles();
  }
  async function loadNotifications() {
  try {

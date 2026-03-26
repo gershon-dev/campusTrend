@@ -386,7 +386,13 @@ document.addEventListener('DOMContentLoaded', async function() {
  if (!postCard) return;
  const likeBtn = postCard.querySelector('.like-btn');
  if (likeBtn) {
- likeBtn.addEventListener('click', () => handleLike(postId));
+ // Use pointerup so the event fires once regardless of input type (touch/mouse).
+ // This prevents the mobile ghost-click (touchstart → click) that caused the
+ // count to toggle twice — first increasing then immediately decreasing.
+ likeBtn.addEventListener('pointerup', (e) => {
+ e.preventDefault(); // suppress any following synthetic click
+ handleLike(postId);
+ });
  }
  const commentBtn = postCard.querySelector('.comment-btn');
  if (commentBtn) {
@@ -411,7 +417,10 @@ document.addEventListener('DOMContentLoaded', async function() {
  const followBtn = postCard.querySelector('.follow-btn');
  if (followBtn) {
  const userId = followBtn.dataset.userId;
- followBtn.addEventListener('click', () => handleFollow(userId, followBtn));
+ followBtn.addEventListener('pointerup', (e) => {
+ e.preventDefault(); // suppress ghost click on mobile
+ handleFollow(userId, followBtn);
+ });
  }
  const seeMoreBtn = postCard.querySelector('.see-more-btn');
  if (seeMoreBtn) {
@@ -460,26 +469,60 @@ document.addEventListener('DOMContentLoaded', async function() {
  });
  }
  }
+ // Track in-flight like requests to prevent double-fire (touch + click on mobile)
+ const _likeInFlight = new Set();
+
  async function handleLike(postId) {
- try {
+ // Guard: ignore if a request for this post is already in progress
+ if (_likeInFlight.has(postId)) return;
+
  const post = posts.find(p => p.id === postId);
  if (!post) return;
+
+ // Offline check — give immediate feedback instead of a silent hang
+ if (!navigator.onLine) {
+ showToast('You are offline. Please check your connection.', 'error');
+ return;
+ }
+
+ const postCard = document.querySelector(`[data-post-id="${postId}"]`);
+ const likeBtn = postCard?.querySelector('.like-btn');
+ const likesCount = postCard?.querySelector('.likes-count');
+
+ // Snapshot current state so we can roll back on failure
+ const prevIsLiked = post.isLiked;
+ const prevCount = post.likes_count || 0;
+
+ // --- Optimistic UI update ---
+ const optimisticLiked = !prevIsLiked;
+ const optimisticCount = optimisticLiked ? prevCount + 1 : Math.max(0, prevCount - 1);
+ post.isLiked = optimisticLiked;
+ post.likes_count = optimisticCount;
+ if (likeBtn) {
+ likeBtn.classList.toggle('liked', optimisticLiked);
+ likeBtn.setAttribute('aria-pressed', optimisticLiked ? 'true' : 'false');
+ likeBtn.setAttribute('aria-label', optimisticLiked ? 'Unlike post' : 'Like post');
+ // Disable button while request is in-flight (prevents double-tap on mobile)
+ likeBtn.disabled = true;
+ }
+ if (likesCount) likesCount.textContent = optimisticCount;
+
+ _likeInFlight.add(postId);
+ try {
  const result = await window.toggleLike(postId);
  if (result.success) {
+ // Use server's authoritative state
  post.isLiked = result.liked;
- post.likes_count = result.liked ? (post.likes_count || 0) + 1 : Math.max(0, (post.likes_count || 0) - 1);
- const postCard = document.querySelector(`[data-post-id="${postId}"]`);
- if (postCard) {
- const likeBtn = postCard.querySelector('.like-btn');
- const likesCount = postCard.querySelector('.likes-count');
+ // Prefer server-provided count; fall back to local calculation
+ post.likes_count = (typeof result.likes_count === 'number')
+ ? result.likes_count
+ : result.liked ? prevCount + 1 : Math.max(0, prevCount - 1);
  if (likeBtn) {
  likeBtn.classList.toggle('liked', post.isLiked);
  likeBtn.setAttribute('aria-pressed', post.isLiked ? 'true' : 'false');
  likeBtn.setAttribute('aria-label', post.isLiked ? 'Unlike post' : 'Like post');
  }
- if (likesCount) {
- likesCount.textContent = post.likes_count;
- }
+ if (likesCount) likesCount.textContent = post.likes_count;
  /* STAR RATING LOCKED — uncomment to re-enable
  const starRating = window.getStarRating(post.likes_count);
  const imageContainer = postCard.querySelector('.post-image-container');
@@ -508,42 +551,115 @@ document.addEventListener('DOMContentLoaded', async function() {
  }
  }
  END STAR RATING LOCKED */
+ } else {
+ // Server rejected — roll back optimistic update
+ post.isLiked = prevIsLiked;
+ post.likes_count = prevCount;
+ if (likeBtn) {
+ likeBtn.classList.toggle('liked', prevIsLiked);
+ likeBtn.setAttribute('aria-pressed', prevIsLiked ? 'true' : 'false');
+ likeBtn.setAttribute('aria-label', prevIsLiked ? 'Unlike post' : 'Like post');
  }
+ if (likesCount) likesCount.textContent = prevCount;
+ showToast(result.error || 'Failed to update like', 'error');
  }
  } catch (error) {
+ // Network/unexpected error — roll back optimistic update
+ post.isLiked = prevIsLiked;
+ post.likes_count = prevCount;
+ if (likeBtn) {
+ likeBtn.classList.toggle('liked', prevIsLiked);
+ likeBtn.setAttribute('aria-pressed', prevIsLiked ? 'true' : 'false');
+ likeBtn.setAttribute('aria-label', prevIsLiked ? 'Unlike post' : 'Like post');
+ }
+ if (likesCount) likesCount.textContent = prevCount;
  console.error('Error handling like:', error);
- showToast('Failed to update like', 'error');
+ const msg = navigator.onLine ? 'Failed to update like. Please try again.' : 'You are offline. Please check your connection.';
+ showToast(msg, 'error');
+ } finally {
+ // Always re-enable the button and clear the in-flight lock
+ _likeInFlight.delete(postId);
+ if (likeBtn) likeBtn.disabled = false;
  }
  }
+ // Track in-flight follow requests to prevent double-fire (touch + click on mobile)
+ const _followInFlight = new Set();
+
  async function handleFollow(userId, button) {
- try {
  if (!userId || !button) return false;
- const result = await window.toggleFollow(userId);
- if (result.success) {
- // Update ALL follow buttons for this user across the entire feed
+
+ // Guard: ignore if a request for this user is already in progress
+ if (_followInFlight.has(userId)) return false;
+
+ // Offline check — give immediate feedback instead of a silent hang
+ if (!navigator.onLine) {
+ showToast('You are offline. Please check your connection.', 'error');
+ return false;
+ }
+
+ // Snapshot current state for rollback
+ const prevFollowing = button.classList.contains('following');
+ const optimisticFollowing = !prevFollowing;
+
+ // Helper: apply a follow state to every button for this user in the feed
+ function applyFollowState(isFollowing) {
  document.querySelectorAll(`.follow-btn[data-user-id="${userId}"]`).forEach(btn => {
- btn.classList.toggle('following', result.following);
- btn.setAttribute('aria-pressed', result.following ? 'true' : 'false');
- btn.setAttribute('aria-label', `${result.following ? 'Unfollow' : 'Follow'} user`);
+ btn.classList.toggle('following', isFollowing);
+ btn.setAttribute('aria-pressed', isFollowing ? 'true' : 'false');
+ btn.setAttribute('aria-label', `${isFollowing ? 'Unfollow' : 'Follow'} user`);
  const icon = btn.querySelector('i');
  const span = btn.querySelector('span');
- if (icon) icon.className = result.following ? 'fas fa-user-check' : 'fas fa-user-plus';
- if (span) span.textContent = result.following ? 'Following' : 'Follow';
+ if (icon) icon.className = isFollowing ? 'fas fa-user-check' : 'fas fa-user-plus';
+ if (span) span.textContent = isFollowing ? 'Following' : 'Follow';
+ // Disable/enable in sync with in-flight state
+ btn.disabled = _followInFlight.has(userId);
  });
- // Update all matching posts in the data array
+ }
+
+ // --- Optimistic UI update ---
+ applyFollowState(optimisticFollowing);
+ // Disable all follow buttons for this user while request is in-flight
+ document.querySelectorAll(`.follow-btn[data-user-id="${userId}"]`).forEach(btn => {
+ btn.disabled = true;
+ });
+
+ _followInFlight.add(userId);
+ try {
+ const result = await window.toggleFollow(userId);
+ if (result.success) {
+ // Confirm with server's authoritative state
+ applyFollowState(result.following);
+ // Sync data array
  posts.forEach(post => {
  if (post.user_id === userId) post.isFollowing = result.following;
  });
  showToast(result.following ? 'Following!' : 'Unfollowed successfully', 'success');
  return true;
  } else {
- showToast('Failed to update follow status', 'error');
+ // Server rejected — roll back
+ applyFollowState(prevFollowing);
+ posts.forEach(post => {
+ if (post.user_id === userId) post.isFollowing = prevFollowing;
+ });
+ showToast(result.error || 'Failed to update follow status', 'error');
  return false;
  }
  } catch (error) {
+ // Network/unexpected error — roll back
+ applyFollowState(prevFollowing);
+ posts.forEach(post => {
+ if (post.user_id === userId) post.isFollowing = prevFollowing;
+ });
  console.error('Error handling follow:', error);
- showToast('Failed to update follow status', 'error');
+ const msg = navigator.onLine ? 'Failed to update follow status. Please try again.' : 'You are offline. Please check your connection.';
+ showToast(msg, 'error');
  return false;
+ } finally {
+ // Always clear the lock and re-enable all buttons
+ _followInFlight.delete(userId);
+ document.querySelectorAll(`.follow-btn[data-user-id="${userId}"]`).forEach(btn => {
+ btn.disabled = false;
+ });
  }
  }
  async function handleComment(postId, content) {

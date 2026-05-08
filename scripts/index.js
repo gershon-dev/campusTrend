@@ -366,8 +366,8 @@ document.addEventListener('DOMContentLoaded', async function () {
                 <p class="description-text ${needsTruncation ? 'truncated' : ''}"
                     data-full-text="${escapeHTML(description)}">
                     ${escapeHTML(truncatedDescription)}
-                    ${needsTruncation ? `<button class="see-more-btn" data-action="expand" aria-expanded="false">See more</button>` : ''}
                 </p>
+                ${needsTruncation ? `<button class="see-more-btn" data-action="expand" aria-expanded="false">See more</button>` : ''}
             </div>` : ''}
 
             ${(post.image_url || post.media_url) ? `
@@ -383,7 +383,6 @@ document.addEventListener('DOMContentLoaded', async function () {
                     ${isLCP ? 'fetchpriority="high" loading="eager"' : 'loading="lazy"'}
                     decoding="${isLCP ? 'sync' : 'async'}">
                 `}
-                /* STAR RATING LOCKED */
             </div>` : ''}
 
             <div class="post-stats" aria-label="Post statistics">
@@ -479,22 +478,19 @@ document.addEventListener('DOMContentLoaded', async function () {
                 const descriptionText = postCard.querySelector('.description-text');
                 const fullText = descriptionText.dataset.fullText;
                 const isExpanded = this.dataset.action === 'collapse';
-                const btn = this;
+                const maxLength = 200;
                 if (isExpanded) {
-                    const maxLength = 200;
-                    descriptionText.innerHTML = '';
-                    descriptionText.appendChild(document.createTextNode(fullText.substring(0, maxLength) + '... '));
-                    descriptionText.appendChild(btn);
-                    btn.textContent = 'See more';
-                    btn.dataset.action = 'expand';
+                    descriptionText.textContent = fullText.substring(0, maxLength) + '...';
                     descriptionText.classList.add('truncated');
+                    this.textContent = 'See more';
+                    this.dataset.action = 'expand';
+                    this.setAttribute('aria-expanded', 'false');
                 } else {
-                    descriptionText.innerHTML = '';
-                    descriptionText.appendChild(document.createTextNode(fullText + ' '));
-                    descriptionText.appendChild(btn);
-                    btn.textContent = 'See less';
-                    btn.dataset.action = 'collapse';
+                    descriptionText.textContent = fullText;
                     descriptionText.classList.remove('truncated');
+                    this.textContent = 'See less';
+                    this.dataset.action = 'collapse';
+                    this.setAttribute('aria-expanded', 'true');
                 }
             });
         }

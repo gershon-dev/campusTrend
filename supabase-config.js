@@ -285,21 +285,27 @@ window.likePost = async function(postId) {
         const { data: { user } } = await supabaseClient.auth.getUser();
         if (!user) return { success: false, error: 'Not authenticated' };
 
+        // Use maybeSingle() so a missing row returns null instead of throwing
         const { data: existing } = await supabaseClient
             .from('likes')
             .select('id')
             .eq('post_id', postId)
             .eq('user_id', user.id)
-            .single();
+            .maybeSingle();
 
         if (existing) {
             await supabaseClient.from('likes').delete().eq('id', existing.id);
             await supabaseClient.rpc('decrement_likes', { post_id: postId });
-            return { success: true, liked: false };
+            // Fetch authoritative count so the UI is always in sync
+            const { data: postData } = await supabaseClient
+                .from('posts').select('likes_count').eq('id', postId).maybeSingle();
+            return { success: true, liked: false, likes_count: postData?.likes_count ?? null };
         } else {
             await supabaseClient.from('likes').insert([{ post_id: postId, user_id: user.id }]);
             await supabaseClient.rpc('increment_likes', { post_id: postId });
-            return { success: true, liked: true };
+            const { data: postData } = await supabaseClient
+                .from('posts').select('likes_count').eq('id', postId).maybeSingle();
+            return { success: true, liked: true, likes_count: postData?.likes_count ?? null };
         }
     } catch (err) {
         return { success: false, error: err.message };
@@ -407,12 +413,13 @@ window.followUser = async function(targetUserId) {
     try {
         const { data: { user } } = await supabaseClient.auth.getUser();
         if (!user) return { success: false, error: 'Not authenticated' };
+        // Use maybeSingle() so a missing row returns null instead of throwing
         const { data: existing } = await supabaseClient
             .from('followers')
             .select('id')
             .eq('follower_id', user.id)
             .eq('following_id', targetUserId)
-            .single();
+            .maybeSingle();
         if (existing) {
             await supabaseClient.from('followers').delete().eq('id', existing.id);
             return { success: true, following: false };

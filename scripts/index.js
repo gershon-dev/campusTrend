@@ -386,13 +386,11 @@ document.addEventListener('DOMContentLoaded', async function() {
  if (!postCard) return;
  const likeBtn = postCard.querySelector('.like-btn');
  if (likeBtn) {
- // Use pointerup so the event fires once regardless of input type (touch/mouse).
- // This prevents the mobile ghost-click (touchstart → click) that caused the
- // count to toggle twice — first increasing then immediately decreasing.
- likeBtn.addEventListener('pointerup', (e) => {
- e.preventDefault(); // suppress any following synthetic click
- handleLike(postId);
- });
+ // Simple 'click' works for both mouse and touch.
+ // The _likeInFlight Set + disabled flag inside handleLike prevents
+ // any double-fire — no pointerup/preventDefault tricks needed
+ // (those can cause additional ghost-click problems on mobile).
+ likeBtn.addEventListener('click', () => handleLike(postId));
  }
  const commentBtn = postCard.querySelector('.comment-btn');
  if (commentBtn) {
@@ -417,10 +415,8 @@ document.addEventListener('DOMContentLoaded', async function() {
  const followBtn = postCard.querySelector('.follow-btn');
  if (followBtn) {
  const userId = followBtn.dataset.userId;
- followBtn.addEventListener('pointerup', (e) => {
- e.preventDefault(); // suppress ghost click on mobile
- handleFollow(userId, followBtn);
- });
+ // Simple 'click' — _followInFlight Set + disabled flag handle deduplication
+ followBtn.addEventListener('click', () => handleFollow(userId, followBtn));
  }
  const seeMoreBtn = postCard.querySelector('.see-more-btn');
  if (seeMoreBtn) {
@@ -455,18 +451,22 @@ document.addEventListener('DOMContentLoaded', async function() {
  sendCommentBtn.disabled = !hasText;
  sendCommentBtn.setAttribute('aria-disabled', String(!hasText));
  });
- commentInput.addEventListener('keypress', (e) => {
- if (e.key === 'Enter' && !e.shiftKey && commentInput.value.trim()) {
- e.preventDefault();
- handleComment(postId, commentInput.value.trim());
- }
- });
- sendCommentBtn.addEventListener('click', () => {
+ // Shared flag to prevent double-submit (mobile can fire keypress + click together)
+ let _commentSubmitting = false;
+ function _doSubmitComment() {
  const text = commentInput.value.trim();
- if (text) {
- handleComment(postId, text);
+ if (!text || _commentSubmitting) return;
+ _commentSubmitting = true;
+ sendCommentBtn.disabled = true;
+ handleComment(postId, text).finally(() => { _commentSubmitting = false; });
+ }
+ commentInput.addEventListener('keypress', (e) => {
+ if (e.key === 'Enter' && !e.shiftKey) {
+ e.preventDefault();
+ _doSubmitComment();
  }
  });
+ sendCommentBtn.addEventListener('click', _doSubmitComment);
  }
  }
  // Track in-flight like requests to prevent double-fire (touch + click on mobile)
@@ -577,9 +577,11 @@ document.addEventListener('DOMContentLoaded', async function() {
  const msg = navigator.onLine ? 'Failed to update like. Please try again.' : 'You are offline. Please check your connection.';
  showToast(msg, 'error');
  } finally {
- // Always re-enable the button and clear the in-flight lock
+ // Clear in-flight lock immediately, but delay re-enabling the button
+ // by one event-loop tick so any mobile ghost-click (touchend→click)
+ // that fires after pointerup is consumed while the button is still disabled.
  _likeInFlight.delete(postId);
- if (likeBtn) likeBtn.disabled = false;
+ setTimeout(() => { if (likeBtn) likeBtn.disabled = false; }, 350);
  }
  }
  // Track in-flight follow requests to prevent double-fire (touch + click on mobile)
@@ -655,11 +657,13 @@ document.addEventListener('DOMContentLoaded', async function() {
  showToast(msg, 'error');
  return false;
  } finally {
- // Always clear the lock and re-enable all buttons
+ // Clear lock, but delay re-enabling buttons to absorb any mobile ghost-click
  _followInFlight.delete(userId);
+ setTimeout(() => {
  document.querySelectorAll(`.follow-btn[data-user-id="${userId}"]`).forEach(btn => {
  btn.disabled = false;
  });
+ }, 350);
  }
  }
  async function handleComment(postId, content) {
@@ -681,6 +685,13 @@ document.addEventListener('DOMContentLoaded', async function() {
  post.comments_count = (post.comments_count || 0) + 1;
  const commentsCount = postCard.querySelector('.comments-count');
  if (commentsCount) commentsCount.textContent = post.comments_count;
+ }
+ // Make sure the comments section is visible BEFORE reloading,
+ // otherwise the freshly rendered comments are hidden and it looks
+ // like nothing happened (the bug: "comment not showing without refresh")
+ const commentsSection = postCard?.querySelector('.comments-section');
+ if (commentsSection && !commentsSection.classList.contains('show')) {
+ commentsSection.classList.add('show');
  }
  await loadComments(postId);
  if (commentInput) commentInput.focus();

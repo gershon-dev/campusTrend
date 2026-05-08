@@ -1,835 +1,1394 @@
-/**
- * index.js  — CampusTrend UEW main feed script
- *
- * Feature modules (ES modules, type="module" in HTML):
- *   scripts/upload-modal.js  — Create Post modal + video compression
- *   scripts/comments.js      — Comments / replies
- *   scripts/share-modal.js   — Share modal
- */
-
-import { setupCreatePostModal }               from './upload-modal.js';
-import {
-    getInitials,
-    escapeHTML,
-    stringToColor,
-    loadComments,
-    handleComment,
-    setupCommentInput,
-    renderComments,
-}                                              from './comments.js';
-import { setupShareModal, openShareModal }     from './share-modal.js';
-
-// ─── Global helper ────────────────────────────────────────────────────────────
-
-export function viewUserProfile(userId) {
-    if (!userId) return;
-    window.location.href = `user-profile.html?userId=${userId}`;
+function viewUserProfile(userId) {
+ if (!userId) return;
+ window.location.href = `user-profile.html?userId=${userId}`;
 }
-// Keep accessible to inline onclick attributes in post HTML
-window.viewUserProfile = viewUserProfile;
+document.addEventListener('DOMContentLoaded', async function() {
+ let currentUser = null;
+ let currentProfile = null;
+ let posts = [];
+ let currentFilter = 'all';
+ let currentDepartmentFilter = null;
+ let selectedPostForShare = null;
+ const profileModal = document.getElementById('profileModal');
+ const postsContainer = document.getElementById('postsContainer');
+ const uploadModal = document.getElementById('uploadModal');
+ const shareModal = document.getElementById('shareModal');
+ const notificationBell = document.getElementById('notificationBell');
+ const notificationDropdown = document.getElementById('notificationDropdown');
+ const notificationBadge = document.getElementById('notificationBadge');
+ const currentUserAvatar = document.getElementById('currentUserAvatar');
+ const currentUserName = document.getElementById('currentUserName');
+ await init();
+ async function init() {
+ try {
+ const isLoggedIn = await window.isLoggedIn();
+ if (!isLoggedIn) {
+ // Only redirect if we're online — offline failures should not kick user out
+ if (!navigator.onLine) {
+ console.warn('Offline and not logged in — staying on page');
+ showError('You are offline. Please check your internet connection.');
+ return;
+ }
+ window.location.href = 'sign-in.html';
+ return;
+ }
+ currentUser = await window.getCurrentUser();
+ currentProfile = await window.getCurrentProfile();
+ if (!currentUser || !currentProfile) {
+ // Don't redirect if offline — the fetch just failed due to no network
+ if (!navigator.onLine) {
+ console.warn('Offline — could not load profile, staying on page');
+ showError('You are offline. Please check your internet connection.');
+ return;
+ }
+ console.error('Failed to load user or profile');
+ window.location.href = 'sign-in.html';
+ return;
+ }
+ updateUserUI();
+ loadDepartments();
+ loadTutorialsStrip(); // start immediately, runs in parallel
+ await loadPosts();
+ await loadNotifications();
+ await loadTrends();
+ setupEventListeners();
+ } catch (error) {
+ console.error('Initialization error:', error);
+ alert('Failed to load app. Please try refreshing the page.');
+ }
+ }
+ function updateUserUI() {
+ if (!currentProfile) return;
+ const initials = getInitials(currentProfile.full_name);
+ if (currentUserAvatar) {
+ if (currentProfile.avatar_url) {
+ currentUserAvatar.innerHTML = `<img src="${currentProfile.avatar_url}" alt="${currentProfile.full_name}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
+ } else {
+ currentUserAvatar.textContent = initials;
+ currentUserAvatar.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+ currentUserAvatar.style.color = 'white';
+ }
+ }
+ if (currentUserName) {
+ currentUserName.textContent = currentProfile.full_name;
+ }
+ const modalUserAvatar = document.getElementById('modalUserAvatar');
+ const modalUserName = document.getElementById('modalUserName');
+ if (modalUserAvatar) {
+ if (currentProfile.avatar_url) {
+ modalUserAvatar.innerHTML = `<img src="${currentProfile.avatar_url}" alt="${currentProfile.full_name}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
+ } else {
+ modalUserAvatar.textContent = initials;
+ }
+ }
+ if (modalUserName) {
+ modalUserName.textContent = currentProfile.full_name;
+ }
+ }
+ function getInitials(name) {
+ if (!name) return 'U';
+ const parts = name.trim().split(' ');
+ if (parts.length >= 2) {
+ return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+ }
+ return name.substring(0, 2).toUpperCase();
+ }
+ function loadDepartments() {
+ const departmentTags = document.getElementById('departmentTags');
+ const departments = window.DEPARTMENTS || [
+ 'Computer Science',
+ 'Mathematics',
+ 'Basic Education',
+ 'Business Administration',
+ 'Graphic Design',
+ 'Music Education',
+ 'Health Education',
+ 'Social Studies',
+ 'English Education',
+ 'Science Education',
+ 'Physical Education',
+ 'Special Education'
+ ];
+ if (departmentTags) {
+ departmentTags.innerHTML = `
+ <div class="department-tag active" data-department="">All</div>
+ ${departments.map(dept =>
+ `<div class="department-tag" data-department="${dept}">${dept}</div>`
+ ).join('')}
+ `;
+ departmentTags.querySelectorAll('.department-tag').forEach(tag => {
+ tag.addEventListener('click', function() {
+ departmentTags.querySelectorAll('.department-tag').forEach(t =>
+ t.classList.remove('active')
+ );
+ this.classList.add('active');
+ currentDepartmentFilter = this.dataset.department || null;
+ loadPosts();
+ });
+ });
+ }
+ }
+ async function loadPosts() {
+ try {
+ // ── Show cached posts instantly so the feed is visible immediately ──
+ try {
+     const cached = localStorage.getItem(POSTS_CACHE_KEY);
+     if (cached) {
+         const { data: cachedPosts, ts } = JSON.parse(cached);
+         if (cachedPosts && Array.isArray(cachedPosts) && Date.now() - ts < POSTS_CACHE_TTL) {
+             posts = cachedPosts;
+             renderPosts();
+         }
+     }
+ } catch(e) { /* ignore cache errors */ }
 
-// ─── Cache constants ─────────────────────────────────────────────────────────
+ showLoading();
+ let query = window.supabaseClient
+ .from('posts')
+ .select(`
+ *,
+ profiles:user_id (
+ id,
+ full_name,
+ avatar_url,
+ department
+ )
+ `)
+ .order('created_at', { ascending: false });
+ if (currentFilter === 'popular') {
+ query = query.gte('likes_count', 5).order('likes_count', { ascending: false });
+ } else if (currentFilter === 'recent') {
+ query = query.order('created_at', { ascending: false });
+ }
+ if (currentDepartmentFilter) {
+ query = query.eq('department', currentDepartmentFilter);
+ }
+ const { data, error } = await query.limit(50);
+ if (error) {
+ console.error('Error loading posts:', error);
+ throw error;
+ }
+ posts = data || [];
+ if (currentUser && posts.length > 0) { const postIds = posts.map(p => p.id);
+ const userIds = [...new Set(posts.map(p => p.user_id))].filter(id => id !== currentUser.id);
+ const { data: likes } = await window.supabaseClient
+ .from('likes')
+ .select('post_id')
+ .eq('user_id', currentUser.id)
+ .in('post_id', postIds);
+ const likedPostIds = new Set(likes?.map(l => l.post_id) || []);
+ const { data: following } = await window.supabaseClient
+ .from('followers')
+ .select('following_id')
+ .eq('follower_id', currentUser.id)
+ .in('following_id', userIds);
+ const followingIds = new Set(following?.map(f => f.following_id) || []);
+ posts = posts.map(post => ({
+ ...post,
+ isLiked: likedPostIds.has(post.id),
+ isFollowing: followingIds.has(post.user_id)
+ }));
+ }
+ renderPosts();
+ // Save to cache so the feed loads instantly on next visit
+ try {
+     localStorage.setItem(POSTS_CACHE_KEY, JSON.stringify({ data: posts, ts: Date.now() }));
+ } catch(e) { /* storage full */ }
+ } catch (error) {
+ console.error('Error loading posts:', error);
+ showError('Failed to load posts. Please try refreshing the page.');
+ }
+ }
+ function showLoading() {
+ if (postsContainer) {
+ const skeletonCard = () => `
+ <div class="post-skeleton" aria-hidden="true">
+ <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
+ <div class="skeleton-avatar"></div>
+ <div style="flex:1">
+ <div class="skeleton-line" style="width:40%;margin-bottom:6px"></div>
+ <div class="skeleton-line" style="width:25%;height:10px"></div>
+ </div>
+ </div>
+ <div class="skeleton-line" style="width:90%"></div>
+ <div class="skeleton-line" style="width:70%"></div>
+ <div class="skeleton-image" style="margin:10px 0"></div>
+ <div class="skeleton-line" style="width:50%;height:10px"></div>
+ </div>`;
+ postsContainer.innerHTML = skeletonCard() + skeletonCard() + skeletonCard();
+ }
+ }
+ function showError(message) {
+ if (postsContainer) {
+ postsContainer.innerHTML = `
+ <div class="error-message">
+ <i class="fas fa-exclamation-triangle"></i>
+ <p>${message}</p>
+ </div>
+ `;
+ }
+ }
+ function renderPosts() {
+ if (!postsContainer) return;
+ if (posts.length === 0) {
+ postsContainer.innerHTML = `
+ <div class="no-posts">
+ <i class="fas fa-image" aria-hidden="true"></i>
+ <h3>No posts yet</h3>
+ <p>Be the first to share something!</p>
+ </div>
+ `;
+ return;
+ }
+ postsContainer.innerHTML = posts.map((post, index) => createPostHTML(post, index)).join('');
+ const observer = new IntersectionObserver((entries) => {
+ entries.forEach(entry => {
+ if (entry.isIntersecting) {
+ const postId = entry.target.dataset.postId;
+ if (postId && !entry.target.dataset.commentsLoaded) {
+ entry.target.dataset.commentsLoaded = 'true';
+ loadComments(postId);
+ }
+ observer.unobserve(entry.target);
+ }
+ });
+ }, { rootMargin: '200px' });
+ posts.forEach((post, index) => {
+ setupPostEventListeners(post.id);
+ const card = document.querySelector(`[data-post-id="${post.id}"]`);
+ if (card) {
+ if (index < 2) {
+ loadComments(post.id);
+ card.dataset.commentsLoaded = 'true';
+ } else {
+ observer.observe(card);
+ }
+ }
+ });
+ }
+ function createPostHTML(post, index = 0) {
+ const profile = post.profiles || {};
+ const initials = getInitials(profile.full_name || 'User');
+ const timeAgo = window.timeAgo(post.created_at);
+ const isOwnPost = currentUser && post.user_id === currentUser.id;
+ // STAR RATING LOCKED: const starRating = window.getStarRating(post.likes_count);
+ const starRating = { stars: 0, label: '' }; // locked
+ const isLCP = index === 0;
+ const avatarHTML = profile.avatar_url
+ ? `<img src="${profile.avatar_url}" alt="${escapeHTML(profile.full_name || 'User')}" width="40" height="40" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" loading="${isLCP ? 'eager' : 'lazy'}" decoding="async">`
+ : initials;
+ const maxLength = 200;
+ const description = post.content || '';
+ const needsTruncation = description.length > maxLength;
+ const truncatedDescription = needsTruncation ? description.substring(0, maxLength) + '...' : description;
+ return `
+ <article class="post-card" data-post-id="${post.id}" aria-label="Post by ${escapeHTML(profile.full_name || 'Unknown User')}">
+ <div class="post-header">
+ <div class="post-user-info">
+ <div class="user-avatar" onclick="viewUserProfile('${post.user_id}')" style="cursor:pointer;background:${stringToColor(profile.full_name || 'User')}" role="button" tabindex="0" aria-label="View ${escapeHTML(profile.full_name || 'user')}'s profile">
+ ${avatarHTML}
+ </div>
+ <div>
+ <div class="post-username" onclick="viewUserProfile('${post.user_id}')" style="cursor:pointer;" role="button" tabindex="0" aria-label="View ${escapeHTML(profile.full_name || 'user')}'s profile">
+ ${escapeHTML(profile.full_name || 'Unknown User')}
+ ${isOwnPost ? '<span class="own-post-badge" aria-label="Your post">You</span>' : ''}
+ </div>
+ <div class="post-meta">
+ <span class="department-badge"><i class="fas fa-graduation-cap" aria-hidden="true"></i> ${escapeHTML(profile.department || 'Unknown')}</span>
+ <time class="post-time" datetime="${post.created_at}">${timeAgo}</time>
+ </div>
+ </div>
+ </div>
+ ${!isOwnPost ? `
+ <button class="follow-btn ${post.isFollowing ? 'following' : ''}" data-user-id="${post.user_id}" aria-label="${post.isFollowing ? 'Unfollow' : 'Follow'} ${escapeHTML(profile.full_name || 'user')}" aria-pressed="${post.isFollowing ? 'true' : 'false'}">
+ <i class="fas ${post.isFollowing ? 'fa-user-check' : 'fa-user-plus'}" aria-hidden="true"></i>
+ <span>${post.isFollowing ? 'Following' : 'Follow'}</span>
+ </button>
+ ` : ''}
+ </div>
+ ${description ? `
+ <div class="post-description">
+ <p class="description-text ${needsTruncation ? 'truncated' : ''}" data-full-text="${escapeHTML(description)}">${escapeHTML(truncatedDescription)}${needsTruncation ? ` <button class="see-more-btn" data-action="expand" aria-expanded="false">See more</button>` : ''}</p>
+ </div>
+ ` : ''}
+ ${(post.image_url || post.media_url) ? `
+ <div class="post-image-container">
+ ${(post.media_type === 'video') ? `
+ <video
+ src="${post.media_url || post.image_url}"
+ class="post-video"
+ controls
+ playsinline
+ preload="metadata"
+ style="width:100%;max-height:500px;border-radius:12px;background:#000;"
+ ></video>
+ ` : `
+ <img
+ src="${post.image_url || post.media_url}"
+ alt="Post by ${escapeHTML(profile.full_name || 'user')}${description ? ': ' + escapeHTML(description.substring(0, 100)) : ''}"
+ class="post-image"
+ ${isLCP ? 'fetchpriority="high" loading="eager"' : 'loading="lazy"'}
+ decoding="${isLCP ? 'sync' : 'async'}"
+ >
+ `}
+ /* STAR RATING LOCKED */
+ </div>
+ ` : ''}
+ <div class="post-stats" aria-label="Post statistics">
+ <span class="stat-item">
+ <i class="fas fa-heart" aria-hidden="true"></i>
+ <span class="likes-count">${post.likes_count || 0}</span> likes
+ </span>
+ <span class="stat-item">
+ <i class="fas fa-comment" aria-hidden="true"></i>
+ <span class="comments-count">${post.comments_count || 0}</span> comments
+ </span>
+ <span class="stat-item">
+ <i class="fas fa-share" aria-hidden="true"></i>
+    shares
+ </span>
+ </div>
+ <div class="post-actions" role="group" aria-label="Post actions">
+ <button class="action-btn like-btn ${post.isLiked ? 'liked' : ''}" data-action="like" aria-label="${post.isLiked ? 'Unlike post' : 'Like post'}" aria-pressed="${post.isLiked ? 'true' : 'false'}">
+ <i class="fas fa-heart" aria-hidden="true"></i>
+ <span>Like</span>
+ </button>
+ <button class="action-btn comment-btn" data-action="comment" aria-label="Comment on post">
+ <i class="fas fa-comment" aria-hidden="true"></i>
+ <span>Comment</span>
+ </button>
+ <button class="action-btn share-btn" data-action="share" aria-label="Share post">
+ <i class="fas fa-share" aria-hidden="true"></i>
+ <span>Share</span>
+ </button>
+ </div>
+ <div class="comments-section" data-post-id="${post.id}">
+ <div class="comments-list" data-post-id="${post.id}" role="list" aria-label="Comments"></div>
+ <div class="comment-input-wrapper">
+ <div class="user-avatar small" aria-hidden="true" style="background:${stringToColor(currentProfile?.full_name || 'U')}">${getInitials(currentProfile?.full_name || 'U')}</div>
+ <input
+ type="text"
+ class="comment-input"
+ placeholder="Write a comment..."
+ data-post-id="${post.id}"
+ aria-label="Write a comment"
+ >
+ <button class="send-comment-btn" data-post-id="${post.id}" disabled aria-label="Send comment" aria-disabled="true">
+ <i class="fas fa-paper-plane" aria-hidden="true"></i>
+ </button>
+ </div>
+ </div>
+ </article>
+ `;
+ }
+ function setupPostEventListeners(postId) {
+ const postCard = document.querySelector(`[data-post-id="${postId}"]`);
+ if (!postCard) return;
+ const likeBtn = postCard.querySelector('.like-btn');
+ if (likeBtn) {
+ // Use pointerup so the event fires once regardless of input type (touch/mouse).
+ // This prevents the mobile ghost-click (touchstart → click) that caused the
+ // count to toggle twice — first increasing then immediately decreasing.
+ likeBtn.addEventListener('pointerup', (e) => {
+ e.preventDefault(); // suppress any following synthetic click
+ handleLike(postId);
+ });
+ }
+ const commentBtn = postCard.querySelector('.comment-btn');
+ if (commentBtn) {
+ commentBtn.addEventListener('click', () => {
+ const commentsSection = postCard.querySelector('.comments-section');
+ const commentInput = postCard.querySelector('.comment-input');
+ if (commentsSection) {
+ commentsSection.classList.toggle('show');
+ if (commentsSection.classList.contains('show') && commentInput) {
+ setTimeout(() => {
+ commentInput.focus();
+ commentInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+ }, 100);
+ }
+ }
+ });
+ }
+ const shareBtn = postCard.querySelector('.share-btn');
+ if (shareBtn) {
+ shareBtn.addEventListener('click', () => openShareModal(postId));
+ }
+ const followBtn = postCard.querySelector('.follow-btn');
+ if (followBtn) {
+ const userId = followBtn.dataset.userId;
+ followBtn.addEventListener('pointerup', (e) => {
+ e.preventDefault(); // suppress ghost click on mobile
+ handleFollow(userId, followBtn);
+ });
+ }
+ const seeMoreBtn = postCard.querySelector('.see-more-btn');
+ if (seeMoreBtn) {
+ seeMoreBtn.addEventListener('click', function() {
+ const descriptionText = postCard.querySelector('.description-text');
+ const fullText = descriptionText.dataset.fullText;
+ const isExpanded = this.dataset.action === 'collapse';
+ const btn = this;
+ if (isExpanded) {
+ const maxLength = 200;
+ descriptionText.innerHTML = '';
+ descriptionText.appendChild(document.createTextNode(fullText.substring(0, maxLength) + '... '));
+ descriptionText.appendChild(btn);
+ btn.textContent = 'See more';
+ btn.dataset.action = 'expand';
+ descriptionText.classList.add('truncated');
+ } else {
+ descriptionText.innerHTML = '';
+ descriptionText.appendChild(document.createTextNode(fullText + ' '));
+ descriptionText.appendChild(btn);
+ btn.textContent = 'See less';
+ btn.dataset.action = 'collapse';
+ descriptionText.classList.remove('truncated');
+ }
+ });
+ }
+ const commentInput = postCard.querySelector('.comment-input');
+ const sendCommentBtn = postCard.querySelector('.send-comment-btn');
+ if (commentInput && sendCommentBtn) {
+ commentInput.addEventListener('input', () => {
+ const hasText = commentInput.value.trim().length > 0;
+ sendCommentBtn.disabled = !hasText;
+ sendCommentBtn.setAttribute('aria-disabled', String(!hasText));
+ });
+ commentInput.addEventListener('keypress', (e) => {
+ if (e.key === 'Enter' && !e.shiftKey && commentInput.value.trim()) {
+ e.preventDefault();
+ handleComment(postId, commentInput.value.trim());
+ }
+ });
+ sendCommentBtn.addEventListener('click', () => {
+ const text = commentInput.value.trim();
+ if (text) {
+ handleComment(postId, text);
+ }
+ });
+ }
+ }
+ // Track in-flight like requests to prevent double-fire (touch + click on mobile)
+ const _likeInFlight = new Set();
 
-const POSTS_CACHE_KEY = 'ct_posts_cache';
-const POSTS_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
+ async function handleLike(postId) {
+ // Guard: ignore if a request for this post is already in progress
+ if (_likeInFlight.has(postId)) return;
 
-// ─── DOMContentLoaded ────────────────────────────────────────────────────────
+ const post = posts.find(p => p.id === postId);
+ if (!post) return;
 
-document.addEventListener('DOMContentLoaded', async function () {
+ // Offline check — give immediate feedback instead of a silent hang
+ if (!navigator.onLine) {
+ showToast('You are offline. Please check your connection.', 'error');
+ return;
+ }
 
-    // ── App state ─────────────────────────────────────────────────────────────
-    let currentUser    = null;
-    let currentProfile = null;
-    let posts          = [];
-    let currentFilter  = 'all';
-    let currentDepartmentFilter = null;
+ const postCard = document.querySelector(`[data-post-id="${postId}"]`);
+ const likeBtn = postCard?.querySelector('.like-btn');
+ const likesCount = postCard?.querySelector('.likes-count');
 
-    // ── DOM refs ──────────────────────────────────────────────────────────────
-    const postsContainer      = document.getElementById('postsContainer');
-    const uploadModal         = document.getElementById('uploadModal');
-    const shareModal          = document.getElementById('shareModal');
-    const notificationBell    = document.getElementById('notificationBell');
-    const notificationDropdown = document.getElementById('notificationDropdown');
-    const notificationBadge   = document.getElementById('notificationBadge');
-    const currentUserAvatar   = document.getElementById('currentUserAvatar');
-    const currentUserName     = document.getElementById('currentUserName');
+ // Snapshot current state so we can roll back on failure
+ const prevIsLiked = post.isLiked;
+ const prevCount = post.likes_count || 0;
 
-    // ── Shared deps object passed to modules ─────────────────────────────────
-    const commentDeps = {
-        getProfile:   () => currentProfile,
-        showToast,
-        getInitials,
-        escapeHTML,
-        stringToColor,
+ // --- Optimistic UI update ---
+ const optimisticLiked = !prevIsLiked;
+ const optimisticCount = optimisticLiked ? prevCount + 1 : Math.max(0, prevCount - 1);
+ post.isLiked = optimisticLiked;
+ post.likes_count = optimisticCount;
+ if (likeBtn) {
+ likeBtn.classList.toggle('liked', optimisticLiked);
+ likeBtn.setAttribute('aria-pressed', optimisticLiked ? 'true' : 'false');
+ likeBtn.setAttribute('aria-label', optimisticLiked ? 'Unlike post' : 'Like post');
+ // Disable button while request is in-flight (prevents double-tap on mobile)
+ likeBtn.disabled = true;
+ }
+ if (likesCount) likesCount.textContent = optimisticCount;
+
+ _likeInFlight.add(postId);
+ try {
+ const result = await window.toggleLike(postId);
+ if (result.success) {
+ // Use server's authoritative state
+ post.isLiked = result.liked;
+ // Prefer server-provided count; fall back to local calculation
+ post.likes_count = (typeof result.likes_count === 'number')
+ ? result.likes_count
+ : result.liked ? prevCount + 1 : Math.max(0, prevCount - 1);
+ if (likeBtn) {
+ likeBtn.classList.toggle('liked', post.isLiked);
+ likeBtn.setAttribute('aria-pressed', post.isLiked ? 'true' : 'false');
+ likeBtn.setAttribute('aria-label', post.isLiked ? 'Unlike post' : 'Like post');
+ }
+ if (likesCount) likesCount.textContent = post.likes_count;
+ /* STAR RATING LOCKED — uncomment to re-enable
+ const starRating = window.getStarRating(post.likes_count);
+ const imageContainer = postCard.querySelector('.post-image-container');
+ if (imageContainer) {
+ let starBadge = imageContainer.querySelector('.star-rating-badge');
+ if (starRating.stars > 0) {
+ if (!starBadge) {
+ starBadge = document.createElement('div');
+ imageContainer.appendChild(starBadge);
+ }
+ starBadge.className = `star-rating-badge stars-${starRating.stars}`;
+ starBadge.innerHTML = `
+ ${Array(starRating.stars).fill('<i class="fas fa-star"></i>').join('')}
+ <span class="star-rating-label">${starRating.label}</span>
+ `;
+ const previousRating = window.getStarRating(post.likes_count - 1);
+ if (result.liked && starRating.stars > previousRating.stars) {
+ showStarMilestone({
+ stars: starRating.stars,
+ label: starRating.label,
+ likes: post.likes_count
+ });
+ }
+ } else if (starBadge) {
+ starBadge.remove();
+ }
+ }
+ END STAR RATING LOCKED */
+ } else {
+ // Server rejected — roll back optimistic update
+ post.isLiked = prevIsLiked;
+ post.likes_count = prevCount;
+ if (likeBtn) {
+ likeBtn.classList.toggle('liked', prevIsLiked);
+ likeBtn.setAttribute('aria-pressed', prevIsLiked ? 'true' : 'false');
+ likeBtn.setAttribute('aria-label', prevIsLiked ? 'Unlike post' : 'Like post');
+ }
+ if (likesCount) likesCount.textContent = prevCount;
+ showToast(result.error || 'Failed to update like', 'error');
+ }
+ } catch (error) {
+ // Network/unexpected error — roll back optimistic update
+ post.isLiked = prevIsLiked;
+ post.likes_count = prevCount;
+ if (likeBtn) {
+ likeBtn.classList.toggle('liked', prevIsLiked);
+ likeBtn.setAttribute('aria-pressed', prevIsLiked ? 'true' : 'false');
+ likeBtn.setAttribute('aria-label', prevIsLiked ? 'Unlike post' : 'Like post');
+ }
+ if (likesCount) likesCount.textContent = prevCount;
+ console.error('Error handling like:', error);
+ const msg = navigator.onLine ? 'Failed to update like. Please try again.' : 'You are offline. Please check your connection.';
+ showToast(msg, 'error');
+ } finally {
+ // Always re-enable the button and clear the in-flight lock
+ _likeInFlight.delete(postId);
+ if (likeBtn) likeBtn.disabled = false;
+ }
+ }
+ // Track in-flight follow requests to prevent double-fire (touch + click on mobile)
+ const _followInFlight = new Set();
+
+ async function handleFollow(userId, button) {
+ if (!userId || !button) return false;
+
+ // Guard: ignore if a request for this user is already in progress
+ if (_followInFlight.has(userId)) return false;
+
+ // Offline check — give immediate feedback instead of a silent hang
+ if (!navigator.onLine) {
+ showToast('You are offline. Please check your connection.', 'error');
+ return false;
+ }
+
+ // Snapshot current state for rollback
+ const prevFollowing = button.classList.contains('following');
+ const optimisticFollowing = !prevFollowing;
+
+ // Helper: apply a follow state to every button for this user in the feed
+ function applyFollowState(isFollowing) {
+ document.querySelectorAll(`.follow-btn[data-user-id="${userId}"]`).forEach(btn => {
+ btn.classList.toggle('following', isFollowing);
+ btn.setAttribute('aria-pressed', isFollowing ? 'true' : 'false');
+ btn.setAttribute('aria-label', `${isFollowing ? 'Unfollow' : 'Follow'} user`);
+ const icon = btn.querySelector('i');
+ const span = btn.querySelector('span');
+ if (icon) icon.className = isFollowing ? 'fas fa-user-check' : 'fas fa-user-plus';
+ if (span) span.textContent = isFollowing ? 'Following' : 'Follow';
+ // Disable/enable in sync with in-flight state
+ btn.disabled = _followInFlight.has(userId);
+ });
+ }
+
+ // --- Optimistic UI update ---
+ applyFollowState(optimisticFollowing);
+ // Disable all follow buttons for this user while request is in-flight
+ document.querySelectorAll(`.follow-btn[data-user-id="${userId}"]`).forEach(btn => {
+ btn.disabled = true;
+ });
+
+ _followInFlight.add(userId);
+ try {
+ const result = await window.toggleFollow(userId);
+ if (result.success) {
+ // Confirm with server's authoritative state
+ applyFollowState(result.following);
+ // Sync data array
+ posts.forEach(post => {
+ if (post.user_id === userId) post.isFollowing = result.following;
+ });
+ showToast(result.following ? 'Following!' : 'Unfollowed successfully', 'success');
+ return true;
+ } else {
+ // Server rejected — roll back
+ applyFollowState(prevFollowing);
+ posts.forEach(post => {
+ if (post.user_id === userId) post.isFollowing = prevFollowing;
+ });
+ showToast(result.error || 'Failed to update follow status', 'error');
+ return false;
+ }
+ } catch (error) {
+ // Network/unexpected error — roll back
+ applyFollowState(prevFollowing);
+ posts.forEach(post => {
+ if (post.user_id === userId) post.isFollowing = prevFollowing;
+ });
+ console.error('Error handling follow:', error);
+ const msg = navigator.onLine ? 'Failed to update follow status. Please try again.' : 'You are offline. Please check your connection.';
+ showToast(msg, 'error');
+ return false;
+ } finally {
+ // Always clear the lock and re-enable all buttons
+ _followInFlight.delete(userId);
+ document.querySelectorAll(`.follow-btn[data-user-id="${userId}"]`).forEach(btn => {
+ btn.disabled = false;
+ });
+ }
+ }
+ async function handleComment(postId, content) {
+ try {
+ const postCard = document.querySelector(`[data-post-id="${postId}"]`);
+ const commentInput = postCard?.querySelector('.comment-input');
+ const sendBtn = postCard?.querySelector('.send-comment-btn');
+ // Optimistically disable while posting
+ if (sendBtn) sendBtn.disabled = true;
+ const result = await window.addComment(postId, content);
+ if (result.success) {
+ if (commentInput) commentInput.value = '';
+ if (sendBtn) {
+ sendBtn.disabled = true;
+ sendBtn.setAttribute('aria-disabled', 'true');
+ }
+ const post = posts.find(p => p.id === postId);
+ if (post) {
+ post.comments_count = (post.comments_count || 0) + 1;
+ const commentsCount = postCard.querySelector('.comments-count');
+ if (commentsCount) commentsCount.textContent = post.comments_count;
+ }
+ await loadComments(postId);
+ if (commentInput) commentInput.focus();
+ showToast('Comment added!', 'success');
+ } else {
+ showToast(result.error || 'Failed to add comment', 'error');
+ if (sendBtn) sendBtn.disabled = false;
+ }
+ } catch (error) {
+ console.error('Error adding comment:', error);
+ showToast('Failed to add comment', 'error');
+ }
+ }
+ async function handleReply(postId, commentId, content) {
+ try {
+ const result = await window.addComment(postId, content, commentId);
+ if (result.success) {
+ const replyContainer = document.querySelector(`.reply-input-container[data-comment-id="${commentId}"]`);
+ if (replyContainer) {
+ replyContainer.classList.remove('show');
+ const input = replyContainer.querySelector('.reply-input');
+ if (input) input.value = '';
+ }
+ await loadComments(postId);
+ showToast('Reply added!', 'success');
+ } else {
+ showToast(result.error || 'Failed to add reply', 'error');
+ }
+ } catch (error) {
+ console.error('Error adding reply:', error);
+ showToast('Failed to add reply', 'error');
+ }
+ }
+ async function loadComments(postId) {
+ try {
+ const result = await window.getComments(postId);
+ if (result.success) {
+ const commentsList = document.querySelector(`.comments-list[data-post-id="${postId}"]`);
+ if (commentsList) {
+ renderComments(commentsList, result.comments, postId);
+ }
+ }
+ } catch (error) {
+ console.error('Error loading comments:', error);
+ }
+ }
+ function renderComments(container, comments, postId) {
+ if (!container || !comments) return;
+ if (comments.length === 0) {
+ container.innerHTML = '<p class="no-comments-text" style="text-align: center; color: #65676b; padding: 10px;">No comments yet. Be the first to comment!</p>';
+ return;
+ }
+ const topLevelComments = comments.filter(c => !c.parent_comment_id);
+ const repliesMap = {};
+ comments.forEach(comment => {
+ if (comment.parent_comment_id) {
+ if (!repliesMap[comment.parent_comment_id]) {
+ repliesMap[comment.parent_comment_id] = [];
+ }
+ repliesMap[comment.parent_comment_id].push(comment);
+ }
+ });
+ topLevelComments.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+ Object.keys(repliesMap).forEach(commentId => {
+ repliesMap[commentId].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+ });
+ container.innerHTML = topLevelComments.map(comment => {
+ const replies = repliesMap[comment.id] || [];
+ return createCommentHTML(comment, postId, replies);
+ }).join('');
+ container.querySelectorAll('.reply-btn').forEach(btn => {
+ btn.addEventListener('click', function() {
+ const commentId = this.dataset.commentId;
+ toggleReplyInput(postId, commentId);
+ });
+ });
+ container.querySelectorAll('.reply-input').forEach(input => {
+ const sendBtn = input.nextElementSibling;
+ input.addEventListener('input', function() {
+ if (sendBtn) {
+ sendBtn.disabled = !this.value.trim();
+ }
+ });
+ input.addEventListener('keypress', function(e) {
+ if (e.key === 'Enter' && this.value.trim()) {
+ const commentId = this.dataset.replyTo;
+ handleReply(postId, commentId, this.value.trim());
+ }
+ });
+ });
+ container.querySelectorAll('.send-reply-btn').forEach(btn => {
+ btn.addEventListener('click', function() {
+ const commentId = this.dataset.commentId;
+ const replyInput = document.querySelector(`[data-reply-to="${commentId}"]`);
+ if (replyInput && replyInput.value.trim()) {
+ handleReply(postId, commentId, replyInput.value.trim());
+ }
+ });
+ });
+ }
+ function createCommentHTML(comment, postId, replies = []) {
+ const profile = comment.profiles || {};
+ const initials = getInitials(profile.full_name || 'User');
+ const timeAgo = window.timeAgo(comment.created_at);
+ const avatarColor = stringToColor(profile.full_name || 'User');
+ return `
+ <div class="comment-item" data-comment-id="${comment.id}">
+ <div class="comment-user" data-user-id="${comment.user_id}">
+ <div class="user-avatar small" style="background: ${avatarColor}">
+ ${initials}
+ </div>
+ </div>
+ <div class="comment-content">
+ <div class="comment-bubble">
+ <div class="comment-author">${escapeHTML(profile.full_name || 'Unknown')}</div>
+ <div class="comment-text">${escapeHTML(comment.content)}</div>
+ </div>
+ <div class="comment-actions">
+ <span class="comment-time">${timeAgo}</span>
+ <button class="reply-btn" data-comment-id="${comment.id}">Reply</button>
+ </div>
+ <!-- Reply input (hidden by default) -->
+ <div class="reply-input-container" data-comment-id="${comment.id}">
+ <div class="user-avatar small" style="background: linear-gradient(135deg, #667eea, #764ba2)">
+ ${getInitials(currentProfile?.full_name || 'U')}
+ </div>
+ <input
+ type="text"
+ class="reply-input"
+ placeholder="Write a reply..."
+ data-reply-to="${comment.id}"
+ >
+ <button class="send-reply-btn" data-comment-id="${comment.id}" disabled>
+ <i class="fas fa-paper-plane"></i>
+ </button>
+ </div>
+ <!-- Nested Replies -->
+ ${replies.length > 0 ? `
+ <div class="replies-container">
+ ${replies.map(reply => createReplyHTML(reply, postId)).join('')}
+ </div>
+ ` : ''}
+ </div>
+ </div>
+ `;
+ }
+ function createReplyHTML(reply, postId) {
+ const profile = reply.profiles || {};
+ const initials = getInitials(profile.full_name || 'User');
+ const timeAgo = window.timeAgo(reply.created_at);
+ const avatarColor = stringToColor(profile.full_name || 'User');
+ return `
+ <div class="comment-item reply" data-comment-id="${reply.id}">
+ <div class="comment-user" data-user-id="${reply.user_id}">
+ <div class="user-avatar small" style="background: ${avatarColor}">
+ ${initials}
+ </div>
+ </div>
+ <div class="comment-content">
+ <div class="comment-bubble">
+ <div class="comment-author">${escapeHTML(profile.full_name || 'Unknown')}</div>
+ <div class="comment-text">${escapeHTML(reply.content)}</div>
+ </div>
+ <div class="comment-actions">
+ <span class="comment-time">${timeAgo}</span>
+ </div>
+ </div>
+ </div>
+ `;
+ }
+ function toggleReplyInput(postId, commentId) {
+ const replyContainer = document.querySelector(`.reply-input-container[data-comment-id="${commentId}"]`);
+ if (replyContainer) {
+ const isVisible = replyContainer.classList.contains('show');
+ document.querySelectorAll('.reply-input-container.show').forEach(container => {
+ container.classList.remove('show');
+ });
+ if (!isVisible) {
+ replyContainer.classList.add('show');
+ const input = replyContainer.querySelector('.reply-input');
+ if (input) {
+ setTimeout(() => input.focus(), 100);
+ }
+ }
+ }
+ }
+ function stringToColor(str) {
+ let hash = 0;
+ for (let i = 0; i < str.length; i++) {
+ hash = str.charCodeAt(i) + ((hash << 5) - hash);
+ }
+ const hue = hash % 360;
+ return `linear-gradient(135deg, hsl(${hue}, 70%, 50%), hsl(${(hue + 40) % 360}, 70%, 40%))`;
+ }
+ function setupCreatePostModal() {
+ const openUploadModal       = document.getElementById('openUploadModal');
+ const closeUploadModal      = document.getElementById('closeUploadModal');
+ const imageUploadArea       = document.getElementById('imageUploadArea');
+ const imageInput            = document.getElementById('imageInput');
+ const imagePreview          = document.getElementById('imagePreview');
+ const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+ const uploadPlaceholder     = document.getElementById('uploadPlaceholder');
+ const removeImageBtn        = document.getElementById('removeImageBtn');
+ const postDescription       = document.getElementById('postDescription');
+ const charCount             = document.getElementById('charCount');
+ const submitPostBtn         = document.getElementById('submitPostBtn');
+
+ // ── State ─────────────────────────────────────────────────────────────────
+ let _rawFile = null;
+
+ // ── Video Compression via MediaRecorder ───────────────────────────────────
+ // Compresses video to ~720p at a reduced bitrate before uploading.
+ // Only runs when the file exceeds 90 MB. Falls back to the original if
+ // compression fails or MediaRecorder is not supported.
+ const COMPRESS_THRESHOLD = 90 * 1024 * 1024; // 90 MB
+
+ function compressVideo(file, onProgress) {
+  return new Promise((resolve) => {
+   const statusBox  = document.getElementById('compressStatus');
+   const statusText = document.getElementById('compressStatusText');
+   const bar        = document.getElementById('compressProgressBar');
+   if (statusBox)  statusBox.style.display = 'block';
+   if (statusText) statusText.textContent  = 'Compressing video…';
+   if (bar)        bar.style.width         = '0%';
+
+   const video   = document.createElement('video');
+   const blobUrl = URL.createObjectURL(file);
+   video.src     = blobUrl;
+   video.muted   = false;
+   video.preload = 'auto';
+
+   video.onloadedmetadata = () => {
+    const duration = video.duration;
+
+    // Scale down to max 720p
+    const MAX_W = 1280, MAX_H = 720;
+    let w = video.videoWidth  || MAX_W;
+    let h = video.videoHeight || MAX_H;
+    if (w > MAX_W || h > MAX_H) {
+     const ratio = Math.min(MAX_W / w, MAX_H / h);
+     w = Math.round(w * ratio);
+     h = Math.round(h * ratio);
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width  = w;
+    canvas.height = h;
+    const ctx    = canvas.getContext('2d');
+    const stream = canvas.captureStream(24); // 24 fps
+
+    // Capture audio if available
+    let combined = stream;
+    try {
+     const audioCtx = new AudioContext();
+     const src  = audioCtx.createMediaElementSource(video);
+     const dest = audioCtx.createMediaStreamDestination();
+     src.connect(dest);
+     src.connect(audioCtx.destination);
+     combined = new MediaStream([...stream.getTracks(), ...dest.stream.getTracks()]);
+    } catch(e) { /* no audio */ }
+
+    // Pick the best supported codec; target ~1.5 Mbps
+    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+     ? 'video/webm;codecs=vp9'
+     : MediaRecorder.isTypeSupported('video/webm;codecs=vp8')
+     ? 'video/webm;codecs=vp8'
+     : 'video/webm';
+
+    let recorder;
+    try {
+     recorder = new MediaRecorder(combined, { mimeType, videoBitsPerSecond: 1_500_000 });
+    } catch(e) {
+     // MediaRecorder not supported with these options — skip compression
+     URL.revokeObjectURL(blobUrl);
+     if (statusBox) statusBox.style.display = 'none';
+     resolve(file);
+     return;
+    }
+
+    const chunks = [];
+    recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+    recorder.onstop = () => {
+     URL.revokeObjectURL(blobUrl);
+     const blob       = new Blob(chunks, { type: mimeType });
+     const ext        = mimeType.includes('mp4') ? 'mp4' : 'webm';
+     const compressed = new File([blob], `compressed.${ext}`, { type: mimeType });
+     // Only use compressed version if it's actually smaller
+     const result     = compressed.size < file.size ? compressed : file;
+     if (statusBox) statusBox.style.display = 'none';
+     resolve(result);
     };
 
-    // ── Boot ──────────────────────────────────────────────────────────────────
-    await init();
+    video.currentTime = 0;
+    video.onseeked = () => {
+     recorder.start(100);
+     video.play();
+     const draw = () => {
+      if (!video.paused && !video.ended) {
+       ctx.drawImage(video, 0, 0, w, h);
+       const pct = duration > 0 ? Math.min(100, Math.round((video.currentTime / duration) * 100)) : 0;
+       if (bar) bar.style.width = pct + '%';
+       if (onProgress) onProgress(pct);
+       requestAnimationFrame(draw);
+      }
+     };
+     requestAnimationFrame(draw);
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // INIT
-    // ─────────────────────────────────────────────────────────────────────────
-    async function init() {
-        try {
-            const isLoggedIn = await window.isLoggedIn();
-            if (!isLoggedIn) {
-                if (!navigator.onLine) {
-                    console.warn('Offline and not logged in — staying on page');
-                    showError('You are offline. Please check your internet connection.');
-                    return;
-                }
-                window.location.href = 'sign-in.html';
-                return;
-            }
+     // Stop recorder when video ends
+     video.onended = () => {
+      if (recorder.state !== 'inactive') recorder.stop();
+     };
+    };
+   };
 
-            currentUser    = await window.getCurrentUser();
-            currentProfile = await window.getCurrentProfile();
+   video.onerror = () => {
+    // Compression failed — upload original
+    URL.revokeObjectURL(blobUrl);
+    if (statusBox) statusBox.style.display = 'none';
+    resolve(file);
+   };
+  });
+ }
 
-            if (!currentUser || !currentProfile) {
-                if (!navigator.onLine) {
-                    console.warn('Offline — could not load profile, staying on page');
-                    showError('You are offline. Please check your internet connection.');
-                    return;
-                }
-                console.error('Failed to load user or profile');
-                window.location.href = 'sign-in.html';
-                return;
-            }
+ // ── Modal open/close ─────────────────────────────────────────────────────
+ if (openUploadModal) {
+  openUploadModal.addEventListener('click', () => {
+   uploadModal.classList.add('show'); checkFormValidity();
+  });
+ }
+ if (closeUploadModal) {
+  closeUploadModal.addEventListener('click', () => uploadModal.classList.remove('show'));
+ }
+ if (uploadModal) {
+  uploadModal.addEventListener('click', e => {
+   if (e.target === uploadModal) uploadModal.classList.remove('show');
+  });
+ }
+ if (imageUploadArea) {
+  imageUploadArea.addEventListener('click', e => {
+   const videoWrap = document.getElementById('videoPreviewWrap');
+   if (videoWrap && videoWrap.contains(e.target)) return;
+   if (imageInput) imageInput.click();
+  });
+ }
 
-            updateUserUI();
-            loadDepartments();
-            loadTutorialsStrip();       // parallel — doesn't block feed
-            await loadPosts();
-            await loadNotifications();
-            await loadTrends();
-            setupEventListeners();
-        } catch (error) {
-            console.error('Initialization error:', error);
-            alert('Failed to load app. Please try refreshing the page.');
-        }
+ // ── File select ───────────────────────────────────────────────────────────
+ if (imageInput) {
+  imageInput.setAttribute('accept', 'image/*,video/*');
+  imageInput.addEventListener('change', e => {
+   const file = e.target.files[0];
+   _rawFile = null;
+   if (file) {
+    const isVideo = file.type.startsWith('video/');
+    const videoWrap = document.getElementById('videoPreviewWrap');
+    const videoEl   = document.getElementById('videoPreview');
+    if (isVideo) {
+     _rawFile = file;
+     if (videoEl) { videoEl.src = URL.createObjectURL(file); videoEl.style.display = 'block'; }
+     if (videoWrap) videoWrap.style.display = 'block';
+     if (imagePreview) { imagePreview.src = ''; imagePreview.style.display = 'none'; }
+     if (uploadPlaceholder) uploadPlaceholder.style.display = 'none';
+     if (imagePreviewContainer) imagePreviewContainer.style.display = 'block';
+     checkFormValidity();
+    } else {
+     const videoWrap = document.getElementById('videoPreviewWrap');
+     if (videoWrap) videoWrap.style.display = 'none';
+     const reader = new FileReader();
+     reader.onload = evt => {
+      if (imagePreview) { imagePreview.src = evt.target.result; imagePreview.style.display = 'block'; }
+     };
+     reader.readAsDataURL(file);
+     if (uploadPlaceholder) uploadPlaceholder.style.display = 'none';
+     if (imagePreviewContainer) imagePreviewContainer.style.display = 'block';
+     checkFormValidity();
     }
+   }
+  });
+ }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // USER UI
-    // ─────────────────────────────────────────────────────────────────────────
-    function updateUserUI() {
-        if (!currentProfile) return;
-        const initials = getInitials(currentProfile.full_name);
+ // ── Remove button ─────────────────────────────────────────────────────────
+ if (removeImageBtn) {
+  removeImageBtn.addEventListener('click', e => {
+   e.stopPropagation();
+   _rawFile = null;
+   if (imageInput) imageInput.value = '';
+   if (imagePreview) { imagePreview.src = ''; imagePreview.style.display = 'none'; }
+   const videoEl      = document.getElementById('videoPreview');
+   const videoWrap    = document.getElementById('videoPreviewWrap');
+   const compStatus   = document.getElementById('compressStatus');
+   if (videoEl)    { videoEl.pause(); videoEl.src = ''; videoEl.style.display = 'none'; }
+   if (videoWrap)   videoWrap.style.display  = 'none';
+   if (compStatus)  compStatus.style.display = 'none';
+   if (uploadPlaceholder)     uploadPlaceholder.style.display = 'flex';
+   if (imagePreviewContainer) imagePreviewContainer.style.display = 'none';
+   checkFormValidity();
+  });
+ }
 
-        if (currentUserAvatar) {
-            if (currentProfile.avatar_url) {
-                currentUserAvatar.innerHTML = `<img src="${currentProfile.avatar_url}" alt="${currentProfile.full_name}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
-            } else {
-                currentUserAvatar.textContent = initials;
-                currentUserAvatar.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
-                currentUserAvatar.style.color = 'white';
-            }
-        }
-        if (currentUserName) currentUserName.textContent = currentProfile.full_name;
+ if (postDescription) {
+  postDescription.addEventListener('input', () => {
+   if (charCount) charCount.textContent = postDescription.value.length;
+   checkFormValidity();
+  });
+ }
 
-        const modalUserAvatar = document.getElementById('modalUserAvatar');
-        const modalUserName   = document.getElementById('modalUserName');
-        if (modalUserAvatar) {
-            modalUserAvatar.innerHTML = currentProfile.avatar_url
-                ? `<img src="${currentProfile.avatar_url}" alt="${currentProfile.full_name}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`
-                : initials;
-        }
-        if (modalUserName) modalUserName.textContent = currentProfile.full_name;
+ if (submitPostBtn) {
+  submitPostBtn.addEventListener('click', async () => { await handleCreatePost(); });
+ }
+
+ function checkFormValidity() {
+  if (submitPostBtn) submitPostBtn.disabled = !(imageInput && imageInput.files.length > 0);
+ }
+
+ async function handleCreatePost() {
+  try {
+   const description = postDescription?.value.trim() || '';
+   const department  = currentProfile?.department || '';
+   const rawFile     = imageInput?.files[0];
+   if (!rawFile) { showToast('Please select an image or video', 'error'); return; }
+
+   const isVideo       = rawFile.type.startsWith('video/');
+   const submitBtnText = document.getElementById('submitBtnText');
+   if (submitPostBtn) submitPostBtn.disabled = true;
+
+   let fileToUpload = rawFile;
+
+   // Compress video before uploading only if it exceeds 90 MB
+   if (isVideo && rawFile.size > COMPRESS_THRESHOLD) {
+    if (submitBtnText) submitBtnText.textContent = 'Compressing…';
+    try {
+     fileToUpload = await compressVideo(rawFile, pct => {
+      const progressBar = document.getElementById('uploadProgressBar');
+      if (progressBar) progressBar.style.width = pct + '%';
+     });
+    } catch(e) {
+     console.error('Compression failed:', e);
+     showToast('Compression failed — uploading original', 'error');
+     fileToUpload = rawFile;
     }
+    if (submitBtnText) submitBtnText.textContent = 'Uploading video…';
+   } else {
+    if (submitBtnText) submitBtnText.textContent = isVideo ? 'Uploading video…' : 'Uploading…';
+   }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // DEPARTMENTS
-    // ─────────────────────────────────────────────────────────────────────────
-    function loadDepartments() {
-        const departmentTags = document.getElementById('departmentTags');
-        const departments = window.DEPARTMENTS || [
-            'Computer Science', 'Mathematics', 'Basic Education',
-            'Business Administration', 'Graphic Design', 'Music Education',
-            'Health Education', 'Social Studies', 'English Education',
-            'Science Education', 'Physical Education', 'Special Education',
-        ];
-        if (!departmentTags) return;
+   const progressBar       = document.getElementById('uploadProgressBar');
+   const progressContainer = document.getElementById('uploadProgressContainer');
+   if (progressContainer) progressContainer.style.display = 'block';
+   if (progressBar)        progressBar.style.width = '0%';
 
-        departmentTags.innerHTML = `
-            <div class="department-tag active" data-department="">All</div>
-            ${departments.map(dept =>
-                `<div class="department-tag" data-department="${dept}">${dept}</div>`
-            ).join('')}`;
+   const result = await window.createPost(description, fileToUpload, department, 'public', percent => {
+    if (progressBar) progressBar.style.width = percent + '%';
+    const progressText = document.getElementById('uploadProgressText');
+    if (progressText) progressText.textContent = percent + '%';
+    if (submitBtnText) submitBtnText.textContent = 'Uploading… ' + percent + '%';
+   });
 
-        departmentTags.querySelectorAll('.department-tag').forEach(tag => {
-            tag.addEventListener('click', function () {
-                departmentTags.querySelectorAll('.department-tag').forEach(t => t.classList.remove('active'));
-                this.classList.add('active');
-                currentDepartmentFilter = this.dataset.department || null;
-                loadPosts();
-            });
-        });
+   if (progressContainer) progressContainer.style.display = 'none';
+
+   if (result.success) {
+    showToast('Post created successfully!', 'success');
+    if (postDescription) postDescription.value = '';
+    if (charCount)       charCount.textContent = '0';
+    if (imageInput)      imageInput.value = '';
+    _rawFile = null;
+    if (imagePreview) { imagePreview.src = ''; imagePreview.style.display = 'none'; }
+    const videoEl    = document.getElementById('videoPreview');
+    const videoWrap  = document.getElementById('videoPreviewWrap');
+    const compStatus = document.getElementById('compressStatus');
+    if (videoEl)    { videoEl.pause(); videoEl.src = ''; videoEl.style.display = 'none'; }
+    if (videoWrap)   videoWrap.style.display  = 'none';
+    if (compStatus)  compStatus.style.display = 'none';
+    if (uploadPlaceholder)     uploadPlaceholder.style.display = 'flex';
+    if (imagePreviewContainer) imagePreviewContainer.style.display = 'none';
+    uploadModal.classList.remove('show');
+
+    const newPost = result.post;
+    newPost.isLiked = false; newPost.isFollowing = false;
+    if (fileToUpload && (newPost.image_url || newPost.media_url)) {
+     newPost._localBlobUrl = URL.createObjectURL(fileToUpload);
+     newPost._localIsVideo = isVideo;
     }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // POSTS
-    // ─────────────────────────────────────────────────────────────────────────
-    async function loadPosts() {
-        try {
-            // Show cached posts instantly
-            try {
-                const cached = localStorage.getItem(POSTS_CACHE_KEY);
-                if (cached) {
-                    const { data: cachedPosts, ts } = JSON.parse(cached);
-                    if (cachedPosts && Array.isArray(cachedPosts) && Date.now() - ts < POSTS_CACHE_TTL) {
-                        posts = cachedPosts;
-                        renderPosts();
-                    }
-                }
-            } catch (e) { /* ignore cache errors */ }
-
-            showLoading();
-
-            let query = window.supabaseClient
-                .from('posts')
-                .select(`*, profiles:user_id (id, full_name, avatar_url, department)`)
-                .order('created_at', { ascending: false });
-
-            if (currentFilter === 'popular') {
-                query = query.gte('likes_count', 5).order('likes_count', { ascending: false });
-            } else if (currentFilter === 'recent') {
-                query = query.order('created_at', { ascending: false });
-            }
-            if (currentDepartmentFilter) {
-                query = query.eq('department', currentDepartmentFilter);
-            }
-
-            const { data, error } = await query.limit(50);
-            if (error) throw error;
-
-            posts = data || [];
-
-            if (currentUser && posts.length > 0) {
-                const postIds  = posts.map(p => p.id);
-                const userIds  = [...new Set(posts.map(p => p.user_id))].filter(id => id !== currentUser.id);
-
-                const { data: likes } = await window.supabaseClient
-                    .from('likes').select('post_id')
-                    .eq('user_id', currentUser.id).in('post_id', postIds);
-                const likedPostIds = new Set(likes?.map(l => l.post_id) || []);
-
-                const { data: following } = await window.supabaseClient
-                    .from('followers').select('following_id')
-                    .eq('follower_id', currentUser.id).in('following_id', userIds);
-                const followingIds = new Set(following?.map(f => f.following_id) || []);
-
-                posts = posts.map(post => ({
-                    ...post,
-                    isLiked:     likedPostIds.has(post.id),
-                    isFollowing: followingIds.has(post.user_id),
-                }));
-            }
-
-            renderPosts();
-
-            try {
-                localStorage.setItem(POSTS_CACHE_KEY, JSON.stringify({ data: posts, ts: Date.now() }));
-            } catch (e) { /* storage full */ }
-
-        } catch (error) {
-            console.error('Error loading posts:', error);
-            showError('Failed to load posts. Please try refreshing the page.');
-        }
+    posts.unshift(newPost);
+    try { localStorage.setItem(POSTS_CACHE_KEY, JSON.stringify({ data: posts, ts: Date.now() })); } catch(e) {}
+    const tempHTML = createPostHTML(newPost, 0);
+    const tempDiv  = document.createElement('div');
+    tempDiv.innerHTML = tempHTML;
+    const newCard  = tempDiv.firstElementChild;
+    if (newPost._localBlobUrl) {
+     if (isVideo) { const vid = newCard.querySelector('.post-video'); if (vid) vid.src = newPost._localBlobUrl; }
+     else         { const img = newCard.querySelector('.post-image'); if (img) img.src = newPost._localBlobUrl; }
     }
+    if (postsContainer.firstChild) postsContainer.insertBefore(newCard, postsContainer.firstChild);
+    else postsContainer.appendChild(newCard);
+    setupPostEventListeners(newPost.id);
+   } else {
+    showToast(result.error || 'Failed to create post', 'error');
+   }
+  } catch (error) {
+   console.error('Error creating post:', error);
+   showToast('Failed to create post', 'error');
+   const progressContainer = document.getElementById('uploadProgressContainer');
+   if (progressContainer) progressContainer.style.display = 'none';
+  } finally {
+   const submitBtnText = document.getElementById('submitBtnText');
+   if (submitPostBtn) submitPostBtn.disabled = false;
+   if (submitBtnText) submitBtnText.textContent = 'Post';
+  }
+ }
 
-    function showLoading() {
-        if (!postsContainer) return;
-        const skeletonCard = () => `
-            <div class="post-skeleton" aria-hidden="true">
-                <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
-                    <div class="skeleton-avatar"></div>
-                    <div style="flex:1">
-                        <div class="skeleton-line" style="width:40%;margin-bottom:6px"></div>
-                        <div class="skeleton-line" style="width:25%;height:10px"></div>
-                    </div>
-                </div>
-                <div class="skeleton-line" style="width:90%"></div>
-                <div class="skeleton-line" style="width:70%"></div>
-                <div class="skeleton-image" style="margin:10px 0"></div>
-                <div class="skeleton-line" style="width:50%;height:10px"></div>
-            </div>`;
-        postsContainer.innerHTML = skeletonCard() + skeletonCard() + skeletonCard();
-    }
-
-    function showError(message) {
-        if (postsContainer) {
-            postsContainer.innerHTML = `
-                <div class="error-message">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <p>${message}</p>
-                </div>`;
-        }
-    }
-
-    function renderPosts() {
-        if (!postsContainer) return;
-        if (posts.length === 0) {
-            postsContainer.innerHTML = `
-                <div class="no-posts">
-                    <i class="fas fa-image" aria-hidden="true"></i>
-                    <h3>No posts yet</h3>
-                    <p>Be the first to share something!</p>
-                </div>`;
-            return;
-        }
-
-        postsContainer.innerHTML = posts.map((post, index) => createPostHTML(post, index)).join('');
-
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    const postId = entry.target.dataset.postId;
-                    if (postId && !entry.target.dataset.commentsLoaded) {
-                        entry.target.dataset.commentsLoaded = 'true';
-                        loadComments(postId, commentDeps);
-                    }
-                    observer.unobserve(entry.target);
-                }
-            });
-        }, { rootMargin: '200px' });
-
-        posts.forEach((post, index) => {
-            setupPostEventListeners(post.id);
-            const card = document.querySelector(`[data-post-id="${post.id}"]`);
-            if (card) {
-                if (index < 2) {
-                    loadComments(post.id, commentDeps);
-                    card.dataset.commentsLoaded = 'true';
-                } else {
-                    observer.observe(card);
-                }
-            }
-        });
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // POST HTML
-    // ─────────────────────────────────────────────────────────────────────────
-    function createPostHTML(post, index = 0) {
-        const profile  = post.profiles || {};
-        const initials = getInitials(profile.full_name || 'User');
-        const timeAgo  = window.timeAgo(post.created_at);
-        const isOwnPost = currentUser && post.user_id === currentUser.id;
-        // STAR RATING LOCKED
-        const isLCP = index === 0;
-
-        const avatarHTML = profile.avatar_url
-            ? `<img src="${profile.avatar_url}" alt="${escapeHTML(profile.full_name || 'User')}" width="40" height="40" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" loading="${isLCP ? 'eager' : 'lazy'}" decoding="async">`
-            : initials;
-
-        const maxLength = 200;
-        const description = post.content || '';
-        const needsTruncation = description.length > maxLength;
-        const truncatedDescription = needsTruncation ? description.substring(0, maxLength) + '...' : description;
-
-        return `
-        <article class="post-card" data-post-id="${post.id}" aria-label="Post by ${escapeHTML(profile.full_name || 'Unknown User')}">
-            <div class="post-header">
-                <div class="post-user-info">
-                    <div class="user-avatar"
-                        onclick="viewUserProfile('${post.user_id}')"
-                        style="cursor:pointer;background:${stringToColor(profile.full_name || 'User')}"
-                        role="button" tabindex="0"
-                        aria-label="View ${escapeHTML(profile.full_name || 'user')}'s profile">
-                        ${avatarHTML}
-                    </div>
-                    <div>
-                        <div class="post-username"
-                            onclick="viewUserProfile('${post.user_id}')"
-                            style="cursor:pointer;" role="button" tabindex="0"
-                            aria-label="View ${escapeHTML(profile.full_name || 'user')}'s profile">
-                            ${escapeHTML(profile.full_name || 'Unknown User')}
-                            ${isOwnPost ? '<span class="own-post-badge" aria-label="Your post">You</span>' : ''}
-                        </div>
-                        <div class="post-meta">
-                            <span class="department-badge"><i class="fas fa-graduation-cap" aria-hidden="true"></i> ${escapeHTML(profile.department || 'Unknown')}</span>
-                            <time class="post-time" datetime="${post.created_at}">${timeAgo}</time>
-                        </div>
-                    </div>
-                </div>
-                ${!isOwnPost ? `
-                <button class="follow-btn ${post.isFollowing ? 'following' : ''}" data-user-id="${post.user_id}"
-                    aria-label="${post.isFollowing ? 'Unfollow' : 'Follow'} ${escapeHTML(profile.full_name || 'user')}"
-                    aria-pressed="${post.isFollowing ? 'true' : 'false'}">
-                    <i class="fas ${post.isFollowing ? 'fa-user-check' : 'fa-user-plus'}" aria-hidden="true"></i>
-                    <span>${post.isFollowing ? 'Following' : 'Follow'}</span>
-                </button>` : ''}
-            </div>
-
-            ${description ? `
-            <div class="post-description">
-                <p class="description-text ${needsTruncation ? 'truncated' : ''}"
-                    data-full-text="${escapeHTML(description)}">
-                    ${escapeHTML(truncatedDescription)}
-                </p>
-                ${needsTruncation ? `<button class="see-more-btn" data-action="expand" aria-expanded="false">See more</button>` : ''}
-            </div>` : ''}
-
-            ${(post.image_url || post.media_url) ? `
-            <div class="post-image-container">
-                ${post.media_type === 'video' ? `
-                <video src="${post.media_url || post.image_url}" class="post-video"
-                    controls playsinline preload="metadata"
-                    style="width:100%;max-height:500px;border-radius:12px;background:#000;">
-                </video>` : `
-                <img src="${post.image_url || post.media_url}"
-                    alt="Post by ${escapeHTML(profile.full_name || 'user')}${description ? ': ' + escapeHTML(description.substring(0, 100)) : ''}"
-                    class="post-image"
-                    ${isLCP ? 'fetchpriority="high" loading="eager"' : 'loading="lazy"'}
-                    decoding="${isLCP ? 'sync' : 'async'}">
-                `}
-            </div>` : ''}
-
-            <div class="post-stats" aria-label="Post statistics">
-                <span class="stat-item"><i class="fas fa-heart" aria-hidden="true"></i> <span class="likes-count">${post.likes_count || 0}</span> likes</span>
-                <span class="stat-item"><i class="fas fa-comment" aria-hidden="true"></i> <span class="comments-count">${post.comments_count || 0}</span> comments</span>
-                <span class="stat-item"><i class="fas fa-share" aria-hidden="true"></i> shares</span>
-            </div>
-
-            <div class="post-actions" role="group" aria-label="Post actions">
-                <button class="action-btn like-btn ${post.isLiked ? 'liked' : ''}" data-action="like"
-                    aria-label="${post.isLiked ? 'Unlike post' : 'Like post'}"
-                    aria-pressed="${post.isLiked ? 'true' : 'false'}">
-                    <i class="fas fa-heart" aria-hidden="true"></i><span>Like</span>
-                </button>
-                <button class="action-btn comment-btn" data-action="comment" aria-label="Comment on post">
-                    <i class="fas fa-comment" aria-hidden="true"></i><span>Comment</span>
-                </button>
-                <button class="action-btn share-btn" data-action="share" aria-label="Share post">
-                    <i class="fas fa-share" aria-hidden="true"></i><span>Share</span>
-                </button>
-            </div>
-
-            <div class="comments-section" data-post-id="${post.id}">
-                <div class="comments-list" data-post-id="${post.id}" role="list" aria-label="Comments"></div>
-                <div class="comment-input-wrapper">
-                    <div class="user-avatar small" aria-hidden="true"
-                        style="background:${stringToColor(currentProfile?.full_name || 'U')}">
-                        ${getInitials(currentProfile?.full_name || 'U')}
-                    </div>
-                    <input type="text" class="comment-input"
-                        placeholder="Write a comment..."
-                        data-post-id="${post.id}" aria-label="Write a comment">
-                    <button class="send-comment-btn" data-post-id="${post.id}"
-                        disabled aria-label="Send comment" aria-disabled="true">
-                        <i class="fas fa-paper-plane" aria-hidden="true"></i>
-                    </button>
-                </div>
-            </div>
-        </article>`;
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // POST EVENT LISTENERS
-    // ─────────────────────────────────────────────────────────────────────────
-    function setupPostEventListeners(postId) {
-        const postCard = document.querySelector(`[data-post-id="${postId}"]`);
-        if (!postCard) return;
-
-        // Like
-        const likeBtn = postCard.querySelector('.like-btn');
-        if (likeBtn) {
-            likeBtn.addEventListener('click', () => {
-                handleLike(postId);
-            });
-        }
-
-        // Comment toggle
-        const commentBtn = postCard.querySelector('.comment-btn');
-        if (commentBtn) {
-            commentBtn.addEventListener('click', () => {
-                const commentsSection = postCard.querySelector('.comments-section');
-                const commentInput   = postCard.querySelector('.comment-input');
-                if (commentsSection) {
-                    commentsSection.classList.toggle('show');
-                    if (commentsSection.classList.contains('show') && commentInput) {
-                        setTimeout(() => {
-                            commentInput.focus();
-                            commentInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        }, 100);
-                    }
-                }
-            });
-        }
-
-        // Share — delegate to share-modal module
-        const shareBtn = postCard.querySelector('.share-btn');
-        if (shareBtn) {
-            shareBtn.addEventListener('click', () => openShareModal(postId, shareModal));
-        }
-
-        // Follow
-        const followBtn = postCard.querySelector('.follow-btn');
-        if (followBtn) {
-            followBtn.addEventListener('click', () => {
-                handleFollow(followBtn.dataset.userId, followBtn);
-            });
-        }
-
-        // See more / See less
-        const seeMoreBtn = postCard.querySelector('.see-more-btn');
-        if (seeMoreBtn) {
-            seeMoreBtn.addEventListener('click', function () {
-                const descriptionText = postCard.querySelector('.description-text');
-                const fullText = descriptionText.dataset.fullText;
-                const isExpanded = this.dataset.action === 'collapse';
-                const maxLength = 200;
-                if (isExpanded) {
-                    descriptionText.textContent = fullText.substring(0, maxLength) + '...';
-                    descriptionText.classList.add('truncated');
-                    this.textContent = 'See more';
-                    this.dataset.action = 'expand';
-                    this.setAttribute('aria-expanded', 'false');
-                } else {
-                    descriptionText.textContent = fullText;
-                    descriptionText.classList.remove('truncated');
-                    this.textContent = 'See less';
-                    this.dataset.action = 'collapse';
-                    this.setAttribute('aria-expanded', 'true');
-                }
-            });
-        }
-
-        // Comment input — delegated to comments module
-        setupCommentInput(postId, commentDeps, posts);
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // LIKE
-    // ─────────────────────────────────────────────────────────────────────────
-    const _likeInFlight = new Set();
-
-    async function handleLike(postId) {
-        if (_likeInFlight.has(postId)) return;
-
-        const post = posts.find(p => p.id === postId);
-        if (!post) return;
-
-        if (!navigator.onLine) { showToast('You are offline. Please check your connection.', 'error'); return; }
-
-        const postCard   = document.querySelector(`[data-post-id="${postId}"]`);
-        const likeBtn    = postCard?.querySelector('.like-btn');
-        const likesCount = postCard?.querySelector('.likes-count');
-
-        const prevIsLiked  = post.isLiked;
-        const prevCount    = post.likes_count || 0;
-        const optimistic   = !prevIsLiked;
-        const optCount     = optimistic ? prevCount + 1 : Math.max(0, prevCount - 1);
-
-        post.isLiked      = optimistic;
-        post.likes_count  = optCount;
-        if (likeBtn) {
-            likeBtn.classList.toggle('liked', optimistic);
-            likeBtn.setAttribute('aria-pressed', optimistic ? 'true' : 'false');
-            likeBtn.setAttribute('aria-label', optimistic ? 'Unlike post' : 'Like post');
-            likeBtn.disabled = true;
-        }
-        if (likesCount) likesCount.textContent = optCount;
-
-        _likeInFlight.add(postId);
-        try {
-            const result = await window.toggleLike(postId);
-            if (result.success) {
-                post.isLiked     = result.liked;
-                post.likes_count = typeof result.likes_count === 'number'
-                    ? result.likes_count
-                    : result.liked ? prevCount + 1 : Math.max(0, prevCount - 1);
-                if (likeBtn) {
-                    likeBtn.classList.toggle('liked', post.isLiked);
-                    likeBtn.setAttribute('aria-pressed', post.isLiked ? 'true' : 'false');
-                    likeBtn.setAttribute('aria-label', post.isLiked ? 'Unlike post' : 'Like post');
-                }
-                if (likesCount) likesCount.textContent = post.likes_count;
-            } else {
-                _rollbackLike(post, likeBtn, likesCount, prevIsLiked, prevCount);
-                showToast(result.error || 'Failed to update like', 'error');
-            }
-        } catch (error) {
-            _rollbackLike(post, likeBtn, likesCount, prevIsLiked, prevCount);
-            console.error('Error handling like:', error);
-            showToast(navigator.onLine ? 'Failed to update like. Please try again.' : 'You are offline.', 'error');
-        } finally {
-            _likeInFlight.delete(postId);
-            if (likeBtn) likeBtn.disabled = false;
-        }
-    }
-
-    function _rollbackLike(post, likeBtn, likesCount, prevIsLiked, prevCount) {
-        post.isLiked     = prevIsLiked;
-        post.likes_count = prevCount;
-        if (likeBtn) {
-            likeBtn.classList.toggle('liked', prevIsLiked);
-            likeBtn.setAttribute('aria-pressed', prevIsLiked ? 'true' : 'false');
-            likeBtn.setAttribute('aria-label', prevIsLiked ? 'Unlike post' : 'Like post');
-        }
-        if (likesCount) likesCount.textContent = prevCount;
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // FOLLOW
-    // ─────────────────────────────────────────────────────────────────────────
-    const _followInFlight = new Set();
-
-    async function handleFollow(userId, button) {
-        if (!userId || !button) return false;
-        if (_followInFlight.has(userId)) return false;
-        if (!navigator.onLine) { showToast('You are offline. Please check your connection.', 'error'); return false; }
-
-        const prevFollowing    = button.classList.contains('following');
-        const optimisticFollow = !prevFollowing;
-
-        function applyFollowState(isFollowing) {
-            document.querySelectorAll(`.follow-btn[data-user-id="${userId}"]`).forEach(btn => {
-                btn.classList.toggle('following', isFollowing);
-                btn.setAttribute('aria-pressed', isFollowing ? 'true' : 'false');
-                btn.setAttribute('aria-label', `${isFollowing ? 'Unfollow' : 'Follow'} user`);
-                const icon = btn.querySelector('i');
-                const span = btn.querySelector('span');
-                if (icon) icon.className = isFollowing ? 'fas fa-user-check' : 'fas fa-user-plus';
-                if (span) span.textContent = isFollowing ? 'Following' : 'Follow';
-                btn.disabled = _followInFlight.has(userId);
-            });
-        }
-
-        applyFollowState(optimisticFollow);
-        document.querySelectorAll(`.follow-btn[data-user-id="${userId}"]`).forEach(btn => btn.disabled = true);
-
-        _followInFlight.add(userId);
-        try {
-            const result = await window.toggleFollow(userId);
-            if (result.success) {
-                applyFollowState(result.following);
-                posts.forEach(p => { if (p.user_id === userId) p.isFollowing = result.following; });
-                showToast(result.following ? 'Following!' : 'Unfollowed successfully', 'success');
-                return true;
-            } else {
-                applyFollowState(prevFollowing);
-                posts.forEach(p => { if (p.user_id === userId) p.isFollowing = prevFollowing; });
-                showToast(result.error || 'Failed to update follow status', 'error');
-                return false;
-            }
-        } catch (error) {
-            applyFollowState(prevFollowing);
-            posts.forEach(p => { if (p.user_id === userId) p.isFollowing = prevFollowing; });
-            console.error('Error handling follow:', error);
-            showToast(navigator.onLine ? 'Failed to update follow status. Please try again.' : 'You are offline.', 'error');
-            return false;
-        } finally {
-            _followInFlight.delete(userId);
-            document.querySelectorAll(`.follow-btn[data-user-id="${userId}"]`).forEach(btn => btn.disabled = false);
-        }
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // NOTIFICATIONS
-    // ─────────────────────────────────────────────────────────────────────────
-    async function loadNotifications() {
-        try {
-            const result = await window.getNotifications();
-            if (result.success && result.notifications) {
-                const unreadCount = result.notifications.filter(n => !n.is_read).length;
-                if (notificationBadge) {
-                    notificationBadge.textContent = unreadCount;
-                    notificationBadge.style.display = unreadCount > 0 ? 'block' : 'none';
-                }
-                renderNotifications(result.notifications);
-            }
-        } catch (error) {
-            console.error('Error loading notifications:', error);
-        }
-    }
-
-    function renderNotifications(notifications) {
-        const notificationList = document.getElementById('notificationList');
-        if (!notificationList) return;
-        if (notifications.length === 0) {
-            notificationList.innerHTML = '<p style="text-align:center;color:#6b7280;padding:20px;">No notifications yet</p>';
-            return;
-        }
-        notificationList.innerHTML = notifications.map(notif => {
-            const timeAgo  = window.timeAgo(notif.created_at);
-            const initials = getInitials(notif.from_user?.full_name || 'User');
-            return `
-            <div class="notification-item ${notif.is_read ? '' : 'unread'}">
-                <div class="user-avatar small">${initials}</div>
-                <div class="notification-content">
-                    <p><strong>${escapeHTML(notif.from_user?.full_name || 'Someone')}</strong> ${escapeHTML(notif.message || 'interacted with your post')}</p>
-                    <span class="notification-time">${timeAgo}</span>
-                </div>
-            </div>`;
-        }).join('');
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // TRENDS
-    // ─────────────────────────────────────────────────────────────────────────
-    async function loadTrends() {
-        const trendsList = document.getElementById('trendsList');
-        if (!trendsList) return;
-        const trends = [
-            { tag: 'CampusLife', posts: 245 },
-            { tag: 'UEWEvents',  posts: 189 },
-            { tag: 'StudyTips',  posts: 156 },
-            { tag: 'SportsDay',  posts: 134 },
-        ];
-        trendsList.setAttribute('role', 'list');
-        trendsList.innerHTML = trends.map(trend => `
-            <div class="trend-item" role="listitem">
-                <div class="trend-tag">#${trend.tag}</div>
-                <div class="trend-count">${trend.posts} posts</div>
-            </div>`).join('');
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // TOAST / STAR MILESTONE
-    // ─────────────────────────────────────────────────────────────────────────
-    function showToast(message, type = 'success') {
-        const toast        = document.getElementById('toast');
-        const toastMessage = document.getElementById('toastMessage');
-        if (!toast || !toastMessage) return;
-        const icon = toast.querySelector('i');
-        toastMessage.textContent = message;
-        toast.className = `toast ${type}`;
-        if (icon) icon.className = type === 'success' ? 'fas fa-check-circle' : 'fas fa-exclamation-circle';
-        toast.classList.add('show');
-        setTimeout(() => toast.classList.remove('show'), 3000);
-    }
-    window.showToast = showToast;
-
-    function showStarMilestone(milestone) {
-        const starMilestone  = document.getElementById('starMilestone');
-        const milestoneStars = document.getElementById('milestoneStars');
-        const milestoneText  = document.getElementById('milestoneText');
-        if (starMilestone && milestoneStars && milestoneText) {
-            milestoneStars.innerHTML = Array(milestone.stars).fill('<i class="fas fa-star"></i>').join('');
-            milestoneText.textContent = `${milestone.label}! Your post reached ${milestone.likes} likes!`;
-            starMilestone.classList.add('show');
-            setTimeout(() => starMilestone.classList.remove('show'), 5000);
-        }
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // SETUP ALL EVENT LISTENERS
-    // ─────────────────────────────────────────────────────────────────────────
-    function setupEventListeners() {
-        // ── Upload modal (from module) ────────────────────────────────────────
-        setupCreatePostModal({
-            getProfile:  () => currentProfile,
-            uploadModal,
-            postsContainer,
-            getPosts:    () => posts,
-            showToast,
-            createPostHTML,
-            setupPostEventListeners,
-            onPostCreated(newPost, fileToUpload, isVideo) {
-                newPost.isLiked = false;
-                newPost.isFollowing = false;
-                if (fileToUpload && (newPost.image_url || newPost.media_url)) {
-                    newPost._localBlobUrl = URL.createObjectURL(fileToUpload);
-                    newPost._localIsVideo = isVideo;
-                }
-                posts.unshift(newPost);
-                try { localStorage.setItem(POSTS_CACHE_KEY, JSON.stringify({ data: posts, ts: Date.now() })); } catch (e) {}
-
-                const tempHTML = createPostHTML(newPost, 0);
-                const tempDiv  = document.createElement('div');
-                tempDiv.innerHTML = tempHTML;
-                const newCard  = tempDiv.firstElementChild;
-
-                if (newPost._localBlobUrl) {
-                    if (isVideo) { const vid = newCard.querySelector('.post-video'); if (vid) vid.src = newPost._localBlobUrl; }
-                    else         { const img = newCard.querySelector('.post-image'); if (img) img.src = newPost._localBlobUrl; }
-                }
-
-                if (postsContainer.firstChild) postsContainer.insertBefore(newCard, postsContainer.firstChild);
-                else postsContainer.appendChild(newCard);
-                setupPostEventListeners(newPost.id);
-            },
-        });
-
-        // ── Share modal (from module) ─────────────────────────────────────────
-        setupShareModal({ shareModal, showToast });
-
-        // ── Filter buttons ────────────────────────────────────────────────────
-        document.querySelectorAll('.filter-btn').forEach(btn => {
-            btn.addEventListener('click', function () {
-                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-                this.classList.add('active');
-                currentFilter = this.dataset.filter;
-                loadPosts();
-            });
-        });
-
-        // ── Notification bell ─────────────────────────────────────────────────
-        if (notificationBell) {
-            notificationBell.addEventListener('click', e => {
-                e.stopPropagation();
-                notificationDropdown.classList.toggle('show');
-            });
-        }
-        const markAllRead = document.getElementById('markAllRead');
-        if (markAllRead) {
-            markAllRead.addEventListener('click', async () => {
-                await window.markAllNotificationsRead();
-                await loadNotifications();
-            });
-        }
-        document.addEventListener('click', e => {
-            if (notificationDropdown &&
-                !notificationBell?.contains(e.target) &&
-                !notificationDropdown.contains(e.target)) {
-                notificationDropdown.classList.remove('show');
-            }
-        });
-
-        // ── Profile link ──────────────────────────────────────────────────────
-        const userProfile = document.getElementById('userProfile');
-        if (userProfile) {
-            userProfile.style.cursor = 'pointer';
-            userProfile.addEventListener('click', () => window.goToOwnProfile());
-            userProfile.addEventListener('mouseenter', function () { this.style.opacity = '0.8'; });
-            userProfile.addEventListener('mouseleave', function () { this.style.opacity = '1'; });
-        }
-    }
-
-}); // end DOMContentLoaded
-
-// ─── Go to own profile (used by header) ──────────────────────────────────────
-window.goToOwnProfile = function () {
-    window.location.href = 'user-profile.html';
+ }
+ async function loadNotifications() {
+ try {
+ const result = await window.getNotifications();
+ if (result.success && result.notifications) {
+ const unreadCount = result.notifications.filter(n => !n.is_read).length;
+ if (notificationBadge) {
+ notificationBadge.textContent = unreadCount;
+ notificationBadge.style.display = unreadCount > 0 ? 'block' : 'none';
+ }
+ renderNotifications(result.notifications);
+ }
+ } catch (error) {
+ console.error('Error loading notifications:', error);
+ }
+ }
+ function renderNotifications(notifications) {
+ const notificationList = document.getElementById('notificationList');
+ if (!notificationList) return;
+ if (notifications.length === 0) {
+ notificationList.innerHTML = '<p style="text-align: center; color: #6b7280; padding: 20px;">No notifications yet</p>';
+ return;
+ }
+ notificationList.innerHTML = notifications.map(notif => {
+ const timeAgo = window.timeAgo(notif.created_at);
+ const initials = getInitials(notif.from_user?.full_name || 'User');
+ return `
+ <div class="notification-item ${notif.is_read ? '' : 'unread'}">
+ <div class="user-avatar small">${initials}</div>
+ <div class="notification-content">
+ <p><strong>${escapeHTML(notif.from_user?.full_name || 'Someone')}</strong> ${escapeHTML(notif.message || 'interacted with your post')}</p>
+ <span class="notification-time">${timeAgo}</span>
+ </div>
+ </div>
+ `;
+ }).join('');
+ }
+ async function loadTrends() {
+ const trendsList = document.getElementById('trendsList');
+ if (!trendsList) return;
+ const trends = [
+ { tag: 'CampusLife', posts: 245 },
+ { tag: 'UEWEvents', posts: 189 },
+ { tag: 'StudyTips', posts: 156 },
+ { tag: 'SportsDay', posts: 134 }
+ ];
+ trendsList.setAttribute('role', 'list');
+ trendsList.innerHTML = trends.map(trend => `
+ <div class="trend-item" role="listitem">
+ <div class="trend-tag">#${trend.tag}</div>
+ <div class="trend-count">${trend.posts} posts</div>
+ </div>
+ `).join('');
+ }
+ function openShareModal(postId) {
+ selectedPostForShare = postId;
+ if (shareModal) {
+ shareModal.classList.add('show');
+ }
+ }
+ function setupShareModal() {
+ const closeShareModal = document.getElementById('closeShareModal');
+ const copyLink = document.getElementById('copyLink');
+ if (closeShareModal) {
+ closeShareModal.addEventListener('click', () => {
+ shareModal.classList.remove('show');
+ });
+ }
+ if (shareModal) {
+ shareModal.addEventListener('click', (e) => {
+ if (e.target === shareModal) {
+ shareModal.classList.remove('show');
+ }
+ });
+ }
+ if (copyLink) {
+ copyLink.addEventListener('click', () => {
+ const url = `${window.location.origin}/index.html?post=${selectedPostForShare}`;
+ navigator.clipboard.writeText(url).then(() => {
+ showToast('Link copied to clipboard!', 'success');
+ shareModal.classList.remove('show');
+ });
+ });
+ }
+ }
+ function setupEventListeners() {
+ setupCreatePostModal();
+ setupShareModal();
+ document.querySelectorAll('.filter-btn').forEach(btn => {
+ btn.addEventListener('click', function() {
+ document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+ this.classList.add('active');
+ currentFilter = this.dataset.filter;
+ loadPosts();
+ });
+ });
+ if (notificationBell) {
+ notificationBell.addEventListener('click', (e) => {
+ e.stopPropagation();
+ notificationDropdown.classList.toggle('show');
+ });
+ }
+ const markAllRead = document.getElementById('markAllRead');
+ if (markAllRead) {
+ markAllRead.addEventListener('click', async () => {
+ await window.markAllNotificationsRead();
+ await loadNotifications();
+ });
+ }
+ document.addEventListener('click', (e) => {
+ if (notificationDropdown && !notificationBell.contains(e.target) && !notificationDropdown.contains(e.target)) {
+ notificationDropdown.classList.remove('show');
+ }
+ });
+ const userProfile = document.getElementById('userProfile');
+ if (userProfile) {
+ userProfile.style.cursor = 'pointer';
+ userProfile.addEventListener('click', function() {
+ window.goToOwnProfile();
+ });
+ userProfile.addEventListener('mouseenter', function() {
+ this.style.opacity = '0.8';
+ });
+ userProfile.addEventListener('mouseleave', function() {
+ this.style.opacity = '1';
+ });
+ }
+ }
+ function escapeHTML(str) {
+ if (!str) return '';
+ const div = document.createElement('div');
+ div.textContent = str;
+ return div.innerHTML;
+ }
+ function showStarMilestone(milestone) {
+ const starMilestone = document.getElementById('starMilestone');
+ const milestoneStars = document.getElementById('milestoneStars');
+ const milestoneText = document.getElementById('milestoneText');
+ if (starMilestone && milestoneStars && milestoneText) {
+ milestoneStars.innerHTML = Array(milestone.stars).fill('<i class="fas fa-star"></i>').join('');
+ milestoneText.textContent = `${milestone.label}! Your post reached ${milestone.likes} likes!`;
+ starMilestone.classList.add('show');
+ setTimeout(() => {
+ starMilestone.classList.remove('show');
+ }, 5000);
+ }
+ }
+ function showToast(message, type = 'success') {
+ const toast = document.getElementById('toast');
+ const toastMessage = document.getElementById('toastMessage');
+ if (toast && toastMessage) {
+ const icon = toast.querySelector('i');
+ toastMessage.textContent = message;
+ toast.className = `toast ${type}`;
+ if (icon) {
+ icon.className = type === 'success' ? 'fas fa-check-circle' : 'fas fa-exclamation-circle';
+ }
+ toast.classList.add('show');
+ setTimeout(() => {
+ toast.classList.remove('show');
+ }, 3000);
+ } 
+ }
+ window.showToast = showToast;
+});
+window.goToOwnProfile = function() {
+ window.location.href = 'user-profile.html';
 };
-
-// ─── Tutorials strip (independent; runs in parallel with feed) ───────────────
-
+// ─── Tutorials Strip ──────────────────────────────────────────────────────────
+// Private helpers (escapeHTML/getInitials live inside DOMContentLoaded closure)
 function _esc(s) {
-    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 function _ini(n) {
     if (!n) return 'U';
     const p = n.trim().split(' ');
-    return p.length >= 2 ? (p[0][0] + p[p.length - 1][0]).toUpperCase() : n.substring(0, 2).toUpperCase();
+    return p.length >= 2 ? (p[0][0]+p[p.length-1][0]).toUpperCase() : n.substring(0,2).toUpperCase();
 }
 function extractDriveFileId(url) {
     if (!url) return null;
     const m1 = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
     if (m1) return m1[1];
     const m2 = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-    return m2 ? m2[1] : null;
+    if (m2) return m2[1];
+    return null;
 }
 
 const TUT_CACHE_KEY = 'ct_tutorials_strip';
-const TUT_CACHE_TTL = 5 * 60 * 1000;
+const TUT_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+const POSTS_CACHE_KEY = 'ct_posts_cache';
+const POSTS_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
 
 async function loadTutorialsStrip() {
     const scroll = document.getElementById('tutorialsScroll');
     const strip  = document.getElementById('tutorialsStrip');
     if (!scroll || !strip) return;
 
+    // ── Step 1: show cached data instantly if available ──────────────────────
     try {
         const cached = localStorage.getItem(TUT_CACHE_KEY);
         if (cached) {
@@ -837,12 +1396,14 @@ async function loadTutorialsStrip() {
             if (html && Date.now() - ts < TUT_CACHE_TTL) {
                 scroll.innerHTML = html;
                 strip.style.display = '';
+                // Still refresh in background silently
                 _fetchAndRenderTutorials(scroll, strip, true);
                 return;
             }
         }
-    } catch (e) { /* ignore */ }
+    } catch(e) { /* ignore cache errors */ }
 
+    // ── Step 2: no cache — fetch and render ──────────────────────────────────
     await _fetchAndRenderTutorials(scroll, strip, false);
 }
 
@@ -857,16 +1418,21 @@ async function _fetchAndRenderTutorials(scroll, strip, isBgRefresh) {
         if (error) throw error;
 
         if (!tutorials || tutorials.length === 0) {
+            // Always hide the strip and clear cache — even on background refresh
+            // so deleted tutorials don't keep showing from stale cache
             strip.style.display = 'none';
             localStorage.removeItem(TUT_CACHE_KEY);
             return;
         }
 
+        // Fetch profiles
         const userIds = [...new Set(tutorials.map(t => t.user_id))];
         let profileMap = {};
         if (userIds.length > 0) {
             const { data: profiles } = await window.supabaseClient
-                .from('profiles').select('id, full_name, avatar_url').in('id', userIds);
+                .from('profiles')
+                .select('id, full_name, avatar_url')
+                .in('id', userIds);
             (profiles || []).forEach(p => { profileMap[p.id] = p; });
         }
 
@@ -899,22 +1465,27 @@ async function _fetchAndRenderTutorials(scroll, strip, isBgRefresh) {
                     <div class="tutorial-chip-meta">
                         <div class="tutorial-chip-avatar">${avatarHtml}</div>
                         <span>${_esc(name.split(' ')[0])}</span>
+            
                     </div>
                 </div>
             </a>`;
         }).join('');
 
         const seeAllHtml = `<a class="tutorial-chip-seeall" href="tutorials.html">
-            <i class="fas fa-th-large"></i><span>See all</span>
-        </a>`;
+                <i class="fas fa-th-large"></i><span>See all</span>
+            </a>`;
+
         const finalHtml = chipsHtml + seeAllHtml;
 
+        // Always update the DOM — including background refresh so deletions
+        // are reflected immediately without waiting for cache to expire
         scroll.innerHTML = finalHtml;
         strip.style.display = '';
 
+        // Update cache with fresh data
         try {
             localStorage.setItem(TUT_CACHE_KEY, JSON.stringify({ html: finalHtml, ts: Date.now() }));
-        } catch (e) { /* storage full */ }
+        } catch(e) { /* storage full, ignore */ }
 
     } catch (err) {
         console.warn('loadTutorialsStrip:', err);

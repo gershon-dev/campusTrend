@@ -136,7 +136,11 @@ document.addEventListener('DOMContentLoaded', async function() {
      if (cached) {
          const { data: cachedPosts, ts } = JSON.parse(cached);
          if (cachedPosts && Array.isArray(cachedPosts) && Date.now() - ts < POSTS_CACHE_TTL) {
-             posts = cachedPosts;
+             // Strip isLiked/isFollowing from cache — these are user-specific
+             // interaction states that must always come from the live DB fetch.
+             // Rendering stale values causes the like/follow buttons to start
+             // in the wrong state, making optimistic updates go the wrong direction.
+             posts = cachedPosts.map(p => ({ ...p, isLiked: false, isFollowing: false }));
              renderPosts();
          }
      }
@@ -470,6 +474,16 @@ document.addEventListener('DOMContentLoaded', async function() {
  }
  }
  // Track in-flight like requests to prevent double-fire (touch + click on mobile)
+ // ── Cache sync helper ─────────────────────────────────────────────────────
+ // Call this after any mutation (like/follow/comment) so the cache never
+ // drifts from the in-memory posts array. Without this, the next loadPosts()
+ // call re-renders stale isLiked/isFollowing state from the old cache.
+ function syncPostsCache() {
+     try {
+         localStorage.setItem(POSTS_CACHE_KEY, JSON.stringify({ data: posts, ts: Date.now() }));
+     } catch(e) { /* storage full — ignore */ }
+ }
+
  const _likeInFlight = new Set();
 
  async function handleLike(postId) {
@@ -523,6 +537,7 @@ document.addEventListener('DOMContentLoaded', async function() {
  likeBtn.setAttribute('aria-label', post.isLiked ? 'Unlike post' : 'Like post');
  }
  if (likesCount) likesCount.textContent = post.likes_count;
+ syncPostsCache(); // keep cache in sync after confirmed like
  /* STAR RATING LOCKED — uncomment to re-enable
  const starRating = window.getStarRating(post.likes_count);
  const imageContainer = postCard.querySelector('.post-image-container');
@@ -635,6 +650,7 @@ document.addEventListener('DOMContentLoaded', async function() {
  posts.forEach(post => {
  if (post.user_id === userId) post.isFollowing = result.following;
  });
+ syncPostsCache(); // keep cache in sync after confirmed follow
  showToast(result.following ? 'Following!' : 'Unfollowed successfully', 'success');
  return true;
  } else {
@@ -685,6 +701,7 @@ document.addEventListener('DOMContentLoaded', async function() {
  post.comments_count = (post.comments_count || 0) + 1;
  const commentsCount = postCard.querySelector('.comments-count');
  if (commentsCount) commentsCount.textContent = post.comments_count;
+ syncPostsCache(); // keep cache in sync after comment
  }
  // Make sure the comments section is visible BEFORE reloading,
  // otherwise the freshly rendered comments are hidden and it looks

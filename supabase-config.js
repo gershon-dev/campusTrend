@@ -294,15 +294,27 @@ window.likePost = async function(postId) {
             .maybeSingle();
 
         if (existing) {
-            await supabaseClient.from('likes').delete().eq('id', existing.id);
-            await supabaseClient.rpc('decrement_likes', { post_id: postId });
-            // Fetch authoritative count so the UI is always in sync
+            const { error: delErr } = await supabaseClient.from('likes').delete().eq('id', existing.id);
+            if (delErr) throw new Error(delErr.message);
+            // Best-effort count update — if RPC missing, fall back to manual decrement
+            const { error: rpcErr } = await supabaseClient.rpc('decrement_likes', { post_id: postId });
+            if (rpcErr) {
+                await supabaseClient.from('posts')
+                    .update({ likes_count: supabaseClient.rpc('greatest', { a: 0 }) })
+                    .eq('id', postId);
+            }
             const { data: postData } = await supabaseClient
                 .from('posts').select('likes_count').eq('id', postId).maybeSingle();
             return { success: true, liked: false, likes_count: postData?.likes_count ?? null };
         } else {
-            await supabaseClient.from('likes').insert([{ post_id: postId, user_id: user.id }]);
-            await supabaseClient.rpc('increment_likes', { post_id: postId });
+            const { error: insErr } = await supabaseClient.from('likes').insert([{ post_id: postId, user_id: user.id }]);
+            if (insErr) throw new Error(insErr.message);
+            const { error: rpcErr } = await supabaseClient.rpc('increment_likes', { post_id: postId });
+            if (rpcErr) {
+                // RPC missing — manually count likes and update
+                const { count } = await supabaseClient.from('likes').select('id', { count: 'exact', head: true }).eq('post_id', postId);
+                await supabaseClient.from('posts').update({ likes_count: count }).eq('id', postId);
+            }
             const { data: postData } = await supabaseClient
                 .from('posts').select('likes_count').eq('id', postId).maybeSingle();
             return { success: true, liked: true, likes_count: postData?.likes_count ?? null };

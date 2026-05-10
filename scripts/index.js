@@ -389,15 +389,12 @@ document.addEventListener('DOMContentLoaded', async function() {
  const postCard = document.querySelector(`[data-post-id="${postId}"]`);
  if (!postCard) return;
  const likeBtn = postCard.querySelector('.like-btn');
- if (likeBtn && !likeBtn.dataset.bound) {
- likeBtn.dataset.bound = '1';
- likeBtn.style.touchAction = 'manipulation';
- likeBtn.addEventListener('click', (e) => {
- e.preventDefault();
- e.stopPropagation();
- if (likeBtn.dataset.busy === '1') return;   // hard per-button lock
- handleLike(postId);
- });
+ if (likeBtn) {
+ // Simple 'click' works for both mouse and touch.
+ // The _likeInFlight Set + disabled flag inside handleLike prevents
+ // any double-fire — no pointerup/preventDefault tricks needed
+ // (those can cause additional ghost-click problems on mobile).
+ likeBtn.addEventListener('click', () => handleLike(postId));
  }
  const commentBtn = postCard.querySelector('.comment-btn');
  if (commentBtn) {
@@ -420,16 +417,10 @@ document.addEventListener('DOMContentLoaded', async function() {
  shareBtn.addEventListener('click', () => openShareModal(postId));
  }
  const followBtn = postCard.querySelector('.follow-btn');
- if (followBtn && !followBtn.dataset.bound) {
- followBtn.dataset.bound = '1';
- followBtn.style.touchAction = 'manipulation';
+ if (followBtn) {
  const userId = followBtn.dataset.userId;
- followBtn.addEventListener('click', (e) => {
- e.preventDefault();
- e.stopPropagation();
- if (followBtn.dataset.busy === '1') return; // hard per-button lock
- handleFollow(userId, followBtn);
- });
+ // Simple 'click' — _followInFlight Set + disabled flag handle deduplication
+ followBtn.addEventListener('click', () => handleFollow(userId, followBtn));
  }
  const seeMoreBtn = postCard.querySelector('.see-more-btn');
  if (seeMoreBtn) {
@@ -531,7 +522,6 @@ document.addEventListener('DOMContentLoaded', async function() {
  if (likesCount) likesCount.textContent = optimisticCount;
 
  _likeInFlight.add(postId);
- if (likeBtn) likeBtn.dataset.busy = '1';
  try {
  const result = await window.toggleLike(postId);
  if (result.success) {
@@ -606,9 +596,7 @@ document.addEventListener('DOMContentLoaded', async function() {
  // by one event-loop tick so any mobile ghost-click (touchend→click)
  // that fires after pointerup is consumed while the button is still disabled.
  _likeInFlight.delete(postId);
- setTimeout(() => {
-   if (likeBtn) { likeBtn.disabled = false; likeBtn.dataset.busy = ''; }
- }, 500);
+ setTimeout(() => { if (likeBtn) likeBtn.disabled = false; }, 350);
  }
  }
  // Track in-flight follow requests to prevent double-fire (touch + click on mobile)
@@ -653,7 +641,6 @@ document.addEventListener('DOMContentLoaded', async function() {
  });
 
  _followInFlight.add(userId);
- if (button) button.dataset.busy = '1';
  try {
  const result = await window.toggleFollow(userId);
  if (result.success) {
@@ -691,50 +678,17 @@ document.addEventListener('DOMContentLoaded', async function() {
  setTimeout(() => {
  document.querySelectorAll(`.follow-btn[data-user-id="${userId}"]`).forEach(btn => {
  btn.disabled = false;
- btn.dataset.busy = '';
  });
- }, 500);
+ }, 350);
  }
  }
  async function handleComment(postId, content) {
+ try {
  const postCard = document.querySelector(`[data-post-id="${postId}"]`);
  const commentInput = postCard?.querySelector('.comment-input');
  const sendBtn = postCard?.querySelector('.send-comment-btn');
- const commentsList = postCard?.querySelector(`.comments-list[data-post-id="${postId}"]`);
- const commentsSection = postCard?.querySelector('.comments-section');
-
+ // Optimistically disable while posting
  if (sendBtn) sendBtn.disabled = true;
-
- // Always reveal the comments section first so the new comment is visible.
- if (commentsSection && !commentsSection.classList.contains('show')) {
- commentsSection.classList.add('show');
- }
-
- // ── Optimistic insert into the visible list (mirrors tutorials.js) ──
- const tempId = 'tmp-' + Date.now();
- if (commentsList) {
- // Clear placeholder "No comments yet" if present
- const placeholder = commentsList.querySelector('.no-comments-text');
- if (placeholder) placeholder.remove();
- const initials = getInitials(currentProfile?.full_name || 'You');
- const avatar = currentProfile?.avatar_url
- ? `<img src="${currentProfile.avatar_url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" alt="">`
- : initials;
- const safe = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
- const optimisticHtml = `
- <div class="comment-item" data-temp-id="${tempId}" style="opacity:0.7;">
- <div class="comment-avatar">${avatar}</div>
- <div class="comment-bubble">
- <div class="comment-author">${safe(currentProfile?.full_name || 'You')}</div>
- <div class="comment-text">${safe(content)}</div>
- <div class="comment-time">just now</div>
- </div>
- </div>`;
- // Prepend so it appears at the top (matches existing sort: newest first)
- commentsList.insertAdjacentHTML('afterbegin', optimisticHtml);
- }
-
- try {
  const result = await window.addComment(postId, content);
  if (result.success) {
  if (commentInput) commentInput.value = '';
@@ -747,25 +701,25 @@ document.addEventListener('DOMContentLoaded', async function() {
  post.comments_count = (post.comments_count || 0) + 1;
  const commentsCount = postCard.querySelector('.comments-count');
  if (commentsCount) commentsCount.textContent = post.comments_count;
- syncPostsCache();
+ syncPostsCache(); // keep cache in sync after comment
  }
- // Now reconcile with server-truth (replaces optimistic node).
+ // Make sure the comments section is visible BEFORE reloading,
+ // otherwise the freshly rendered comments are hidden and it looks
+ // like nothing happened (the bug: "comment not showing without refresh")
+ const commentsSection = postCard?.querySelector('.comments-section');
+ if (commentsSection && !commentsSection.classList.contains('show')) {
+ commentsSection.classList.add('show');
+ }
  await loadComments(postId);
  if (commentInput) commentInput.focus();
  showToast('Comment added!', 'success');
  } else {
- // Roll back optimistic node
- const stale = commentsList?.querySelector(`[data-temp-id="${tempId}"]`);
- if (stale) stale.remove();
  showToast(result.error || 'Failed to add comment', 'error');
  if (sendBtn) sendBtn.disabled = false;
  }
  } catch (error) {
- const stale = commentsList?.querySelector(`[data-temp-id="${tempId}"]`);
- if (stale) stale.remove();
  console.error('Error adding comment:', error);
  showToast('Failed to add comment', 'error');
- if (sendBtn) sendBtn.disabled = false;
  }
  }
  async function handleReply(postId, commentId, content) {

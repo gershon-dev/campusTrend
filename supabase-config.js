@@ -285,7 +285,7 @@ window.likePost = async function(postId) {
         const { data: { user } } = await supabaseClient.auth.getUser();
         if (!user) return { success: false, error: 'Not authenticated' };
 
-        // Use maybeSingle() so a missing row returns null instead of throwing
+        // Check if this user already liked the post
         const { data: existing } = await supabaseClient
             .from('likes')
             .select('id')
@@ -294,30 +294,49 @@ window.likePost = async function(postId) {
             .maybeSingle();
 
         if (existing) {
-            const { error: delErr } = await supabaseClient.from('likes').delete().eq('id', existing.id);
+            // ── UNLIKE ──────────────────────────────────────────────────────
+            const { error: delErr } = await supabaseClient
+                .from('likes')
+                .delete()
+                .eq('id', existing.id);
             if (delErr) throw new Error(delErr.message);
-            // Best-effort count update — if RPC missing, fall back to manual decrement
-            const { error: rpcErr } = await supabaseClient.rpc('decrement_likes', { post_id: postId });
-            if (rpcErr) {
-                await supabaseClient.from('posts')
-                    .update({ likes_count: supabaseClient.rpc('greatest', { a: 0 }) })
-                    .eq('id', postId);
-            }
-            const { data: postData } = await supabaseClient
-                .from('posts').select('likes_count').eq('id', postId).maybeSingle();
-            return { success: true, liked: false, likes_count: postData?.likes_count ?? null };
+
+            // Count actual likes in DB so the number is always accurate for ALL users
+            const { count } = await supabaseClient
+                .from('likes')
+                .select('id', { count: 'exact', head: true })
+                .eq('post_id', postId);
+
+            const newCount = Math.max(0, count ?? 0);
+            const { error: updErr } = await supabaseClient
+                .from('posts')
+                .update({ likes_count: newCount })
+                .eq('id', postId);
+            if (updErr) console.error('likes_count update error:', updErr.message);
+
+            return { success: true, liked: false, likes_count: newCount };
+
         } else {
-            const { error: insErr } = await supabaseClient.from('likes').insert([{ post_id: postId, user_id: user.id }]);
+            // ── LIKE ────────────────────────────────────────────────────────
+            const { error: insErr } = await supabaseClient
+                .from('likes')
+                .insert([{ post_id: postId, user_id: user.id }]);
             if (insErr) throw new Error(insErr.message);
-            const { error: rpcErr } = await supabaseClient.rpc('increment_likes', { post_id: postId });
-            if (rpcErr) {
-                // RPC missing — manually count likes and update
-                const { count } = await supabaseClient.from('likes').select('id', { count: 'exact', head: true }).eq('post_id', postId);
-                await supabaseClient.from('posts').update({ likes_count: count }).eq('id', postId);
-            }
-            const { data: postData } = await supabaseClient
-                .from('posts').select('likes_count').eq('id', postId).maybeSingle();
-            return { success: true, liked: true, likes_count: postData?.likes_count ?? null };
+
+            // Count actual likes in DB so the number is always accurate for ALL users
+            const { count } = await supabaseClient
+                .from('likes')
+                .select('id', { count: 'exact', head: true })
+                .eq('post_id', postId);
+
+            const newCount = count ?? 1;
+            const { error: updErr } = await supabaseClient
+                .from('posts')
+                .update({ likes_count: newCount })
+                .eq('id', postId);
+            if (updErr) console.error('likes_count update error:', updErr.message);
+
+            return { success: true, liked: true, likes_count: newCount };
         }
     } catch (err) {
         return { success: false, error: err.message };
@@ -339,9 +358,17 @@ window.addComment = async function(postId, content, parentCommentId = null) {
             .single();
         if (error) return { success: false, error: error.message };
 
-        // Only increment top-level comment count, not replies
+        // Only increment top-level comment count, not replies (direct update, no RPC)
         if (!parentCommentId) {
-            await supabaseClient.rpc('increment_comments', { post_id: postId });
+            const { count } = await supabaseClient
+                .from('comments')
+                .select('id', { count: 'exact', head: true })
+                .eq('post_id', postId)
+                .is('parent_comment_id', null);
+            await supabaseClient
+                .from('posts')
+                .update({ comments_count: count ?? 0 })
+                .eq('id', postId);
         }
         return { success: true, comment: data };
     } catch (err) {

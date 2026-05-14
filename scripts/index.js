@@ -52,11 +52,43 @@ document.addEventListener('DOMContentLoaded', async function() {
  await loadNotifications();
  await loadTrends();
  setupEventListeners();
+ setupRealtimeLikes();
  } catch (error) {
  console.error('Initialization error:', error);
  alert('Failed to load app. Please try refreshing the page.');
  }
  }
+
+ // ── Realtime: sync likes_count live for ALL users ──────────────────────────
+ function setupRealtimeLikes() {
+ try {
+ window.supabaseClient
+ .channel('posts-likes-realtime')
+ .on('postgres_changes', {
+ event: 'UPDATE',
+ schema: 'public',
+ table: 'posts'
+ }, (payload) => {
+ const updated = payload.new;
+ if (!updated || !updated.id) return;
+ const post = posts.find(p => p.id === updated.id);
+ if (!post) return;
+ if (post.likes_count !== updated.likes_count) {
+ post.likes_count = updated.likes_count;
+ const postCard = document.querySelector(`[data-post-id="${updated.id}"]`);
+ if (postCard) {
+ const likesCount = postCard.querySelector('.likes-count');
+ if (likesCount) likesCount.textContent = updated.likes_count;
+ }
+ syncPostsCache();
+ }
+ })
+ .subscribe();
+ } catch(e) {
+ console.warn('Realtime setup failed:', e.message);
+ }
+ }
+
  function updateUserUI() {
  if (!currentProfile) return;
  const initials = getInitials(currentProfile.full_name);

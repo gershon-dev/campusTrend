@@ -59,11 +59,11 @@ document.addEventListener('DOMContentLoaded', async function() {
  }
  }
 
- // ── Realtime: sync likes_count live for ALL users ──────────────────────────
+ // ── Realtime: push live like/comment count to ALL users instantly ──────────
  function setupRealtimeLikes() {
  try {
  window.supabaseClient
- .channel('posts-likes-realtime')
+ .channel('posts-realtime')
  .on('postgres_changes', {
  event: 'UPDATE',
  schema: 'public',
@@ -73,15 +73,24 @@ document.addEventListener('DOMContentLoaded', async function() {
  if (!updated || !updated.id) return;
  const post = posts.find(p => p.id === updated.id);
  if (!post) return;
+ // Update counts if changed (skip if this user's own action — already optimistic)
+ let changed = false;
  if (post.likes_count !== updated.likes_count) {
  post.likes_count = updated.likes_count;
+ changed = true;
+ }
+ if (post.comments_count !== updated.comments_count) {
+ post.comments_count = updated.comments_count;
+ changed = true;
+ }
+ if (!changed) return;
  const postCard = document.querySelector(`[data-post-id="${updated.id}"]`);
- if (postCard) {
+ if (!postCard) return;
  const likesCount = postCard.querySelector('.likes-count');
  if (likesCount) likesCount.textContent = updated.likes_count;
- }
+ const commentsCount = postCard.querySelector('.comments-count');
+ if (commentsCount) commentsCount.textContent = updated.comments_count;
  syncPostsCache();
- }
  })
  .subscribe();
  } catch(e) {
@@ -519,14 +528,18 @@ document.addEventListener('DOMContentLoaded', async function() {
  const _likeInFlight = new Set();
 
  async function handleLike(postId) {
- // Guard: ignore if a request for this post is already in progress
+ // ── Guard: block immediately — BEFORE any async work or UI update ──────
+ // This must be the very first thing so rapid taps on mobile can never
+ // sneak two requests through before the flag is set.
  if (_likeInFlight.has(postId)) return;
+ _likeInFlight.add(postId); // lock NOW, not after the optimistic update
 
  const post = posts.find(p => p.id === postId);
- if (!post) return;
+ if (!post) { _likeInFlight.delete(postId); return; }
 
  // Offline check — give immediate feedback instead of a silent hang
  if (!navigator.onLine) {
+ _likeInFlight.delete(postId);
  showToast('You are offline. Please check your connection.', 'error');
  return;
  }
@@ -534,6 +547,9 @@ document.addEventListener('DOMContentLoaded', async function() {
  const postCard = document.querySelector(`[data-post-id="${postId}"]`);
  const likeBtn = postCard?.querySelector('.like-btn');
  const likesCount = postCard?.querySelector('.likes-count');
+
+ // Disable button immediately — before the optimistic update
+ if (likeBtn) likeBtn.disabled = true;
 
  // Snapshot current state so we can roll back on failure
  const prevIsLiked = post.isLiked;
@@ -548,12 +564,8 @@ document.addEventListener('DOMContentLoaded', async function() {
  likeBtn.classList.toggle('liked', optimisticLiked);
  likeBtn.setAttribute('aria-pressed', optimisticLiked ? 'true' : 'false');
  likeBtn.setAttribute('aria-label', optimisticLiked ? 'Unlike post' : 'Like post');
- // Disable button while request is in-flight (prevents double-tap on mobile)
- likeBtn.disabled = true;
  }
  if (likesCount) likesCount.textContent = optimisticCount;
-
- _likeInFlight.add(postId);
  try {
  const result = await window.toggleLike(postId);
  if (result.success) {

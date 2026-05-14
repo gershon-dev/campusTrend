@@ -285,7 +285,7 @@ window.likePost = async function(postId) {
         const { data: { user } } = await supabaseClient.auth.getUser();
         if (!user) return { success: false, error: 'Not authenticated' };
 
-        // Check if this user already liked the post
+        // Check if already liked
         const { data: existing } = await supabaseClient
             .from('likes')
             .select('id')
@@ -296,24 +296,16 @@ window.likePost = async function(postId) {
         if (existing) {
             // ── UNLIKE ──────────────────────────────────────────────────────
             const { error: delErr } = await supabaseClient
-                .from('likes')
-                .delete()
-                .eq('id', existing.id);
+                .from('likes').delete().eq('id', existing.id);
             if (delErr) throw new Error(delErr.message);
 
-            // Count actual likes in DB so the number is always accurate for ALL users
+            // Count real rows — this is what ALL users will see
             const { count } = await supabaseClient
                 .from('likes')
                 .select('id', { count: 'exact', head: true })
                 .eq('post_id', postId);
-
             const newCount = Math.max(0, count ?? 0);
-            const { error: updErr } = await supabaseClient
-                .from('posts')
-                .update({ likes_count: newCount })
-                .eq('id', postId);
-            if (updErr) console.error('likes_count update error:', updErr.message);
-
+            await supabaseClient.from('posts').update({ likes_count: newCount }).eq('id', postId);
             return { success: true, liked: false, likes_count: newCount };
 
         } else {
@@ -321,21 +313,29 @@ window.likePost = async function(postId) {
             const { error: insErr } = await supabaseClient
                 .from('likes')
                 .insert([{ post_id: postId, user_id: user.id }]);
-            if (insErr) throw new Error(insErr.message);
 
-            // Count actual likes in DB so the number is always accurate for ALL users
+            if (insErr) {
+                // error code 23505 = duplicate key — a concurrent tap already inserted this like.
+                // Treat as success: the like IS in the DB, just return the real count.
+                if (insErr.code === '23505') {
+                    const { count } = await supabaseClient
+                        .from('likes')
+                        .select('id', { count: 'exact', head: true })
+                        .eq('post_id', postId);
+                    const newCount = count ?? 0;
+                    await supabaseClient.from('posts').update({ likes_count: newCount }).eq('id', postId);
+                    return { success: true, liked: true, likes_count: newCount };
+                }
+                throw new Error(insErr.message);
+            }
+
+            // Count real rows — no RPC needed
             const { count } = await supabaseClient
                 .from('likes')
                 .select('id', { count: 'exact', head: true })
                 .eq('post_id', postId);
-
             const newCount = count ?? 1;
-            const { error: updErr } = await supabaseClient
-                .from('posts')
-                .update({ likes_count: newCount })
-                .eq('id', postId);
-            if (updErr) console.error('likes_count update error:', updErr.message);
-
+            await supabaseClient.from('posts').update({ likes_count: newCount }).eq('id', postId);
             return { success: true, liked: true, likes_count: newCount };
         }
     } catch (err) {
@@ -358,7 +358,7 @@ window.addComment = async function(postId, content, parentCommentId = null) {
             .single();
         if (error) return { success: false, error: error.message };
 
-        // Only increment top-level comment count, not replies (direct update, no RPC)
+        // Only increment top-level comment count, not replies (direct update — no RPC)
         if (!parentCommentId) {
             const { count } = await supabaseClient
                 .from('comments')

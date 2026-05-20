@@ -672,7 +672,11 @@ function buildTutorialCard(tut, currentUser) {
     const timeAgo = window.timeAgo(tut.created_at);
     const isOwnTut = currentUser && tut.user_id === currentUser.id;
 
-    // Convert Google Drive share URL → embed URL (matches /file/d/ID and ?id=ID patterns)
+    // Build video embed — supports Cloudinary URLs and legacy Google Drive URLs
+    const videoUrl = tut.video_url || '';
+    const isCloudinaryUrl = videoUrl.includes('res.cloudinary.com');
+    const isSupabaseUrl   = videoUrl.includes('/storage/v1/object/public/');
+
     function getDriveEmbedUrl(url) {
         if (!url) return null;
         url = url.trim();
@@ -682,7 +686,7 @@ function buildTutorialCard(tut, currentUser) {
         if (m2) return 'https://drive.google.com/file/d/' + m2[1] + '/preview';
         return null;
     }
-    const embedUrl = getDriveEmbedUrl(tut.video_url);
+    const embedUrl = getDriveEmbedUrl(videoUrl);
 
     // Department + course badge
     const deptTag = tut.department
@@ -717,10 +721,26 @@ function buildTutorialCard(tut, currentUser) {
         ? '<img src="' + profileData.avatar_url + '" alt="' + escapeHtml(profileData.full_name) + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">'
         : '<span>' + initials + '</span>';
 
-    // Video: auto-embed iframe (no click-to-play)
-    const videoHTML = embedUrl
-        ? '<div class="tut-video-container"><iframe src="' + embedUrl + '" allowfullscreen allow="autoplay" loading="lazy" style="width:100%;aspect-ratio:16/9;border:none;display:block;"></iframe></div>'
-        : '<div class="tut-no-video"><i class="fas fa-video-slash"></i><span>No video available</span></div>';
+    // Video: Cloudinary/Supabase → native <video>, Drive → iframe, else placeholder
+    let videoHTML;
+    if (isCloudinaryUrl || isSupabaseUrl) {
+        // Force MP4 delivery from Cloudinary (auto-transcodes any format)
+        const playUrl = isCloudinaryUrl
+            ? videoUrl.replace(/\.[^\/\.?]+(\?.*)?$/, '.mp4$1')
+            : videoUrl;
+        videoHTML =
+            '<div class="tut-video-container">' +
+            '<video controls preload="metadata" style="width:100%;aspect-ratio:16/9;background:#000;display:block;">' +
+            '<source src="' + playUrl + '" type="video/mp4">' +
+            '<source src="' + videoUrl + '" type="video/webm">' +
+            'Your browser does not support video playback.' +
+            '</video>' +
+            '</div>';
+    } else if (embedUrl) {
+        videoHTML = '<div class="tut-video-container"><iframe src="' + embedUrl + '" allowfullscreen allow="autoplay" loading="lazy" style="width:100%;aspect-ratio:16/9;border:none;display:block;"></iframe></div>';
+    } else {
+        videoHTML = '<div class="tut-no-video"><i class="fas fa-video-slash"></i><span>No video available</span></div>';
+    }
 
     return '<div class="post-card tutorial-card-profile" data-tutorial-id="' + tut.id + '">' +
 

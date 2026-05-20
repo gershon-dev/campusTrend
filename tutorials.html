@@ -10,6 +10,8 @@
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="preconnect" href="https://kkvelbfcwaydxiwzsnpb.supabase.co" crossorigin>
     <link rel="dns-prefetch" href="https://kkvelbfcwaydxiwzsnpb.supabase.co">
+    <link rel="preconnect" href="https://res.cloudinary.com" crossorigin>
+    <link rel="dns-prefetch" href="https://widget.cloudinary.com">
 
     <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></noscript>
@@ -240,40 +242,72 @@
         </div>
         <div class="modal-body">
 
-            <!-- How to upload steps -->
-            <div style="background:var(--bg-secondary,#f4f6fb);border-radius:10px;padding:12px 16px;margin-bottom:18px;border-left:3px solid var(--brand,#1877f2);">
-                <div style="font-weight:600;font-size:0.85rem;margin-bottom:8px;color:var(--text-primary);">
-                    <i class="fas fa-circle-info" style="color:var(--brand);margin-right:6px;"></i>How to post a tutorial
-                </div>
-                <ol style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px;">
-                    <li style="font-size:0.82rem;color:var(--text-secondary);">Go to <strong>Google Drive</strong> and upload your video</li>
-                    <li style="font-size:0.82rem;color:var(--text-secondary);">Right-click the video → <strong>Share</strong> → set access to <strong>"Anyone with the link"</strong> → <strong>Copy link</strong></li>
-                    <li style="font-size:0.82rem;color:var(--text-secondary);">Paste the link below, fill in the details, and hit <strong>Publish</strong> 🎉</li>
-                </ol>
-            </div>
-
-            <!-- ① Google Drive Link -->
+            <!-- ① Video Upload -->
             <div class="form-group">
-                <label class="form-label" for="videoUrlInput">
-                    Google Drive Link <span>*</span>
-                </label>
-                <div class="drive-url-wrap">
-                    <i class="fas fa-brands fa-google-drive drive-icon"></i>
-                    <input type="url" class="form-input" id="videoUrlInput"
-                           placeholder="Paste your Google Drive share link here…">
-                    <button type="button" class="clear-url-btn" id="clearYtUrl" title="Clear">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-                <div class="drive-hint">
-                    <i class="fas fa-info-circle"></i>
-                    Open your video in Drive → Share → "Anyone with the link" → Copy link
+                <label class="form-label" for="tutorialVideoInput">Video File <span>*</span></label>
+
+                <!-- Upload area — matches index.html exactly -->
+                <div class="image-upload-area" id="tutVideoUploadArea"
+                     style="cursor:pointer;"
+                     role="group" tabindex="0"
+                     aria-label="Click to upload a tutorial video">
+
+                    <!-- Idle placeholder -->
+                    <div class="upload-placeholder" id="tutUploadPlaceholder">
+                        <i class="fas fa-cloud-upload-alt upload-icon" aria-hidden="true"></i>
+                        <div class="upload-text">Click to upload tutorial video</div>
+                        <div class="upload-subtext">MP4, MOV, AVI, WEBM (Max 500 MB · large files auto-compressed)</div>
+                        <div class="upload-type-badges">
+                            <span class="upload-badge"><i class="fas fa-video"></i> Video</span>
+                        </div>
+                    </div>
+
+                    <!-- Preview container (shown after file chosen) -->
+                    <div class="image-preview-container" id="tutPreviewContainer" style="display:none;">
+
+                        <!-- Compression status bar -->
+                        <div id="tutCompressStatus" style="display:none; background:#f0f2ff; padding:8px 12px; border-radius:8px 8px 0 0; border:1px solid #d0d5ff;">
+                            <div style="display:flex; align-items:center; gap:8px; font-size:12px; margin-bottom:4px;">
+                                <i class="fas fa-compress-alt" style="color:#667eea;" aria-hidden="true"></i>
+                                <span id="tutCompressText" style="color:#444;">Compressing video…</span>
+                            </div>
+                            <div style="background:#dde0ff; border-radius:99px; height:4px; overflow:hidden;">
+                                <div id="tutCompressBar" style="background:linear-gradient(90deg,#667eea,#764ba2); height:4px; width:0%; transition:width 0.1s;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Video preview — native controls, same as index.html -->
+                        <video id="tutVideoPreview" controls playsinline
+                               style="width:100%; display:block; background:#000; border-radius:0 0 8px 8px; max-height:280px; object-fit:contain;">
+                        </video>
+
+                        <!-- Remove button -->
+                        <button class="remove-image-btn" id="tutRemoveVideoBtn" type="button" aria-label="Remove selected video">
+                            <i class="fas fa-times" aria-hidden="true"></i>
+                        </button>
+                    </div>
                 </div>
 
-                <!-- Live preview -->
-                <div class="yt-preview" id="ytPreview">
-                    <iframe id="ytPreviewFrame" allow="autoplay" allowfullscreen></iframe>
+                <!-- Hidden file input -->
+                <input type="file" class="hidden-input" id="tutorialVideoInput"
+                       accept="video/mp4,video/quicktime,video/avi,video/webm,video/mkv,video/*"
+                       aria-label="Upload tutorial video file">
+
+                <!-- Upload progress bar — same style as index.html -->
+                <div id="tutUploadProgressContainer" style="display:none; margin-top:8px;">
+                    <div style="display:flex; justify-content:space-between; font-size:12px; color:#65676b; margin-bottom:4px;">
+                        <span>Uploading to cloud...</span>
+                        <span id="tutUploadProgressText">0%</span>
+                    </div>
+                    <div style="background:#e4e6eb; border-radius:99px; height:6px; overflow:hidden;">
+                        <div id="tutUploadProgressBar"
+                             style="background:linear-gradient(90deg,#667eea,#764ba2); height:6px; border-radius:99px; width:0%; transition:width 0.2s ease;">
+                        </div>
+                    </div>
                 </div>
+
+                <!-- Hidden field stores the final remote URL -->
+                <input type="hidden" id="videoUrlInput">
             </div>
 
             <!-- ② Video Title -->

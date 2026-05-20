@@ -395,7 +395,7 @@ document.addEventListener('DOMContentLoaded', async function() {
  </div>
  <div class="post-actions" role="group" aria-label="Post actions">
  <button class="action-btn like-btn ${post.isLiked ? 'liked' : ''}" data-action="like" aria-label="${post.isLiked ? 'Unlike post' : 'Like post'}" aria-pressed="${post.isLiked ? 'true' : 'false'}">
- <i class="fas fa-heart" aria-hidden="true"></i>
+ <i class="${post.isLiked ? 'fas' : 'far'} fa-heart" aria-hidden="true"></i>
  <span>Like</span>
  </button>
  <button class="action-btn comment-btn" data-action="comment" aria-label="Comment on post">
@@ -525,123 +525,96 @@ document.addEventListener('DOMContentLoaded', async function() {
      } catch(e) { /* storage full — ignore */ }
  }
 
+ // ── In-flight guard (prevents double-tap on mobile) ──────────────────────
  const _likeInFlight = new Set();
 
  async function handleLike(postId) {
- // ── Guard: block immediately — BEFORE any async work or UI update ──────
- // This must be the very first thing so rapid taps on mobile can never
- // sneak two requests through before the flag is set.
- if (_likeInFlight.has(postId)) return;
- _likeInFlight.add(postId); // lock NOW, not after the optimistic update
+     // Block immediately — before any async work
+     if (_likeInFlight.has(postId)) return;
+     _likeInFlight.add(postId);
 
- const post = posts.find(p => p.id === postId);
- if (!post) { _likeInFlight.delete(postId); return; }
+     const post = posts.find(p => p.id === postId);
+     if (!post) { _likeInFlight.delete(postId); return; }
 
- // Offline check — give immediate feedback instead of a silent hang
- if (!navigator.onLine) {
- _likeInFlight.delete(postId);
- showToast('You are offline. Please check your connection.', 'error');
- return;
- }
+     if (!navigator.onLine) {
+         _likeInFlight.delete(postId);
+         showToast('You are offline. Please check your connection.', 'error');
+         return;
+     }
 
- const postCard = document.querySelector(`[data-post-id="${postId}"]`);
- const likeBtn = postCard?.querySelector('.like-btn');
- const likesCount = postCard?.querySelector('.likes-count');
+     const postCard  = document.querySelector(`[data-post-id="${postId}"]`);
+     const likeBtn   = postCard?.querySelector('.like-btn');
+     const likesCount = postCard?.querySelector('.likes-count');
 
- // Disable button immediately — before the optimistic update
- if (likeBtn) likeBtn.disabled = true;
+     // Disable button before optimistic update
+     if (likeBtn) likeBtn.disabled = true;
 
- // Snapshot current state so we can roll back on failure
- const prevIsLiked = post.isLiked;
- const prevCount = post.likes_count || 0;
+     const isLiked  = post.isLiked;
+     const prevCount = post.likes_count || 0;
 
- // --- Optimistic UI update ---
- const optimisticLiked = !prevIsLiked;
- const optimisticCount = optimisticLiked ? prevCount + 1 : Math.max(0, prevCount - 1);
- post.isLiked = optimisticLiked;
- post.likes_count = optimisticCount;
- if (likeBtn) {
- likeBtn.classList.toggle('liked', optimisticLiked);
- likeBtn.setAttribute('aria-pressed', optimisticLiked ? 'true' : 'false');
- likeBtn.setAttribute('aria-label', optimisticLiked ? 'Unlike post' : 'Like post');
- }
- if (likesCount) likesCount.textContent = optimisticCount;
- try {
- const result = await window.toggleLike(postId);
- if (result.success) {
- // Use server's authoritative state
- post.isLiked = result.liked;
- // Prefer server-provided count; fall back to local calculation
- post.likes_count = (typeof result.likes_count === 'number')
- ? result.likes_count
- : result.liked ? prevCount + 1 : Math.max(0, prevCount - 1);
- if (likeBtn) {
- likeBtn.classList.toggle('liked', post.isLiked);
- likeBtn.setAttribute('aria-pressed', post.isLiked ? 'true' : 'false');
- likeBtn.setAttribute('aria-label', post.isLiked ? 'Unlike post' : 'Like post');
- }
- if (likesCount) likesCount.textContent = post.likes_count;
- syncPostsCache(); // keep cache in sync after confirmed like
- /* STAR RATING LOCKED — uncomment to re-enable
- const starRating = window.getStarRating(post.likes_count);
- const imageContainer = postCard.querySelector('.post-image-container');
- if (imageContainer) {
- let starBadge = imageContainer.querySelector('.star-rating-badge');
- if (starRating.stars > 0) {
- if (!starBadge) {
- starBadge = document.createElement('div');
- imageContainer.appendChild(starBadge);
- }
- starBadge.className = `star-rating-badge stars-${starRating.stars}`;
- starBadge.innerHTML = `
- ${Array(starRating.stars).fill('<i class="fas fa-star"></i>').join('')}
- <span class="star-rating-label">${starRating.label}</span>
- `;
- const previousRating = window.getStarRating(post.likes_count - 1);
- if (result.liked && starRating.stars > previousRating.stars) {
- showStarMilestone({
- stars: starRating.stars,
- label: starRating.label,
- likes: post.likes_count
- });
- }
- } else if (starBadge) {
- starBadge.remove();
- }
- }
- END STAR RATING LOCKED */
- } else {
- // Server rejected — roll back optimistic update
- post.isLiked = prevIsLiked;
- post.likes_count = prevCount;
- if (likeBtn) {
- likeBtn.classList.toggle('liked', prevIsLiked);
- likeBtn.setAttribute('aria-pressed', prevIsLiked ? 'true' : 'false');
- likeBtn.setAttribute('aria-label', prevIsLiked ? 'Unlike post' : 'Like post');
- }
- if (likesCount) likesCount.textContent = prevCount;
- showToast(result.error || 'Failed to update like', 'error');
- }
- } catch (error) {
- // Network/unexpected error — roll back optimistic update
- post.isLiked = prevIsLiked;
- post.likes_count = prevCount;
- if (likeBtn) {
- likeBtn.classList.toggle('liked', prevIsLiked);
- likeBtn.setAttribute('aria-pressed', prevIsLiked ? 'true' : 'false');
- likeBtn.setAttribute('aria-label', prevIsLiked ? 'Unlike post' : 'Like post');
- }
- if (likesCount) likesCount.textContent = prevCount;
- console.error('Error handling like:', error);
- const msg = navigator.onLine ? 'Failed to update like. Please try again.' : 'You are offline. Please check your connection.';
- showToast(msg, 'error');
- } finally {
- // Clear in-flight lock immediately, but delay re-enabling the button
- // by one event-loop tick so any mobile ghost-click (touchend→click)
- // that fires after pointerup is consumed while the button is still disabled.
- _likeInFlight.delete(postId);
- setTimeout(() => { if (likeBtn) likeBtn.disabled = false; }, 350);
- }
+     // ── Optimistic UI update ─────────────────────────────────────────────
+     const nowLiked    = !isLiked;
+     const nowCount    = nowLiked ? prevCount + 1 : Math.max(0, prevCount - 1);
+     post.isLiked      = nowLiked;
+     post.likes_count  = nowCount;
+
+     if (likeBtn) {
+         likeBtn.classList.toggle('liked', nowLiked);
+         likeBtn.querySelector('i').className = nowLiked ? 'fas fa-heart' : 'far fa-heart';
+         likeBtn.setAttribute('aria-pressed', nowLiked ? 'true' : 'false');
+         likeBtn.setAttribute('aria-label',   nowLiked ? 'Unlike post' : 'Like post');
+     }
+     if (likesCount) likesCount.textContent = nowCount;
+
+     try {
+         if (isLiked) {
+             // Remove like from DB
+             await window.supabaseClient
+                 .from('likes')
+                 .delete()
+                 .eq('post_id', postId)
+                 .eq('user_id', currentUser.id);
+         } else {
+             // Insert like (ignore conflict if already exists)
+             const { data: existing } = await window.supabaseClient
+                 .from('likes')
+                 .select('id')
+                 .eq('post_id', postId)
+                 .eq('user_id', currentUser.id)
+                 .maybeSingle();
+             if (!existing) {
+                 await window.supabaseClient
+                     .from('likes')
+                     .insert({ post_id: postId, user_id: currentUser.id });
+             }
+         }
+
+         // Update likes_count on the post row
+         await window.supabaseClient
+             .from('posts')
+             .update({ likes_count: Math.max(0, nowCount) })
+             .eq('id', postId);
+
+         syncPostsCache();
+
+     } catch (err) {
+         // Roll back optimistic update on failure
+         post.isLiked     = isLiked;
+         post.likes_count = prevCount;
+         if (likeBtn) {
+             likeBtn.classList.toggle('liked', isLiked);
+             likeBtn.querySelector('i').className = isLiked ? 'fas fa-heart' : 'far fa-heart';
+             likeBtn.setAttribute('aria-pressed', isLiked ? 'true' : 'false');
+             likeBtn.setAttribute('aria-label',   isLiked ? 'Unlike post' : 'Like post');
+         }
+         if (likesCount) likesCount.textContent = prevCount;
+         console.error('handleLike error:', err);
+         const msg = navigator.onLine ? 'Failed to update like. Please try again.' : 'You are offline. Please check your connection.';
+         showToast(msg, 'error');
+     } finally {
+         _likeInFlight.delete(postId);
+         setTimeout(() => { if (likeBtn) likeBtn.disabled = false; }, 350);
+     }
  }
  // Track in-flight follow requests to prevent double-fire (touch + click on mobile)
  const _followInFlight = new Set();

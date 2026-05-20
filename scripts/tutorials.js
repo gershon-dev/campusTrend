@@ -472,14 +472,30 @@ function buildVideoEmbed(url) {
         </div>`;
     }
 
-    // Google Drive — extract file ID and build /preview embed URL
+    // Supabase Storage or Cloudinary — native HTML5 player
+    if (isSupabaseUrl(url) || isCloudinaryUrl(url)) {
+        // Force MP4 delivery from Cloudinary (auto-transcodes any format)
+        let playUrl = url;
+        if (isCloudinaryUrl(url)) {
+            playUrl = url.replace(/\.[^\/.?]+(\?.*)?$/, '.mp4$1');
+        }
+        return `
+        <video controls preload="metadata"
+               style="width:100%;display:block;background:#000;aspect-ratio:16/9;">
+            <source src="${escHtml(playUrl)}" type="video/mp4">
+            <source src="${escHtml(url)}" type="video/webm">
+            Your browser does not support video playback.
+        </video>`;
+    }
+
+    // Google Drive — legacy iframe (backward-compatible for old posts)
     const driveId = extractDriveId(url);
     if (driveId) {
         return `<iframe src="${buildDriveEmbedUrl(driveId)}"
                         allow="autoplay" allowfullscreen loading="lazy"></iframe>`;
     }
 
-    // Fallback placeholder for unrecognised URLs
+    // Unrecognised URL fallback
     return `
         <div class="tc-video-thumb" style="background:#1a1a2e;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;">
             <i class="fas fa-exclamation-circle" style="font-size:2rem;color:rgba(255,255,255,0.3);"></i>
@@ -860,74 +876,155 @@ async function incrementViews(tutorialId) {
     } catch (e) { console.warn('incrementViews:', e); }
 }
 
-// ─── Google Drive URL Utilities ───────────────────────────────────────────────
+// ─── Video Upload — index.js style, Cloudinary storage ───────────────────────
+// File picker → instant local blob preview → uploadToCloudinary() (from
+// supabase-config.js) with real progress → URL stored in #videoUrlInput.
 
-/**
- * Extracts the file ID from any Google Drive share URL.
- * Handles:
- *   https://drive.google.com/file/d/FILE_ID/view?usp=sharing
- *   https://drive.google.com/file/d/FILE_ID/view
- *   https://drive.google.com/open?id=FILE_ID
- *   https://docs.google.com/file/d/FILE_ID/...
- */
+const COMPRESS_THRESHOLD = 90 * 1024 * 1024; // 90 MB
+
+let _tutRawFile   = null;
+let _tutRemoteUrl = '';
+
+// ── Compression (same MediaRecorder logic as index.js) ────────────────────────
+function compressTutorialVideo(file, onProgress) {
+    return new Promise((resolve) => {
+        const video   = document.createElement('video');
+        const blobUrl = URL.createObjectURL(file);
+        video.src = blobUrl; video.muted = false; video.preload = 'auto';
+
+        video.onloadedmetadata = () => {
+            const duration = video.duration;
+            const MAX_W = 1280, MAX_H = 720;
+            let w = video.videoWidth || MAX_W, h = video.videoHeight || MAX_H;
+            if (w > MAX_W || h > MAX_H) {
+                const r = Math.min(MAX_W / w, MAX_H / h);
+                w = Math.round(w * r); h = Math.round(h * r);
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            const stream = canvas.captureStream(24);
+            let combined = stream;
+            try {
+                const ac = new AudioContext(), src = ac.createMediaElementSource(video), dest = ac.createMediaStreamDestination();
+                src.connect(dest); src.connect(ac.destination);
+                combined = new MediaStream([...stream.getTracks(), ...dest.stream.getTracks()]);
+            } catch(e) {}
+            const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9'
+                : MediaRecorder.isTypeSupported('video/webm;codecs=vp8') ? 'video/webm;codecs=vp8' : 'video/webm';
+            let recorder;
+            try { recorder = new MediaRecorder(combined, { mimeType, videoBitsPerSecond: 1_500_000 }); }
+            catch(e) { URL.revokeObjectURL(blobUrl); resolve(file); return; }
+            const chunks = [];
+            recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+            recorder.onstop = () => {
+                URL.revokeObjectURL(blobUrl);
+                const blob = new Blob(chunks, { type: mimeType });
+                const ext  = mimeType.includes('mp4') ? 'mp4' : 'webm';
+                const comp = new File([blob], `compressed.${ext}`, { type: mimeType });
+                resolve(comp.size < file.size ? comp : file);
+            };
+            video.currentTime = 0;
+            video.onseeked = () => {
+                recorder.start(100); video.play();
+                const draw = () => {
+                    if (!video.paused && !video.ended) {
+                        ctx.drawImage(video, 0, 0, w, h);
+                        const pct = duration > 0 ? Math.min(99, Math.round((video.currentTime / duration) * 100)) : 0;
+                        const bar = document.getElementById('tutCompressBar');
+                        if (bar) bar.style.width = pct + '%';
+                        if (onProgress) onProgress(pct);
+                        requestAnimationFrame(draw);
+                    }
+                };
+                requestAnimationFrame(draw);
+                video.onended = () => { if (recorder.state !== 'inactive') recorder.stop(); };
+            };
+        };
+        video.onerror = () => { URL.revokeObjectURL(blobUrl); resolve(file); };
+    });
+}
+
+// ── Reset to idle placeholder ─────────────────────────────────────────────────
+function resetTutorialUploadUI() {
+    _tutRawFile = null; _tutRemoteUrl = '';
+    document.getElementById('videoUrlInput').value = '';
+    const v = document.getElementById('tutVideoPreview');
+    if (v) { v.pause(); v.src = ''; }
+    document.getElementById('tutUploadPlaceholder').style.display       = '';
+    document.getElementById('tutPreviewContainer').style.display        = 'none';
+    document.getElementById('tutUploadProgressContainer').style.display = 'none';
+    document.getElementById('tutCompressStatus').style.display          = 'none';
+    const fi = document.getElementById('tutorialVideoInput');
+    if (fi) fi.value = '';
+}
+function resetCloudinaryUploadUI() { resetTutorialUploadUI(); }
+
+// ── Wire up — identical UX to index.js "Create Post" ─────────────────────────
+function initCloudinaryUpload() {
+
+    // Click upload area (idle) → open file picker
+    document.getElementById('tutVideoUploadArea')?.addEventListener('click', e => {
+        if (document.getElementById('tutPreviewContainer').style.display !== 'none') return;
+        document.getElementById('tutorialVideoInput')?.click();
+    });
+
+    // ✕ Remove button
+    document.getElementById('tutRemoveVideoBtn')?.addEventListener('click', e => {
+        e.stopPropagation();
+        resetTutorialUploadUI();
+    });
+
+    // File chosen → local preview ONLY. Upload + publish happen on Publish click.
+    document.getElementById('tutorialVideoInput')?.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        if (!file.type.startsWith('video/')) {
+            showToast('Please select a video file (MP4, MOV, AVI, WEBM…)', 'error');
+            e.target.value = '';
+            return;
+        }
+
+        // Store the raw file — it will be uploaded when the user clicks Publish
+        _tutRawFile   = file;
+        _tutRemoteUrl = '';
+        document.getElementById('videoUrlInput').value = '';
+
+        // Show a local blob preview so the user can see their chosen video
+        const blobUrl = URL.createObjectURL(file);
+        const videoEl = document.getElementById('tutVideoPreview');
+        videoEl.src   = blobUrl;
+        document.getElementById('tutUploadPlaceholder').style.display = 'none';
+        document.getElementById('tutPreviewContainer').style.display  = 'block';
+
+        // Keep progress bar hidden — it will appear only when Publish is clicked
+        document.getElementById('tutUploadProgressContainer').style.display = 'none';
+    });
+}
+
+// ─── Video Embed ──────────────────────────────────────────────────────────────
+function isCloudinaryUrl(url) {
+    return url && url.includes('res.cloudinary.com');
+}
+
+function isSupabaseUrl(url) {
+    // Supabase Storage public URLs contain '/storage/v1/object/public/'
+    return url && url.includes('/storage/v1/object/public/');
+}
+
+// ─── Google Drive URL Utilities (kept for backward compatibility) ──────────────
 function extractDriveId(url) {
     if (!url) return null;
     url = url.trim();
-
-    // /file/d/ID pattern
-    const filePattern = /drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/;
-    const m1 = url.match(filePattern);
+    const m1 = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
     if (m1) return m1[1];
-
-    // ?id=ID pattern
-    const idPattern = /[?&]id=([a-zA-Z0-9_-]+)/;
-    const m2 = url.match(idPattern);
+    const m2 = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
     if (m2) return m2[1];
-
     return null;
 }
 
 function buildDriveEmbedUrl(fileId) {
-    // /preview gives a clean embeddable player with no Google sign-in prompt
     return `https://drive.google.com/file/d/${fileId}/preview`;
-}
-
-function isValidDriveUrl(url) {
-    return !!extractDriveId(url);
-}
-
-// Live preview: watch the URL input and show embed as student types
-function initYouTubePreview() {
-    const input    = document.getElementById('videoUrlInput');
-    const preview  = document.getElementById('ytPreview');
-    const frame    = document.getElementById('ytPreviewFrame');
-    const clearBtn = document.getElementById('clearYtUrl');
-    let debounce;
-
-    input?.addEventListener('input', () => {
-        // Show/hide clear button
-        if (clearBtn) {
-            clearBtn.classList.toggle('visible', input.value.length > 0);
-        }
-        clearTimeout(debounce);
-        debounce = setTimeout(() => {
-            const driveId = extractDriveId(input.value.trim());
-            if (driveId) {
-                frame.src = buildDriveEmbedUrl(driveId);
-                preview.classList.add('show');
-            } else {
-                preview.classList.remove('show');
-                frame.src = '';
-            }
-        }, 700);
-    });
-
-    clearBtn?.addEventListener('click', () => {
-        input.value = '';
-        clearBtn.classList.remove('visible');
-        preview.classList.remove('show');
-        frame.src = '';
-    });
 }
 
 // ─── Upload Tutorial ──────────────────────────────────────────────────────────
@@ -940,40 +1037,77 @@ function closeUploadModal() {
 }
 
 function resetUploadForm() {
-    ['videoTitle','videoDesc','videoTags','videoCourse','videoUrlInput'].forEach(id => {
+    ['videoTitle','videoDesc','videoTags','videoCourse'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
     });
     document.getElementById('videoDepartment').value = '';
-
-    // Hide clear button
-    document.getElementById('clearYtUrl')?.classList.remove('visible');
-
-    // Clear Drive preview
-    const preview = document.getElementById('ytPreview');
-    const frame   = document.getElementById('ytPreviewFrame');
-    if (preview) preview.classList.remove('show');
-    if (frame)   frame.src = '';
+    resetCloudinaryUploadUI();
 }
 
 async function submitTutorial() {
-    const videoUrl = (document.getElementById('videoUrlInput')?.value || '').trim();
-    const title    = (document.getElementById('videoTitle')?.value || '').trim();
-    const dept     = document.getElementById('videoDepartment')?.value || '';
-    const desc     = (document.getElementById('videoDesc')?.value || '').trim();
-    const tags     = (document.getElementById('videoTags')?.value || '').split(',').map(t => t.trim()).filter(Boolean);
-    const course   = (document.getElementById('videoCourse')?.value || '').trim();
-    // Validation
-    if (!videoUrl || !isValidDriveUrl(videoUrl)) {
-        showToast('Please paste a valid Google Drive link', 'error');
-        document.getElementById('videoUrlInput')?.focus();
-        return;
+    const title  = (document.getElementById('videoTitle')?.value || '').trim();
+    const dept   = document.getElementById('videoDepartment')?.value || '';
+    const desc   = (document.getElementById('videoDesc')?.value || '').trim();
+    const tags   = (document.getElementById('videoTags')?.value || '').split(',').map(t => t.trim()).filter(Boolean);
+    const course = (document.getElementById('videoCourse')?.value || '').trim();
+
+    // ── Validate details first, before touching the video ────────────────────
+    if (!_tutRawFile && !_tutRemoteUrl) {
+        showToast('Please select a video first', 'error'); return;
     }
     if (!title) { showToast('Please enter a video title', 'error'); return; }
     if (!dept)  { showToast('Please select a department', 'error'); return; }
-    
+
     const btn = document.getElementById('submitTutorialBtn');
     btn.disabled = true;
+
+    // ── Step 1: Upload video to Cloudinary (if not already uploaded) ─────────
+    let videoUrl = _tutRemoteUrl || (document.getElementById('videoUrlInput')?.value || '').trim();
+
+    if (!videoUrl && _tutRawFile) {
+        const container = document.getElementById('tutUploadProgressContainer');
+        const bar       = document.getElementById('tutUploadProgressBar');
+        const pctText   = document.getElementById('tutUploadProgressText');
+
+        try {
+            let fileToUpload = _tutRawFile;
+
+            // Compress if > 90 MB
+            if (_tutRawFile.size > COMPRESS_THRESHOLD) {
+                document.getElementById('tutCompressStatus').style.display = 'block';
+                document.getElementById('tutCompressText').textContent     = 'Compressing video…';
+                document.getElementById('tutCompressBar').style.width      = '0%';
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Compressing…';
+                try { fileToUpload = await compressTutorialVideo(_tutRawFile); }
+                catch(err) { fileToUpload = _tutRawFile; }
+                document.getElementById('tutCompressStatus').style.display = 'none';
+            }
+
+            // Show upload progress
+            container.style.display = 'block';
+            bar.style.width = '0%'; pctText.textContent = '0%';
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading…';
+
+            const uploaded = await uploadToCloudinary(fileToUpload, pct => {
+                bar.style.width = pct + '%'; pctText.textContent = pct + '%';
+            });
+
+            videoUrl      = uploaded.url;
+            _tutRemoteUrl = uploaded.url;
+            document.getElementById('videoUrlInput').value = uploaded.url;
+            container.style.display = 'none';
+
+        } catch (err) {
+            console.error('Video upload failed:', err);
+            showToast('Video upload failed. Please try again.', 'error');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-paper-plane"></i> Publish Tutorial';
+            return;
+        }
+    }
+
+    // ── Step 2: Save to database ─────────────────────────────────────────────
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Publishing…';
 
     try {
@@ -1134,8 +1268,8 @@ function setupEventListeners() {
     // Submit
     document.getElementById('submitTutorialBtn')?.addEventListener('click', submitTutorial);
 
-    // YouTube live preview
-    initYouTubePreview();
+    // Cloudinary video upload
+    initCloudinaryUpload();
 
 
 

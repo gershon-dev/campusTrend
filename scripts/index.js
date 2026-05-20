@@ -1488,15 +1488,35 @@ async function _fetchAndRenderTutorials(scroll, strip, isBgRefresh) {
             const course   = t.course_name || t.department || 'Tutorial';
             const driveId  = extractDriveFileId(t.video_url);
 
-            const thumbHtml = driveId
-                ? `<img src="https://drive.google.com/thumbnail?id=${driveId}&sz=w400"
+            const isCloudinary = t.video_url && t.video_url.includes('res.cloudinary.com');
+
+            // Cloudinary thumbnail: insert so_0,w_400,h_225,c_fill before the filename
+            // e.g. /video/upload/v123/file.mp4 → /video/upload/so_0,w_400,h_225,c_fill/v123/file.jpg
+            const cloudinaryThumb = isCloudinary
+                ? t.video_url
+                    .replace('/video/upload/', '/video/upload/so_0,w_400,h_225,c_fill/')
+                    .replace(/\.[^\.?]+?(\?.*)?$/, '.jpg$1')
+                : null;
+
+            let thumbHtml;
+            if (cloudinaryThumb) {
+                thumbHtml = `<img src="${cloudinaryThumb}"
+                        alt="${_esc(t.title)}"
+                        style="width:100%;height:100%;object-fit:cover;display:block;"
+                        onload="this.parentElement.querySelector('.chip-play').style.display='flex';"
+                        onerror="this.style.display='none';this.parentElement.querySelector('.chip-play').style.display='flex';">
+                   <div class="chip-play" style="display:none;"><i class="fas fa-play"></i></div>`;
+            } else if (driveId) {
+                thumbHtml = `<img src="https://drive.google.com/thumbnail?id=${driveId}&sz=w400"
                         alt="${_esc(t.title)}"
                         style="width:100%;height:100%;object-fit:cover;display:block;"
                         onload="this.style.display='block';this.parentElement.querySelector('.chip-play').style.display='flex';"
                         onerror="this.style.display='none';this.parentElement.querySelector('.chip-play').style.display='flex';">
-                   <div class="chip-play" style="display:none;"><i class="fas fa-play"></i></div>`
-                : `<i class="fas fa-play-circle" style="font-size:2rem;color:rgba(255,255,255,0.25);"></i>
+                   <div class="chip-play" style="display:none;"><i class="fas fa-play"></i></div>`;
+            } else {
+                thumbHtml = `<i class="fas fa-play-circle" style="font-size:2rem;color:rgba(255,255,255,0.25);"></i>
                    <div class="chip-play"><i class="fas fa-play"></i></div>`;
+            }
 
             const avatarHtml = profile.avatar_url
                 ? `<img src="${_esc(profile.avatar_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" alt="">`

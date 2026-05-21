@@ -2,6 +2,7 @@ function viewUserProfile(userId) {
  if (!userId) return;
  window.location.href = `user-profile.html?userId=${userId}`;
 }
+window.viewUserProfile = viewUserProfile;
 document.addEventListener('DOMContentLoaded', async function() {
  let currentUser = null;
  let currentProfile = null;
@@ -330,11 +331,11 @@ document.addEventListener('DOMContentLoaded', async function() {
  <article class="post-card" data-post-id="${post.id}" aria-label="Post by ${escapeHTML(profile.full_name || 'Unknown User')}">
  <div class="post-header">
  <div class="post-user-info">
- <div class="user-avatar" onclick="viewUserProfile('${post.user_id}')" style="cursor:pointer;background:${stringToColor(profile.full_name || 'User')}" role="button" tabindex="0" aria-label="View ${escapeHTML(profile.full_name || 'user')}'s profile">
+ <div class="user-avatar profile-link" data-user-id="${post.user_id}" style="cursor:pointer;background:${stringToColor(profile.full_name || 'User')}" role="button" tabindex="0" aria-label="View ${escapeHTML(profile.full_name || 'user')}'s profile">
  ${avatarHTML}
  </div>
  <div>
- <div class="post-username" onclick="viewUserProfile('${post.user_id}')" style="cursor:pointer;" role="button" tabindex="0" aria-label="View ${escapeHTML(profile.full_name || 'user')}'s profile">
+ <div class="post-username profile-link" data-user-id="${post.user_id}" style="cursor:pointer;" role="button" tabindex="0" aria-label="View ${escapeHTML(profile.full_name || 'user')}'s profile">
  ${escapeHTML(profile.full_name || 'Unknown User')}
  ${isOwnPost ? '<span class="own-post-badge" aria-label="Your post">You</span>' : ''}
  </div>
@@ -429,6 +430,13 @@ document.addEventListener('DOMContentLoaded', async function() {
  function setupPostEventListeners(postId) {
  const postCard = document.querySelector(`[data-post-id="${postId}"]`);
  if (!postCard) return;
+ // Avatar + username → profile navigation (module-safe, no inline onclick)
+ postCard.querySelectorAll('.profile-link').forEach(el => {
+     el.addEventListener('click', () => viewUserProfile(el.dataset.userId));
+     el.addEventListener('keypress', e => {
+         if (e.key === 'Enter' || e.key === ' ') viewUserProfile(el.dataset.userId);
+     });
+ });
  const likeBtn = postCard.querySelector('.like-btn');
  if (likeBtn) {
  // Simple 'click' works for both mouse and touch.
@@ -1312,8 +1320,21 @@ document.addEventListener('DOMContentLoaded', async function() {
  }
  if (copyLink) {
  copyLink.addEventListener('click', () => {
- const url = `${window.location.origin}/index.html?post=${selectedPostForShare}`;
+ // Use the current page's full path so the link works regardless of subdirectory
+ const url = `${window.location.origin}${window.location.pathname}?post=${selectedPostForShare}`;
  navigator.clipboard.writeText(url).then(() => {
+ showToast('Link copied to clipboard!', 'success');
+ shareModal.classList.remove('show');
+ }).catch(() => {
+ // Fallback for browsers that block clipboard without HTTPS
+ const ta = document.createElement('textarea');
+ ta.value = url;
+ ta.style.position = 'fixed';
+ ta.style.opacity = '0';
+ document.body.appendChild(ta);
+ ta.select();
+ document.execCommand('copy');
+ document.body.removeChild(ta);
  showToast('Link copied to clipboard!', 'success');
  shareModal.classList.remove('show');
  });

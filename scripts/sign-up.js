@@ -63,7 +63,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function checkPasswordStrength(password) {
         let strength = 0;
         
-        if (password.length >= 8) strength++;
+        if (password.length >= 6) strength++;
         if (/[a-z]/.test(password) && /[A-Z]/.test(password)) strength++;
         if (/\d/.test(password)) strength++;
         if (/[^a-zA-Z0-9]/.test(password)) strength++;

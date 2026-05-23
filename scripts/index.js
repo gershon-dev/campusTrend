@@ -54,10 +54,65 @@ document.addEventListener('DOMContentLoaded', async function() {
  await loadTrends();
  setupEventListeners();
  setupRealtimeLikes();
+ setupRealtimeComments();
  } catch (error) {
  console.error('Initialization error:', error);
  alert('Failed to load app. Please try refreshing the page.');
  }
+ }
+
+ // ── Realtime: push live comments to ALL users instantly ──────────────────
+ function setupRealtimeComments() {
+   try {
+     window.supabaseClient
+       .channel('comments-realtime')
+       .on('postgres_changes', {
+         event: 'INSERT',
+         schema: 'public',
+         table: 'comments'
+       }, async (payload) => {
+         const newComment = payload.new;
+         if (!newComment || !newComment.post_id) return;
+
+         // Skip if this is our own comment (already shown optimistically)
+         if (currentUser && newComment.user_id === currentUser.id) return;
+
+         // Only update if the post card is visible on screen
+         const commentsList = document.querySelector(`.comments-list[data-post-id="${newComment.post_id}"]`);
+         if (!commentsList) return;
+
+         // Fetch the commenter's profile for the avatar/name
+         const { data: profile } = await window.supabaseClient
+           .from('profiles')
+           .select('id, full_name, avatar_url')
+           .eq('id', newComment.user_id)
+           .single();
+
+         const commentWithProfile = { ...newComment, profiles: profile || {} };
+         const html = createCommentHTML(commentWithProfile);
+
+         // Remove "no comments" placeholder if present
+         const placeholder = commentsList.querySelector('.no-comments-text');
+         if (placeholder) placeholder.remove();
+
+         // Prepend newest comment (matches sort order)
+         commentsList.insertAdjacentHTML('afterbegin', html);
+         setupCommentEventListeners(newComment.post_id, newComment.id);
+
+         // Update comment count in the post card
+         const postCard = document.querySelector(`[data-post-id="${newComment.post_id}"]`);
+         const post = posts.find(p => p.id === newComment.post_id);
+         if (post && !newComment.parent_comment_id) {
+           post.comments_count = (post.comments_count || 0) + 1;
+           const commentsCount = postCard?.querySelector('.comments-count');
+           if (commentsCount) commentsCount.textContent = post.comments_count;
+           syncPostsCache();
+         }
+       })
+       .subscribe();
+   } catch(e) {
+     console.warn('Realtime comments setup failed:', e.message);
+   }
  }
 
  // ── Realtime: push live like/comment count to ALL users instantly ──────────
@@ -708,43 +763,85 @@ document.addEventListener('DOMContentLoaded', async function() {
  }
  }
  async function handleComment(postId, content) {
- try {
  const postCard = document.querySelector(`[data-post-id="${postId}"]`);
  const commentInput = postCard?.querySelector('.comment-input');
  const sendBtn = postCard?.querySelector('.send-comment-btn');
- // Optimistically disable while posting
+ const commentsList = postCard?.querySelector(`.comments-list[data-post-id="${postId}"]`);
+
+ // Disable send button immediately to prevent double-submit
  if (sendBtn) sendBtn.disabled = true;
- const result = await window.addComment(postId, content);
- if (result.success) {
  if (commentInput) commentInput.value = '';
- if (sendBtn) {
- sendBtn.disabled = true;
- sendBtn.setAttribute('aria-disabled', 'true');
- }
- const post = posts.find(p => p.id === postId);
- if (post) {
- post.comments_count = (post.comments_count || 0) + 1;
- const commentsCount = postCard.querySelector('.comments-count');
- if (commentsCount) commentsCount.textContent = post.comments_count;
- syncPostsCache(); // keep cache in sync after comment
- }
- // Make sure the comments section is visible BEFORE reloading,
- // otherwise the freshly rendered comments are hidden and it looks
- // like nothing happened (the bug: "comment not showing without refresh")
+
+ // ── 1. OPTIMISTIC UI: inject the comment instantly ───────────────────────
+ const tempId = `temp-${Date.now()}`;
+ const optimisticHTML = createCommentHTML({
+   id: tempId,
+   content,
+   created_at: new Date().toISOString(),
+   profiles: currentProfile,
+   _optimistic: true
+ });
+
+ // Make sure comments section is visible
  const commentsSection = postCard?.querySelector('.comments-section');
  if (commentsSection && !commentsSection.classList.contains('show')) {
- commentsSection.classList.add('show');
+   commentsSection.classList.add('show');
  }
- await loadComments(postId);
- if (commentInput) commentInput.focus();
- showToast('Comment added!', 'success');
- } else {
- showToast(result.error || 'Failed to add comment', 'error');
- if (sendBtn) sendBtn.disabled = false;
+
+ // Remove "no comments" placeholder if present
+ if (commentsList) {
+   const placeholder = commentsList.querySelector('.no-comments-text');
+   if (placeholder) placeholder.remove();
+   // Prepend (newest-first) the optimistic comment
+   commentsList.insertAdjacentHTML('afterbegin', optimisticHTML);
  }
+
+ // Update comment count optimistically
+ const post = posts.find(p => p.id === postId);
+ if (post) {
+   post.comments_count = (post.comments_count || 0) + 1;
+   const commentsCount = postCard?.querySelector('.comments-count');
+   if (commentsCount) commentsCount.textContent = post.comments_count;
+ }
+
+ try {
+   const result = await window.addComment(postId, content);
+   if (result.success) {
+     // Replace the optimistic node with the real comment from the server
+     const tempEl = document.getElementById(`comment-${tempId}`);
+     if (tempEl && result.comment) {
+       const realHTML = createCommentHTML({ ...result.comment, profiles: currentProfile });
+       tempEl.outerHTML = realHTML;
+       // Re-attach reply listeners for the real comment node
+       setupCommentEventListeners(postId, result.comment.id);
+     }
+     syncPostsCache();
+     if (commentInput) commentInput.focus();
+     showToast('Comment added!', 'success');
+   } else {
+     // Roll back: remove optimistic comment and restore count
+     document.getElementById(`comment-${tempId}`)?.remove();
+     if (post) {
+       post.comments_count = Math.max(0, (post.comments_count || 1) - 1);
+       const commentsCount = postCard?.querySelector('.comments-count');
+       if (commentsCount) commentsCount.textContent = post.comments_count;
+     }
+     if (commentInput) commentInput.value = content; // restore typed text
+     if (sendBtn) sendBtn.disabled = false;
+     showToast(result.error || 'Failed to add comment', 'error');
+   }
  } catch (error) {
- console.error('Error adding comment:', error);
- showToast('Failed to add comment', 'error');
+   // Roll back on network error
+   document.getElementById(`comment-${tempId}`)?.remove();
+   if (post) {
+     post.comments_count = Math.max(0, (post.comments_count || 1) - 1);
+     const commentsCount = postCard?.querySelector('.comments-count');
+     if (commentsCount) commentsCount.textContent = post.comments_count;
+   }
+   if (commentInput) commentInput.value = content;
+   if (sendBtn) sendBtn.disabled = false;
+   console.error('Error adding comment:', error);
+   showToast('Failed to add comment', 'error');
  }
  }
  async function handleReply(postId, commentId, content) {
@@ -780,6 +877,66 @@ document.addEventListener('DOMContentLoaded', async function() {
  console.error('Error loading comments:', error);
  }
  }
+ // ── Renders a single comment into an HTML string ──────────────────────────
+ function createCommentHTML(comment) {
+   const profile = comment.profiles || {};
+   const initials = getInitials(profile.full_name || 'U');
+   const avatarHTML = profile.avatar_url
+     ? `<img src="${escapeHTML(profile.avatar_url)}" alt="${escapeHTML(profile.full_name || 'User')}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`
+     : initials;
+   const timeAgo = window.timeAgo(comment.created_at);
+   const opacity = comment._optimistic ? 'opacity:0.6;' : '';
+   return `
+     <div class="comment-item" id="comment-${comment.id}" role="listitem" style="${opacity}">
+       <div class="comment-avatar" style="background:${stringToColor(profile.full_name || 'U')}" aria-hidden="true">${avatarHTML}</div>
+       <div class="comment-content">
+         <div class="comment-bubble">
+           <span class="comment-author">${escapeHTML(profile.full_name || 'User')}</span>
+           <p class="comment-text">${escapeHTML(comment.content)}</p>
+         </div>
+         <div class="comment-meta">
+           <time class="comment-time">${timeAgo}</time>
+           ${!comment._optimistic ? `<button class="reply-btn" data-comment-id="${comment.id}" aria-label="Reply to comment">Reply</button>` : ''}
+         </div>
+         ${!comment._optimistic ? `<div class="reply-input-container" data-comment-id="${comment.id}">
+           <input type="text" class="reply-input" placeholder="Write a reply..." aria-label="Write a reply">
+           <button class="send-reply-btn" data-comment-id="${comment.id}" disabled aria-label="Send reply">
+             <i class="fas fa-paper-plane" aria-hidden="true"></i>
+           </button>
+         </div>` : ''}
+       </div>
+     </div>`;
+ }
+
+ // ── Attaches reply listeners to a freshly-rendered comment node ──────────
+ function setupCommentEventListeners(postId, commentId) {
+   const commentEl = document.getElementById(`comment-${commentId}`);
+   if (!commentEl) return;
+   const replyBtn = commentEl.querySelector('.reply-btn');
+   const replyContainer = commentEl.querySelector(`.reply-input-container`);
+   const replyInput = commentEl.querySelector('.reply-input');
+   const sendReplyBtn = commentEl.querySelector('.send-reply-btn');
+   if (replyBtn && replyContainer) {
+     replyBtn.addEventListener('click', () => replyContainer.classList.toggle('show'));
+   }
+   if (replyInput && sendReplyBtn) {
+     replyInput.addEventListener('input', () => {
+       sendReplyBtn.disabled = replyInput.value.trim().length === 0;
+     });
+     sendReplyBtn.addEventListener('click', () => {
+       const text = replyInput.value.trim();
+       if (text) handleReply(postId, commentId, text);
+     });
+     replyInput.addEventListener('keypress', (e) => {
+       if (e.key === 'Enter' && !e.shiftKey) {
+         e.preventDefault();
+         const text = replyInput.value.trim();
+         if (text) handleReply(postId, commentId, text);
+       }
+     });
+   }
+ }
+
  function renderComments(container, comments, postId) {
  if (!container || !comments) return;
  if (comments.length === 0) {

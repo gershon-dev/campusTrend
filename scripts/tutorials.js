@@ -122,6 +122,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             loadTutorials()   // will overwrite cache render with fresh data
         ]);
 
+        setupRealtimeTutorialComments();
+
     } catch (err) {
         console.error('Tutorial page init error:', err);
         showToast('Error loading page. Please refresh.', 'error');
@@ -725,6 +727,53 @@ window.viewUserProfile = viewUserProfile;
 // ─── Comments ─────────────────────────────────────────────────────────────────
 const loadedComments = new Set();
 
+// ── Real-time: show other users' comments instantly ───────────────────────────
+function setupRealtimeTutorialComments() {
+    try {
+        window.supabaseClient
+            .channel('tutorial-comments-realtime')
+            .on('postgres_changes', {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'tutorial_comments'
+            }, async (payload) => {
+                const c = payload.new;
+                if (!c || !c.tutorial_id) return;
+
+                // Skip own comments — already shown optimistically
+                if (currentUser && c.user_id === currentUser.id) return;
+
+                // Only inject if the comment list is open/visible
+                const list = document.getElementById(`comment-list-${c.tutorial_id}`);
+                if (!list) return;
+
+                // Fetch commenter profile
+                const { data: profile } = await window.supabaseClient
+                    .from('profiles')
+                    .select('id, full_name, avatar_url')
+                    .eq('id', c.user_id)
+                    .single();
+
+                // Remove placeholder if present
+                const placeholder = list.querySelector('p');
+                if (placeholder) placeholder.remove();
+
+                list.insertAdjacentHTML('beforeend', buildCommentHTML(c, profile || {}));
+
+                // Update comment count
+                const tut = allTutorials.find(t => t.id === c.tutorial_id);
+                if (tut) {
+                    tut.comments_count = (tut.comments_count || 0) + 1;
+                    const countEl = document.getElementById(`comment-count-${c.tutorial_id}`);
+                    if (countEl) countEl.textContent = formatCount(tut.comments_count);
+                }
+            })
+            .subscribe();
+    } catch (e) {
+        console.warn('Realtime tutorial comments setup failed:', e.message);
+    }
+}
+
 async function toggleComments(tutorialId) {
     const section = document.getElementById(`comments-${tutorialId}`);
     if (!section) return;
@@ -770,19 +819,7 @@ async function loadComments(tutorialId) {
 
         list.innerHTML = comments.map(c => {
             const p = profileMap[c.user_id] || {};
-            const initials = getInitials(p.full_name);
-            const avatarHtml = p.avatar_url
-                ? `<img src="${escHtml(p.avatar_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" alt="">`
-                : initials;
-            return `
-            <div class="tc-comment-item">
-                <div class="tc-comment-avatar">${avatarHtml}</div>
-                <div class="tc-comment-bubble">
-                    <div class="tc-comment-author">${escHtml(p.full_name || 'Student')}</div>
-                    <div class="tc-comment-text">${escHtml(c.content)}</div>
-                    <div class="tc-comment-time">${timeAgo(c.created_at)}</div>
-                </div>
-            </div>`;
+            return buildCommentHTML(c, p);
         }).join('');
     } catch (err) {
         console.error('loadComments:', err);
@@ -803,36 +840,87 @@ async function submitComment(tutorialId) {
     input.value = '';
     input.disabled = true;
 
+    // ── 1. OPTIMISTIC UI: render the comment instantly ───────────────────────
+    const list = document.getElementById(`comment-list-${tutorialId}`);
+    const tempId = `temp-${Date.now()}`;
+
+    // Remove "no comments" placeholder if present
+    const placeholder = list?.querySelector('p');
+    if (placeholder) placeholder.remove();
+
+    const optimisticHTML = buildCommentHTML({
+        id: tempId,
+        content,
+        created_at: new Date().toISOString(),
+        user_id: currentUser.id,
+        _optimistic: true
+    }, { full_name: currentProfile.full_name, avatar_url: currentProfile.avatar_url });
+
+    if (list) list.insertAdjacentHTML('beforeend', optimisticHTML);
+
+    // Update comment count optimistically
+    const tut = allTutorials.find(t => t.id === tutorialId);
+    if (tut) tut.comments_count = (tut.comments_count || 0) + 1;
+    const countEl = document.getElementById(`comment-count-${tutorialId}`);
+    if (countEl && tut) countEl.textContent = formatCount(tut.comments_count);
+
     try {
-        const { error } = await window.supabaseClient
+        const { data, error } = await window.supabaseClient
             .from('tutorial_comments')
-            .insert({ tutorial_id: tutorialId, user_id: currentUser.id, content });
+            .insert({ tutorial_id: tutorialId, user_id: currentUser.id, content })
+            .select('id, content, created_at, user_id')
+            .single();
 
         if (error) throw error;
 
-        // Update comment count locally
-        const tut = allTutorials.find(t => t.id === tutorialId);
-        if (tut) tut.comments_count = (tut.comments_count || 0) + 1;
-        const countEl = document.getElementById(`comment-count-${tutorialId}`);
-        if (countEl && tut) countEl.textContent = formatCount(tut.comments_count);
+        // Swap optimistic node with real one
+        const tempEl = document.getElementById(`tc-comment-${tempId}`);
+        if (tempEl && data) {
+            tempEl.outerHTML = buildCommentHTML(data, {
+                full_name: currentProfile.full_name,
+                avatar_url: currentProfile.avatar_url
+            });
+        }
 
-        // Update tutorials table
-        await window.supabaseClient
+        // Update tutorials table count in background
+        window.supabaseClient
             .from('tutorials')
             .update({ comments_count: tut?.comments_count ?? 1 })
             .eq('id', tutorialId);
 
-        // Reload comments
-        loadedComments.delete(tutorialId);
-        await loadComments(tutorialId);
+        loadedComments.add(tutorialId); // mark as loaded so toggleComments won't re-fetch
+
     } catch (err) {
         console.error('submitComment:', err);
-        showToast('Could not post comment', 'error');
+        // Roll back optimistic comment and count
+        document.getElementById(`tc-comment-${tempId}`)?.remove();
+        if (tut) tut.comments_count = Math.max(0, (tut.comments_count || 1) - 1);
+        if (countEl && tut) countEl.textContent = formatCount(tut.comments_count);
         input.value = content;
+        showToast('Could not post comment', 'error');
     } finally {
         input.disabled = false;
         input.focus();
     }
+}
+
+// ── Builds a single comment's HTML ───────────────────────────────────────────
+function buildCommentHTML(comment, profile) {
+    const p = profile || {};
+    const initials = getInitials(p.full_name);
+    const avatarHtml = p.avatar_url
+        ? `<img src="${escHtml(p.avatar_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" alt="">`
+        : initials;
+    const opacity = comment._optimistic ? 'opacity:0.6;' : '';
+    return `
+    <div class="tc-comment-item" id="tc-comment-${comment.id}" style="${opacity}">
+        <div class="tc-comment-avatar">${avatarHtml}</div>
+        <div class="tc-comment-bubble">
+            <div class="tc-comment-author">${escHtml(p.full_name || 'Student')}</div>
+            <div class="tc-comment-text">${escHtml(comment.content)}</div>
+            <div class="tc-comment-time">${timeAgo(comment.created_at)}</div>
+        </div>
+    </div>`;
 }
 window.submitComment = submitComment;
 

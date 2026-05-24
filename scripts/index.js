@@ -46,6 +46,7 @@ document.addEventListener('DOMContentLoaded', async function() {
  window.location.href = 'sign-in.html';
  return;
  }
+ window.scrollTo({ top: 0, behavior: "instant" });
  updateUserUI();
  loadDepartments();
  loadTutorialsStrip(); // start immediately, runs in parallel
@@ -129,7 +130,6 @@ document.addEventListener('DOMContentLoaded', async function() {
  if (!updated || !updated.id) return;
  const post = posts.find(p => p.id === updated.id);
  if (!post) return;
- // Update counts if changed (skip if this user's own action — already optimistic)
  let changed = false;
  if (post.likes_count !== updated.likes_count) {
  post.likes_count = updated.likes_count;
@@ -139,13 +139,19 @@ document.addEventListener('DOMContentLoaded', async function() {
  post.comments_count = updated.comments_count;
  changed = true;
  }
+ if (post.video_views !== updated.video_views) {
+ post.video_views = updated.video_views;
+ changed = true;
+ }
  if (!changed) return;
  const postCard = document.querySelector(`[data-post-id="${updated.id}"]`);
  if (!postCard) return;
  const likesCount = postCard.querySelector('.likes-count');
- if (likesCount) likesCount.textContent = updated.likes_count;
+ if (likesCount) likesCount.textContent = formatCount(updated.likes_count);
  const commentsCount = postCard.querySelector('.comments-count');
- if (commentsCount) commentsCount.textContent = updated.comments_count;
+ if (commentsCount) commentsCount.textContent = formatCount(updated.comments_count);
+ const viewCount = postCard.querySelector(`#view-count-${updated.id}`);
+ if (viewCount) viewCount.textContent = formatViewCount(updated.video_views || 0);
  syncPostsCache();
  })
  .subscribe();
@@ -226,6 +232,7 @@ document.addEventListener('DOMContentLoaded', async function() {
  }
  }
  async function loadPosts() {
+ window.scrollTo({ top: 0, behavior: "instant" });
  try {
  // ── Show cached posts instantly so the feed is visible immediately ──
  try {
@@ -438,11 +445,11 @@ document.addEventListener('DOMContentLoaded', async function() {
  <div class="post-stats" aria-label="Post statistics">
  <span class="stat-item">
  <i class="fas fa-heart" aria-hidden="true"></i>
- <span class="likes-count">${post.likes_count || 0}</span> likes
+ <span class="likes-count">${formatCount(post.likes_count || 0)}</span> likes
  </span>
  <span class="stat-item">
  <i class="fas fa-comment" aria-hidden="true"></i>
- <span class="comments-count">${post.comments_count || 0}</span> comments
+ <span class="comments-count">${formatCount(post.comments_count || 0)}</span> comments
  </span>
  <span class="stat-item">
  <i class="fas fa-share" aria-hidden="true"></i>
@@ -462,6 +469,12 @@ document.addEventListener('DOMContentLoaded', async function() {
  <i class="fas fa-share" aria-hidden="true"></i>
  <span>Share</span>
  </button>
+ ${post.media_type === 'video' ? `
+ <span class="action-btn video-views-stat" aria-label="Video views" id="view-badge-${post.id}">
+   <i class="fas fa-eye" aria-hidden="true"></i>
+   <span id="view-count-${post.id}">${formatViewCount(post.video_views || 0)}</span>
+ </span>
+ ` : ''}
  </div>
  <div class="comments-section" data-post-id="${post.id}">
  <div class="comments-list" data-post-id="${post.id}" role="list" aria-label="Comments"></div>
@@ -519,6 +532,11 @@ document.addEventListener('DOMContentLoaded', async function() {
  const shareBtn = postCard.querySelector('.share-btn');
  if (shareBtn) {
  shareBtn.addEventListener('click', () => openShareModal(postId));
+ }
+ // ── Video view count ─────────────────────────────────────────────────────
+ const videoEl = postCard.querySelector('.post-video');
+ if (videoEl) {
+     videoEl.addEventListener('play', () => incrementVideoView(postId), { once: true });
  }
  const followBtn = postCard.querySelector('.follow-btn');
  if (followBtn) {
@@ -588,6 +606,51 @@ document.addEventListener('DOMContentLoaded', async function() {
      } catch(e) { /* storage full — ignore */ }
  }
 
+ // ── Video view count ──────────────────────────────────────────────────────
+ const _viewedVideoIds = new Set(
+     JSON.parse(sessionStorage.getItem('ct_viewed_videos') || '[]')
+ );
+
+ function formatCount(n) {
+     if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+     if (n >= 1000)    return (n / 1000).toFixed(1) + 'K';
+     return String(n || 0);
+ }
+
+ function formatViewCount(n) {
+     if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M views';
+     if (n >= 1000)    return (n / 1000).toFixed(1) + 'K views';
+     return `${n || 0} views`;
+ }
+
+ async function incrementVideoView(postId) {
+     if (_viewedVideoIds.has(postId)) return;
+     _viewedVideoIds.add(postId);
+     try { sessionStorage.setItem('ct_viewed_videos', JSON.stringify([..._viewedVideoIds])); } catch(e) {}
+
+     // Optimistic UI update
+     const post = posts.find(p => p.id === postId);
+     if (post) {
+         post.video_views = (post.video_views || 0) + 1;
+         const countEl = document.getElementById(`view-count-${postId}`);
+         if (countEl) countEl.textContent = formatViewCount(post.video_views);
+         syncPostsCache();
+     }
+
+     // Persist to DB — read current value first to avoid race conditions
+     try {
+         const { data } = await window.supabaseClient
+             .from('posts').select('video_views').eq('id', postId).single();
+         const newCount = (data?.video_views || 0) + 1;
+         await window.supabaseClient
+             .from('posts').update({ video_views: newCount }).eq('id', postId);
+         if (post) post.video_views = newCount;
+         const countEl = document.getElementById(`view-count-${postId}`);
+         if (countEl) countEl.textContent = formatViewCount(newCount);
+         syncPostsCache();
+     } catch(err) { console.warn('incrementVideoView:', err); }
+ }
+
  // ── In-flight guard (prevents double-tap on mobile) ──────────────────────
  const _likeInFlight = new Set();
 
@@ -627,7 +690,7 @@ document.addEventListener('DOMContentLoaded', async function() {
          likeBtn.setAttribute('aria-pressed', nowLiked ? 'true' : 'false');
          likeBtn.setAttribute('aria-label',   nowLiked ? 'Unlike post' : 'Like post');
      }
-     if (likesCount) likesCount.textContent = nowCount;
+     if (likesCount) likesCount.textContent = formatCount(nowCount);
 
      try {
          if (isLiked) {

@@ -1035,6 +1035,22 @@
             font-size: 18px;
         }
 
+        /* View count — inline with action buttons, video posts only */
+        .video-views-stat {
+            cursor: default;
+            color: #8a8d91;
+            font-size: 13px;
+            font-weight: 600;
+            flex: none;
+            padding: 6px 10px;
+            gap: 5px;
+            pointer-events: none;
+        }
+
+        .video-views-stat i {
+            font-size: 14px;
+        }
+
         /* Comments Section */
         .comments-section {
             padding: 8px 15px 5px;

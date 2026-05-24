@@ -19,6 +19,12 @@ let profileData = {
 };
 
 // Stats data
+function formatCount(n) {
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+    if (n >= 1000)    return (n / 1000).toFixed(1) + 'K';
+    return String(n || 0);
+}
+
 let statsData = {
     followers: 0,
     following: 0,
@@ -418,7 +424,7 @@ async function loadUserPosts() {
         });
 
         // Update UI
-        document.getElementById('totalLikes').textContent = statsData.totalLikes;
+        document.getElementById('totalLikes').textContent = formatCount(statsData.totalLikes);
         document.getElementById('totalStars').textContent = statsData.totalStars;
 
         // --- Render IMAGE POSTS section ---
@@ -1420,8 +1426,10 @@ async function handleLikeClick(postId, button) {
                 // Update total likes stat
                 const totalLikesEl = document.getElementById('totalLikes');
                 if (totalLikesEl) {
-                    const current = parseInt(totalLikesEl.textContent) || 0;
-                    totalLikesEl.textContent = isLiked ? current + 1 : Math.max(0, current - 1);
+                    const current = parseInt(totalLikesEl.textContent.replace(/[KkMm]/g, '')) || 0;
+                    const multiplier = totalLikesEl.textContent.includes('K') ? 1000 : totalLikesEl.textContent.includes('M') ? 1000000 : 1;
+                    const actualCount = current * multiplier;
+                    totalLikesEl.textContent = formatCount(isLiked ? actualCount + 1 : Math.max(0, actualCount - 1));
                 }
             }
         } else {

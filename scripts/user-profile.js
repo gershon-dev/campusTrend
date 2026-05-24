@@ -558,7 +558,7 @@ async function renderPosts(posts) {
                     <div class="post-actions">
                         <button class="post-action-btn like-btn ${isLiked ? 'liked' : ''}" data-post-id="${post.id}" aria-pressed="${isLiked}">
                             <i class="fas fa-heart"></i>
-                            <span class="likes-count">${post.likes_count || 0}</span>
+                            <span class="likes-count">${formatCount(post.likes_count || 0)}</span>
                         </button>
                         <button class="post-action-btn comment-toggle-btn" data-post-id="${post.id}">
                             <i class="fas fa-comment"></i>

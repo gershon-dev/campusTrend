@@ -449,11 +449,7 @@ document.addEventListener('DOMContentLoaded', async function() {
  </span>
  <span class="stat-item">
  <i class="fas fa-comment" aria-hidden="true"></i>
- <span class="comments-count">${formatCount(post.comments_count || 0)}</span> comments
- </span>
- <span class="stat-item">
- <i class="fas fa-share" aria-hidden="true"></i>
-    shares
+ <span class="comments-count">${formatCount(post.comments_count || 0)}</span> comments 
  </span>
  ${post.media_type === 'video' ? `
  <span class="stat-item" aria-label="Video views" id="view-badge-${post.id}">

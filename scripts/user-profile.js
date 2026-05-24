@@ -221,40 +221,37 @@ function updateProfileUI() {
 
 // Update stats from profile data
 function updateStatsFromProfile() {
-    // Show cached values immediately while the accurate count loads
-    statsData.followers = profileData.followers_count;
-    statsData.following = profileData.following_count;
+    // Use the cached columns from profiles — these are the source of truth.
+    // Admin can boost these values directly via the admin panel.
+    statsData.followers  = profileData.followers_count;
+    statsData.following  = profileData.following_count;
     statsData.postsCount = profileData.posts_count;
 
     document.getElementById('followersCount').textContent = statsData.followers;
     document.getElementById('followingCount').textContent = statsData.following;
-
-    // Always recount live from the followers table — the cached column
-    // can be stale if someone followed from the index feed (RLS blocks
-    // updating another user's profile row from client code)
-    refreshFollowerCounts();
 }
 
 async function refreshFollowerCounts() {
     try {
-        const [followersRes, followingRes] = await Promise.all([
-            window.supabaseClient
-                .from('followers')
-                .select('id', { count: 'exact', head: true })
-                .eq('following_id', currentProfileUserId),
-            window.supabaseClient
-                .from('followers')
-                .select('id', { count: 'exact', head: true })
-                .eq('follower_id', currentProfileUserId)
-        ]);
+        // Read followers_count directly from profiles table.
+        // Admin sets this value via the admin panel boost.
+        // We NEVER overwrite it here — doing so would wipe the admin boost.
+        const { data } = await window.supabaseClient
+            .from('profiles')
+            .select('followers_count, following_count')
+            .eq('id', currentProfileUserId)
+            .single();
 
-        const followers = followersRes.count ?? statsData.followers;
-        const following = followingRes.count ?? statsData.following;
+        const followers = data?.followers_count ?? statsData.followers;
+        const following  = data?.following_count  ?? statsData.following;
 
         statsData.followers = followers;
-        statsData.following = following;
-        document.getElementById('followersCount').textContent = followers;
-        document.getElementById('followingCount').textContent = following;
+        statsData.following  = following;
+
+        const followersEl = document.getElementById('followersCount');
+        const followingEl = document.getElementById('followingCount');
+        if (followersEl) followersEl.textContent = formatCount(followers);
+        if (followingEl) followingEl.textContent = formatCount(following);
     } catch (err) {
         console.error('refreshFollowerCounts error:', err);
     }

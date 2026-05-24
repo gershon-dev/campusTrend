@@ -455,6 +455,10 @@ document.addEventListener('DOMContentLoaded', async function() {
  <i class="fas fa-share" aria-hidden="true"></i>
     shares
  </span>
+ ${post.media_type === 'video' ? `
+ <span class="stat-item" aria-label="Video views" id="view-badge-${post.id}">
+   <i class="fas fa-eye" aria-hidden="true"></i>
+   <span id="view-count-${post.id}">${formatViewCount(post.video_views || 0)}</span>` : ''}
  </div>
  <div class="post-actions" role="group" aria-label="Post actions">
  <button class="action-btn like-btn ${post.isLiked ? 'liked' : ''}" data-action="like" aria-label="${post.isLiked ? 'Unlike post' : 'Like post'}" aria-pressed="${post.isLiked ? 'true' : 'false'}">
@@ -469,12 +473,6 @@ document.addEventListener('DOMContentLoaded', async function() {
  <i class="fas fa-share" aria-hidden="true"></i>
  <span>Share</span>
  </button>
- ${post.media_type === 'video' ? `
- <span class="action-btn video-views-stat" aria-label="Video views" id="view-badge-${post.id}">
-   <i class="fas fa-eye" aria-hidden="true"></i>
-   <span id="view-count-${post.id}">${formatViewCount(post.video_views || 0)}</span>
- </span>
- ` : ''}
  </div>
  <div class="comments-section" data-post-id="${post.id}">
  <div class="comments-list" data-post-id="${post.id}" role="list" aria-label="Comments"></div>

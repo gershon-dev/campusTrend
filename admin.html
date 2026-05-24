@@ -89,7 +89,7 @@
                 </div>
             </div>
             <div class="table-card">
-                <table><thead><tr><th>User</th><th>Department</th><th>Index No.</th><th>Posts</th><th>Status</th><th>Actions</th></tr></thead>
+                <table><thead><tr><th>User</th><th>Department</th><th>Index No.</th><th>Posts</th><th>Followers</th><th>Status</th><th>Actions</th></tr></thead>
                 <tbody id="usersTable"><tr class="loading-row"><td colspan="7"><span class="pulse">Loading...</span></td></tr></tbody></table>
             </div>
         </div>
@@ -137,6 +137,32 @@
     </main>
 </div>
 
+
+<!-- Followers Modal -->
+<div class="modal-overlay" id="followersModal" style="display:none;align-items:center;justify-content:center;">
+    <div class="modal-box" style="max-width:360px;text-align:left;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+            <h3 class="modal-title" style="margin:0;font-size:16px;">Set Followers</h3>
+            <button class="btn btn-ghost btn-sm" onclick="closeFollowersModal()"><i class="fas fa-times"></i></button>
+        </div>
+        <p id="followersUserName" style="font-size:12px;color:var(--text2);margin:0 0 18px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></p>
+        <input type="hidden" id="followersUserId">
+        <div style="display:flex;flex-direction:column;gap:14px;">
+            <div>
+                <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;">Followers count</label>
+                <input type="number" id="followersCount" min="0" class="login-input" style="margin:0;padding:10px 14px;" placeholder="0">
+            </div>
+            <div>
+                <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;">Following count</label>
+                <input type="number" id="followingCount" min="0" class="login-input" style="margin:0;padding:10px 14px;" placeholder="0">
+            </div>
+        </div>
+        <div class="modal-actions" style="margin-top:22px;">
+            <button class="btn btn-ghost" onclick="closeFollowersModal()">Cancel</button>
+            <button class="btn btn-primary" id="followersSaveBtn" onclick="saveFollowers()"><i class="fas fa-users"></i> Save</button>
+        </div>
+    </div>
+</div>
 
 <!-- Boost Modal -->
 <div class="modal-overlay" id="boostModal" style="display:none;align-items:center;justify-content:center;">

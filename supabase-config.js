@@ -452,20 +452,28 @@ window.followUser = async function(targetUserId) {
     try {
         const { data: { user } } = await supabaseClient.auth.getUser();
         if (!user) return { success: false, error: 'Not authenticated' };
-        // Use maybeSingle() so a missing row returns null instead of throwing
+
         const { data: existing } = await supabaseClient
             .from('followers')
             .select('id')
             .eq('follower_id', user.id)
             .eq('following_id', targetUserId)
             .maybeSingle();
+
         if (existing) {
             await supabaseClient.from('followers').delete().eq('id', existing.id);
-            return { success: true, following: false };
         } else {
-            await supabaseClient.from('followers').insert([{ follower_id: user.id, following_id: targetUserId }]);
-            return { success: true, following: true };
+            await supabaseClient.from('followers')
+                .insert([{ follower_id: user.id, following_id: targetUserId }]);
         }
+
+        // SECURITY DEFINER function updates counts, bypasses RLS safely
+        await supabaseClient.rpc('update_follow_counts', {
+            target_user_id: targetUserId,
+            current_user_id: user.id
+        });
+
+        return { success: true, following: !existing };
     } catch (err) {
         return { success: false, error: err.message };
     }

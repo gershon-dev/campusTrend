@@ -1,7 +1,8 @@
 // ─── State ───────────────────────────────────────────────────────────────────
-let allUsers    = [];
-let allPosts    = [];
-let allComments = [];
+let allUsers     = [];
+let allPosts     = [];
+let allComments  = [];
+let allTutorials = [];
 let pendingAction = null;
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
@@ -55,7 +56,7 @@ function showPage(name, btn) {
 
 // ─── Data Loading ─────────────────────────────────────────────────────────────
 async function loadAllData() {
-    await Promise.all([loadUsers(), loadPosts(), loadComments()]);
+    await Promise.all([loadUsers(), loadPosts(), loadComments(), loadTutorials()]);
 }
 
 async function loadUsers() {
@@ -118,6 +119,35 @@ async function loadComments() {
     document.getElementById('commentsBadge').textContent = allComments.length;
     renderCommentsTable(allComments);
 }
+
+async function loadTutorials() {
+    const { data, error } = await window.supabaseClient
+        .from('tutorials')
+        .select('*, profiles:user_id(full_name, avatar_url)')
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error('loadTutorials error:', error);
+        showToast('Error loading tutorials: ' + (error.message || 'unknown'), 'error');
+        return;
+    }
+
+    allTutorials = data || [];
+    document.getElementById('tutorialsBadge').textContent = allTutorials.length;
+
+    const sel = document.getElementById('tutorialDeptFilter');
+    if (sel) {
+        const depts = [...new Set(allTutorials.map(t => t.department).filter(Boolean))].sort();
+        const cur = sel.value;
+        sel.innerHTML = '<option value="">All departments</option>' +
+            depts.map(d => `<option value="${esc(d)}">${esc(d)}</option>`).join('');
+        sel.value = cur;
+    }
+    renderTutorialsTable(allTutorials);
+}
+
+
+
 
 // ─── Render: Users ────────────────────────────────────────────────────────────
 function renderUsersTable(users) {
@@ -245,6 +275,45 @@ function renderCommentsTable(comments) {
         </tr>`).join('');
 }
 
+// ─── Render: Tutorials ────────────────────────────────────────────────────────
+function renderTutorialsTable(tutorials) {
+    const tbody = document.getElementById('tutorialsTable');
+    if (!tbody) return;
+    if (!tutorials.length) {
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="7"><div class="empty-icon">🎓</div><div class="empty-text">No tutorials found</div></td></tr>';
+        return;
+    }
+    tbody.innerHTML = tutorials.map(t => {
+        const thumb = t.video_url
+            ? `<div class="post-image-placeholder"><i class="fas fa-play"></i></div>`
+            : `<div class="post-image-placeholder"><i class="fas fa-graduation-cap"></i></div>`;
+        const courseLine = [t.course_code, t.course_name].filter(Boolean).join(' · ');
+        return `
+        <tr>
+            <td><div class="user-cell">${thumb}
+                <div><div class="post-text">${esc(t.title||'(untitled)')}</div>
+                <div class="post-meta">${esc(courseLine || 'No course')}</div></div>
+            </div></td>
+            <td><div class="user-cell">
+                <div class="user-avatar" style="width:28px;height:28px;">${t.profiles?.avatar_url ? `<img src="${t.profiles.avatar_url}">` : esc((t.profiles?.full_name||'?')[0])}</div>
+                <span style="font-size:13px;">${esc(t.profiles?.full_name||'Unknown')}</span>
+            </div></td>
+            <td><span class="badge badge-dept">${esc(t.department||'—')}</span></td>
+            <td style="font-family:var(--mono);">${fmtNum(t.likes_count||0)}</td>
+            <td style="font-family:var(--mono);">${fmtNum(t.views_count||0)}</td>
+            <td style="font-family:var(--mono);font-size:12px;">${new Date(t.created_at).toLocaleDateString()}</td>
+            <td><div class="actions-cell">
+                <button class="btn btn-ghost btn-sm" onclick="openBoostTutorialModal('${t.id}','${esc(t.title||'')}',${t.likes_count||0},${t.views_count||0})">
+                    <i class="fas fa-rocket"></i> Boost
+                </button>
+                <button class="btn btn-danger btn-sm" onclick="confirmAction('deleteTutorial','${t.id}','')"><i class="fas fa-trash"></i></button>
+            </div></td>
+        </tr>`;
+    }).join('');
+}
+
+
+
 // ─── Followers Modal ──────────────────────────────────────────────────────────
 function openFollowersModal(userId, userName, currentFollowers, currentFollowing) {
     document.getElementById('followersUserId').value    = userId;
@@ -303,7 +372,10 @@ async function saveFollowers() {
 }
 
 // ─── Boost Modal (posts) ──────────────────────────────────────────────────────
+let boostKind = 'post'; // 'post' | 'tutorial'
+
 function openBoostModal(postId, title, likes, views, mediaType) {
+    boostKind = 'post';
     document.getElementById('boostPostId').value    = postId;
     document.getElementById('boostPostTitle').textContent = title || '(no caption)';
     document.getElementById('boostLikes').value     = likes;
@@ -318,6 +390,25 @@ function openBoostModal(postId, title, likes, views, mediaType) {
     requestAnimationFrame(() => modal.classList.add('open'));
 }
 
+function openBoostTutorialModal(tutorialId, title, likes, views) {
+    boostKind = 'tutorial';
+    document.getElementById('boostPostId').value    = tutorialId;
+    document.getElementById('boostPostTitle').textContent = title || '(untitled)';
+    document.getElementById('boostLikes').value     = likes || 0;
+    document.getElementById('boostIsVideo').value   = '1'; // tutorials always have views
+
+    const viewsRow = document.getElementById('boostViewsRow');
+    viewsRow.style.display = 'flex';
+    document.getElementById('boostViews').value = views || 0;
+    // relabel views input for clarity
+    const lbl = viewsRow.querySelector('label');
+    if (lbl) lbl.textContent = 'Views';
+
+    const modal = document.getElementById('boostModal');
+    modal.style.display = 'flex';
+    requestAnimationFrame(() => modal.classList.add('open'));
+}
+
 function closeBoostModal() {
     const modal = document.getElementById('boostModal');
     modal.classList.remove('open');
@@ -325,26 +416,41 @@ function closeBoostModal() {
 }
 
 async function saveBoost() {
-    const postId  = document.getElementById('boostPostId').value;
+    const id      = document.getElementById('boostPostId').value;
     const likes   = parseInt(document.getElementById('boostLikes').value) || 0;
     const isVideo = document.getElementById('boostIsVideo').value === '1';
     const saveBtn = document.getElementById('boostSaveBtn');
-
-    const update = { likes_count: likes };
-    if (isVideo) update.video_views = parseInt(document.getElementById('boostViews').value) || 0;
 
     saveBtn.innerHTML = '<span class="spinner"></span>';
     saveBtn.disabled  = true;
 
     try {
-        const { error } = await window.supabaseClient.from('posts').update(update).eq('id', postId);
-        if (error) throw error;
+        if (boostKind === 'tutorial') {
+            const views = parseInt(document.getElementById('boostViews').value) || 0;
+            const { error } = await window.supabaseClient
+                .from('tutorials')
+                .update({ likes_count: likes, views_count: views })
+                .eq('id', id);
+            if (error) throw error;
 
-        const post = allPosts.find(p => p.id === postId);
-        if (post) { post.likes_count = likes; if (isVideo) post.video_views = update.video_views; }
-        renderPostsTable(allPosts);
-        closeBoostModal();
-        showToast('Post boosted!', 'success');
+            const t = allTutorials.find(x => x.id === id);
+            if (t) { t.likes_count = likes; t.views_count = views; }
+            renderTutorialsTable(allTutorials);
+            closeBoostModal();
+            showToast('Tutorial boosted!', 'success');
+        } else {
+            const update = { likes_count: likes };
+            if (isVideo) update.video_views = parseInt(document.getElementById('boostViews').value) || 0;
+
+            const { error } = await window.supabaseClient.from('posts').update(update).eq('id', id);
+            if (error) throw error;
+
+            const post = allPosts.find(p => p.id === id);
+            if (post) { post.likes_count = likes; if (isVideo) post.video_views = update.video_views; }
+            renderPostsTable(allPosts);
+            closeBoostModal();
+            showToast('Post boosted!', 'success');
+        }
     } catch (err) {
         showToast('Error: ' + err.message, 'error');
     } finally {
@@ -370,6 +476,7 @@ function confirmAction(action, id, name) {
         deleteUser:  { icon:'danger',  fa:'fa-trash',        title:`Delete ${name}`,            desc:'This will permanently delete this user and all their data.',   btn:'btn-danger',  txt:'Delete User' },
         deletePost:  { icon:'danger',  fa:'fa-trash',        title:'Delete Post',                desc:'This will permanently delete this post and all its comments.', btn:'btn-danger',  txt:'Delete Post' },
         deleteComment:{ icon:'danger', fa:'fa-trash',        title:'Delete Comment',             desc:'This will permanently delete this comment.',                   btn:'btn-danger',  txt:'Delete Comment' },
+        deleteTutorial:{ icon:'danger',fa:'fa-trash',        title:'Delete Tutorial',            desc:'This will permanently delete this tutorial, its likes and comments.', btn:'btn-danger', txt:'Delete Tutorial' },
         block:       { icon:'block',   fa:'fa-ban',          title:`Block ${name}`,              desc:'This user will be blocked and unable to use the platform.',    btn:'btn-block',   txt:'Block User', showReason: true },
         unblock:     { icon:'unblock', fa:'fa-unlock',       title:`Unblock ${name}`,            desc:'This user will regain access to the platform.',                btn:'btn-unblock', txt:'Unblock User' },
         deleteAll:   { icon:'danger',  fa:'fa-exclamation-triangle', title:'Delete ALL Data',   desc:'⚠️ This will delete EVERY user, post, and comment. This cannot be undone!', btn:'btn-danger', txt:'Delete Everything' },
@@ -423,6 +530,13 @@ async function executeAction() {
             if (error) throw error;
             showToast('Comment deleted', 'success');
             await loadComments();
+        } else if (action === 'deleteTutorial') {
+            await window.supabaseClient.from('tutorial_likes').delete().eq('tutorial_id', id);
+            await window.supabaseClient.from('tutorial_comments').delete().eq('tutorial_id', id);
+            const { error } = await window.supabaseClient.from('tutorials').delete().eq('id', id);
+            if (error) throw error;
+            showToast('Tutorial deleted', 'success');
+            await loadTutorials();
         } else if (action === 'block') {
             const reason = document.getElementById('blockReasonInput').value.trim() || 'Violation of community guidelines';
             const { error } = await window.supabaseClient.from('profiles')
@@ -489,6 +603,26 @@ function filterComments(q) {
         (c.profiles?.full_name||'').toLowerCase().includes(s)
     ));
 }
+
+function filterTutorials(q) {
+    const s = (q || '').toLowerCase();
+    const dept = document.getElementById('tutorialDeptFilter')?.value || '';
+    renderTutorialsTable(allTutorials.filter(t =>
+        (!dept || t.department === dept) && (
+            (t.title||'').toLowerCase().includes(s) ||
+            (t.course_name||'').toLowerCase().includes(s) ||
+            (t.course_code||'').toLowerCase().includes(s) ||
+            (t.description||'').toLowerCase().includes(s) ||
+            (t.profiles?.full_name||'').toLowerCase().includes(s)
+        )
+    ));
+}
+
+function filterTutorialsByDept(d) {
+    renderTutorialsTable(d ? allTutorials.filter(t => t.department === d) : allTutorials);
+}
+
+
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmtNum(n) {

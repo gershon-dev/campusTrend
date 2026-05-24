@@ -527,18 +527,31 @@ function attachCardListeners(t) {
         }
     });
 
-    // View count — fires when the video area scrolls into view (works for iframes too)
+    // View count — fires only when the user actually plays / clicks the video
     const videoWrap = document.getElementById(`video-wrap-${t.id}`);
     if (videoWrap) {
-        const observer = new IntersectionObserver((entries, obs) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    obs.disconnect(); // only count once per session render
-                    incrementViews(t.id);
-                }
-            });
-        }, { threshold: 0.5 }); // at least 50% of the video must be visible
-        observer.observe(videoWrap);
+        let counted = false;
+        const countOnce = () => {
+            if (counted) return;
+            counted = true;
+            incrementViews(t.id);
+        };
+
+        const nativeVideo = videoWrap.querySelector('video');
+        if (nativeVideo) {
+            // Supabase / Cloudinary — real playback event
+            nativeVideo.addEventListener('play', countOnce, { once: true });
+        } else {
+            // YouTube / Drive iframes — no cross-origin play event,
+            // so count on first user interaction with the player.
+            const iframe = videoWrap.querySelector('iframe');
+            const target = iframe || videoWrap;
+            target.addEventListener('click',      countOnce, { once: true });
+            target.addEventListener('touchstart', countOnce, { once: true, passive: true });
+            window.addEventListener('blur', () => {
+                if (document.activeElement === iframe) countOnce();
+            }, { once: true });
+        }
     }
 }
 

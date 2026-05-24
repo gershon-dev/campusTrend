@@ -36,6 +36,7 @@
             <button class="nav-item" onclick="showPage('users',this)"><i class="fas fa-users"></i>Users<span class="nav-badge" id="usersBadge">0</span></button>
             <button class="nav-item" onclick="showPage('blocked',this)"><i class="fas fa-ban"></i>Blocked<span class="nav-badge orange" id="blockedBadge">0</span></button>
             <button class="nav-item" onclick="showPage('posts',this)"><i class="fas fa-images"></i>Posts<span class="nav-badge" id="postsBadge">0</span></button>
+            <button class="nav-item" onclick="showPage('tutorials',this)"><i class="fas fa-graduation-cap"></i>Tutorials<span class="nav-badge" id="tutorialsBadge">0</span></button>
             <button class="nav-item" onclick="showPage('comments',this)"><i class="fas fa-comments"></i>Comments<span class="nav-badge" id="commentsBadge">0</span></button>
         </nav>
         <div class="sidebar-bottom">
@@ -119,6 +120,23 @@
             <div class="table-card">
                 <table><thead><tr><th>Post</th><th>Author</th><th>Visibility</th><th>Likes</th><th>Views</th><th>Date</th><th>Actions</th></tr></thead>
                 <tbody id="postsTable"><tr class="loading-row"><td colspan="7"><span class="pulse">Loading...</span></td></tr></tbody></table>
+            </div>
+        </div>
+
+        <!-- Tutorials -->
+        <div class="page" id="page-tutorials">
+            <div class="page-header">
+                <div><h2 class="page-title">Tutorials</h2><p class="page-subtitle">// MANAGE_ALL_TUTORIALS</p></div>
+                <div class="table-actions">
+                    <input type="text" class="search-box" placeholder="Search tutorials..." oninput="filterTutorials(this.value)">
+                    <select class="select-box" id="tutorialDeptFilter" onchange="filterTutorialsByDept(this.value)">
+                        <option value="">All departments</option>
+                    </select>
+                </div>
+            </div>
+            <div class="table-card">
+                <table><thead><tr><th>Tutorial</th><th>Author</th><th>Department</th><th>Likes</th><th>Views</th><th>Date</th><th>Actions</th></tr></thead>
+                <tbody id="tutorialsTable"><tr class="loading-row"><td colspan="7"><span class="pulse">Loading...</span></td></tr></tbody></table>
             </div>
         </div>
 

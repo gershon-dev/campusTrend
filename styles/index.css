@@ -971,6 +971,16 @@
             font-size: 15px;
             align-items: center;
         }
+        @media (max-width: 600px) {
+            .post-stats {
+                display: flex;
+                justify-content: space-between;
+                padding: 8px 16px;
+                color: #5f6368;
+                font-size: 15px;
+                align-items: center;
+            }
+        }
 
         .like-icons {
             display: flex;

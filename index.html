@@ -51,6 +51,13 @@
     <meta name="apple-mobile-web-app-title" content="CampusTrend">
     <link rel="apple-touch-icon" href="icons/icon-192.png">
 
+    <meta property="og:site_name" content="CampusTrend" />
+    <meta property="og:title" content="CampusTrend" />
+    <meta property="og:description" content="Trending posts from your campus." />
+    <meta property="og:image" content="https://gershon-dev.github.io/campusTrend/og-default.jpg" />
+    <meta property="og:type" content="website" />
+
+
     <!-- Critical inline CSS: prevents CLS by reserving image space before stylesheet loads -->
     <style>
         
@@ -415,6 +422,15 @@
             </div>
             <div class="modal-body">
                 <div class="share-options" role="list">
+                    <button id="shareWhatsApp" class="share-option">
+                        <i class="fab fa-whatsapp" style="color:#25D366;"></i>
+                        <span>WhatsApp</span>
+                        </button>
+                        <button id="shareNative" class="share-option">
+                        <i class="fas fa-share-alt"></i>
+                        <span>More…</span>
+                    </button>
+
                     <div class="share-option" id="shareTimeline" role="listitem" tabindex="0" aria-label="Share to your timeline">
                         <div class="share-option-icon timeline" aria-hidden="true">
                             <i class="fas fa-home" aria-hidden="true"></i>

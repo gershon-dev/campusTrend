@@ -1517,9 +1517,27 @@ document.addEventListener('DOMContentLoaded', async function() {
  shareModal.classList.add('show');
  }
  }
+ function buildShareData() {
+ const post = posts.find(p => p.id === selectedPostForShare) || {};
+ const url = `${window.location.origin}${window.location.pathname}?post=${selectedPostForShare}`;
+ const appName = 'CampusTrend';
+ const rawDesc = (post.content || 'Check out this post on CampusTrend').trim();
+ const description = rawDesc.length > 200 ? rawDesc.slice(0, 200) + '...' : rawDesc;
+ const thumbnail = post.image_url || post.media_url || '';
+ const authorName = (post.profiles && post.profiles.full_name) ? post.profiles.full_name : 'Someone';
+ const title = `${appName} • ${authorName}`;
+ const text =
+ `*${appName}*\n\n` +
+ `${description}\n\n` +
+ (thumbnail ? `${thumbnail}\n\n` : '') +
+ `View post: ${url}`;
+ return { title, text, url, thumbnail, description, appName };
+ }
  function setupShareModal() {
  const closeShareModal = document.getElementById('closeShareModal');
  const copyLink = document.getElementById('copyLink');
+ const shareWhatsApp = document.getElementById('shareWhatsApp');
+ const shareNative = document.getElementById('shareNative');
  if (closeShareModal) {
  closeShareModal.addEventListener('click', () => {
  shareModal.classList.remove('show');
@@ -1534,13 +1552,11 @@ document.addEventListener('DOMContentLoaded', async function() {
  }
  if (copyLink) {
  copyLink.addEventListener('click', () => {
- // Use the current page's full path so the link works regardless of subdirectory
- const url = `${window.location.origin}${window.location.pathname}?post=${selectedPostForShare}`;
+ const { url } = buildShareData();
  navigator.clipboard.writeText(url).then(() => {
  showToast('Link copied to clipboard!', 'success');
  shareModal.classList.remove('show');
  }).catch(() => {
- // Fallback for browsers that block clipboard without HTTPS
  const ta = document.createElement('textarea');
  ta.value = url;
  ta.style.position = 'fixed';
@@ -1552,6 +1568,27 @@ document.addEventListener('DOMContentLoaded', async function() {
  showToast('Link copied to clipboard!', 'success');
  shareModal.classList.remove('show');
  });
+ });
+ }
+ if (shareWhatsApp) {
+ shareWhatsApp.addEventListener('click', () => {
+ const { text } = buildShareData();
+ const waUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
+ window.open(waUrl, '_blank', 'noopener,noreferrer');
+ shareModal.classList.remove('show');
+ });
+ }
+ if (shareNative) {
+ shareNative.addEventListener('click', async () => {
+ const { title, text, url } = buildShareData();
+ if (navigator.share) {
+ try { await navigator.share({ title, text, url }); } catch (_) {}
+ } else {
+ const { text: t } = buildShareData();
+ const waUrl = `https://wa.me/?text=${encodeURIComponent(t)}`;
+ window.open(waUrl, '_blank', 'noopener,noreferrer');
+ }
+ shareModal.classList.remove('show');
  });
  }
  }

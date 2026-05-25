@@ -147,11 +147,11 @@ document.addEventListener('DOMContentLoaded', async function() {
  const postCard = document.querySelector(`[data-post-id="${updated.id}"]`);
  if (!postCard) return;
  const likesCount = postCard.querySelector('.likes-count');
- if (likesCount) likesCount.textContent = formatCount(updated.likes_count);
+ if (likesCount) likesCount.textContent = formatCount((updated.likes_count||0) + (post.boost_likes||0));
  const commentsCount = postCard.querySelector('.comments-count');
  if (commentsCount) commentsCount.textContent = formatCount(updated.comments_count);
  const viewCount = postCard.querySelector(`#view-count-${updated.id}`);
- if (viewCount) viewCount.textContent = formatViewCount(updated.video_views || 0);
+ if (viewCount) viewCount.textContent = formatViewCount((updated.video_views||0) + (post.boost_views||0));
  syncPostsCache();
  })
  .subscribe();
@@ -445,7 +445,7 @@ document.addEventListener('DOMContentLoaded', async function() {
  <div class="post-stats" aria-label="Post statistics">
  <span class="stat-item">
  <i class="fas fa-heart" aria-hidden="true"></i>
- <span class="likes-count">${formatCount(post.likes_count || 0)}</span> likes
+ <span class="likes-count">${formatCount((post.likes_count||0) + (post.boost_likes||0))}</span> likes
  </span>
  <span class="stat-item">
  <i class="fas fa-comment" aria-hidden="true"></i>
@@ -454,7 +454,7 @@ document.addEventListener('DOMContentLoaded', async function() {
  ${post.media_type === 'video' ? `
  <span class="stat-item" aria-label="Video views" id="view-badge-${post.id}">
    <i class="fas fa-eye" aria-hidden="true"></i>
-   <span id="view-count-${post.id}">${formatViewCount(post.video_views || 0)}</span>` : ''}
+   <span id="view-count-${post.id}">${formatViewCount((post.video_views||0) + (post.boost_views||0))}</span>` : ''}
  </div>
  <div class="post-actions" role="group" aria-label="Post actions">
  <button class="action-btn like-btn ${post.isLiked ? 'liked' : ''}" data-action="like" aria-label="${post.isLiked ? 'Unlike post' : 'Like post'}" aria-pressed="${post.isLiked ? 'true' : 'false'}">
@@ -627,7 +627,7 @@ document.addEventListener('DOMContentLoaded', async function() {
      if (post) {
          post.video_views = (post.video_views || 0) + 1;
          const countEl = document.getElementById(`view-count-${postId}`);
-         if (countEl) countEl.textContent = formatViewCount(post.video_views);
+         if (countEl) countEl.textContent = formatViewCount((post.video_views||0) + (post.boost_views||0));
          syncPostsCache();
      }
 

@@ -94,7 +94,7 @@ async function loadOwnProfile(user) {
                 location: profile.location || '',
                 avatar_url: profile.avatar_url,
                 posts_count: profile.posts_count || 0,
-                followers_count: profile.followers_count || 0,
+                followers_count: (profile.followers_count || 0) + (profile.followers_boost || 0),
                 following_count: profile.following_count || 0,
                 created_at: profile.created_at
             };
@@ -136,7 +136,7 @@ async function loadOtherUserProfile(userId) {
                 location: profile.location || '',
                 avatar_url: profile.avatar_url,
                 posts_count: profile.posts_count || 0,
-                followers_count: profile.followers_count || 0,
+                followers_count: (profile.followers_count || 0) + (profile.followers_boost || 0),
                 following_count: profile.following_count || 0,
                 created_at: profile.created_at
             };
@@ -238,11 +238,11 @@ async function refreshFollowerCounts() {
         // We NEVER overwrite it here — doing so would wipe the admin boost.
         const { data } = await window.supabaseClient
             .from('profiles')
-            .select('followers_count, following_count')
+            .select('followers_count, following_count, followers_boost')
             .eq('id', currentProfileUserId)
             .single();
 
-        const followers = data?.followers_count ?? statsData.followers;
+        const followers = ((data?.followers_count ?? 0) + (data?.followers_boost ?? 0)) || statsData.followers;
         const following  = data?.following_count  ?? statsData.following;
 
         statsData.followers = followers;

@@ -6,7 +6,7 @@ let allTutorials = [];
 let pendingAction = null;
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
-const ADMIN_EMAILS = ['admin@campustrend.com']; // add your admin emails here
+const ADMIN_EMAILS = ['5251170066@st.uew.edu.gh']; // add your admin emails here
 
 async function adminLogin() {
     const email    = document.getElementById('loginEmail').value.trim();
@@ -74,7 +74,8 @@ async function loadUsers() {
     // Use cached columns as source of truth — these are kept in sync by
     // refreshFollowerCounts() after real follows, and set directly by the admin panel.
     allUsers.forEach(u => {
-        u._followers = u.followers_count || 0;
+        u._followersBoost = u.followers_boost || 0;
+        u._followers = (u.followers_count || 0) + u._followersBoost;
         u._following = u.following_count || 0;
     });
 
@@ -94,19 +95,20 @@ async function loadUsers() {
 async function loadPosts() {
     const { data, error } = await window.supabaseClient
         .from('posts')
-        .select('*, profiles:user_id(full_name, avatar_url)')
+        .select('*, boost_likes, boost_views, profiles:user_id(full_name, avatar_url)')
         .order('created_at', { ascending: false });
 
     if (error) { showToast('Error loading posts', 'error'); return; }
     allPosts = data || [];
 
-    const totalLikes = allPosts.reduce((s, p) => s + (p.likes_count || 0), 0);
+    const totalLikes = allPosts.reduce((s, p) => s + (p.likes_count || 0) + (p.boost_likes || 0), 0);
     document.getElementById('stat-posts').textContent  = allPosts.length;
     document.getElementById('stat-likes').textContent  = fmtNum(totalLikes);
     document.getElementById('postsBadge').textContent  = allPosts.length;
 
     renderPostsTable(allPosts);
 }
+
 
 async function loadComments() {
     const { data, error } = await window.supabaseClient
@@ -123,8 +125,9 @@ async function loadComments() {
 async function loadTutorials() {
     const { data, error } = await window.supabaseClient
         .from('tutorials')
-        .select('*, profiles:user_id(full_name, avatar_url)')
+        .select('*, boost_likes, boost_views, profiles:user_id(full_name, avatar_url)')
         .order('created_at', { ascending: false });
+
 
     if (error) {
         console.error('loadTutorials error:', error);
@@ -167,12 +170,12 @@ function renderUsersTable(users) {
             <td style="font-family:var(--mono);">${u.posts_count||0}</td>
             <td>
                 <span style="font-family:var(--mono);font-size:13px;">
-                    <i class="fas fa-user-friends" style="color:var(--accent);margin-right:4px;"></i>${fmtNum(u._followers)}
+                    <i class="fas fa-user-friends" style="color:var(--accent);margin-right:4px;"></i>${fmtNum(u._followers)}${u._followersBoost ? ` <span style="color:var(--accent);font-size:11px;">(+${fmtNum(u._followersBoost)})</span>` : ''}
                 </span>
             </td>
             <td><span class="badge ${u.is_blocked ? 'badge-blocked' : 'badge-active'}">${u.is_blocked ? 'BLOCKED' : 'ACTIVE'}</span></td>
             <td><div class="actions-cell">
-                <button class="btn btn-ghost btn-sm" onclick="openFollowersModal('${u.id}','${esc(u.full_name||'')}',${u._followers},${u._following})">
+                <button class="btn btn-ghost btn-sm" onclick="openFollowersModal('${u.id}','${esc(u.full_name||'')}',${u._followersBoost})">
                     <i class="fas fa-user-friends"></i> Followers
                 </button>
                 ${u.is_blocked
@@ -195,7 +198,7 @@ function renderRecentUsers(users) {
             <td><span class="badge badge-dept">${esc(u.department||'—')}</span></td>
             <td><span class="badge ${u.is_blocked ? 'badge-blocked' : 'badge-active'}">${u.is_blocked ? 'BLOCKED' : 'ACTIVE'}</span></td>
             <td><div class="actions-cell">
-                <button class="btn btn-ghost btn-sm" onclick="openFollowersModal('${u.id}','${esc(u.full_name||'')}',${u._followers},${u._following})">
+                <button class="btn btn-ghost btn-sm" onclick="openFollowersModal('${u.id}','${esc(u.full_name||'')}',${u._followersBoost})">
                     <i class="fas fa-user-friends"></i> Followers
                 </button>
             </div></td>
@@ -246,13 +249,14 @@ function renderPostsTable(posts) {
                 <span style="font-size:13px;">${esc(p.profiles?.full_name||'Unknown')}</span>
             </div></td>
             <td><span class="badge ${p.visibility==='department' ? 'badge-dept-only' : 'badge-public'}">${p.visibility||'public'}</span></td>
-            <td style="font-family:var(--mono);">${fmtNum(p.likes_count||0)}</td>
-            <td style="font-family:var(--mono);">${p.media_type==='video' ? fmtNum(p.video_views||0) : '—'}</td>
+            <td style="font-family:var(--mono);">${fmtNum((p.likes_count||0)+(p.boost_likes||0))}${p.boost_likes ? ` <span style="color:var(--accent);font-size:11px;">(+${fmtNum(p.boost_likes)})</span>` : ''}</td>
+            <td style="font-family:var(--mono);">${p.media_type==='video' ? fmtNum((p.video_views||0)+(p.boost_views||0)) + (p.boost_views ? ` <span style="color:var(--accent);font-size:11px;">(+${fmtNum(p.boost_views)})</span>` : '') : '—'}</td>
             <td style="font-family:var(--mono);font-size:12px;">${new Date(p.created_at).toLocaleDateString()}</td>
             <td><div class="actions-cell">
-                <button class="btn btn-ghost btn-sm" onclick="openBoostModal('${p.id}','${esc(p.content||'')}',${p.likes_count||0},${p.video_views||0},'${p.media_type}')">
+                <button class="btn btn-ghost btn-sm" onclick="openBoostModal('${p.id}','${esc(p.content||'')}',${p.boost_likes||0},${p.boost_views||0},'${p.media_type}')">
                     <i class="fas fa-rocket"></i> Boost
                 </button>
+
                 <button class="btn btn-danger btn-sm" onclick="confirmAction('deletePost','${p.id}','')"><i class="fas fa-trash"></i></button>
             </div></td>
         </tr>`;
@@ -299,11 +303,12 @@ function renderTutorialsTable(tutorials) {
                 <span style="font-size:13px;">${esc(t.profiles?.full_name||'Unknown')}</span>
             </div></td>
             <td><span class="badge badge-dept">${esc(t.department||'—')}</span></td>
-            <td style="font-family:var(--mono);">${fmtNum(t.likes_count||0)}</td>
-            <td style="font-family:var(--mono);">${fmtNum(t.views_count||0)}</td>
+            <td style="font-family:var(--mono);">${fmtNum((t.likes_count||0)+(t.boost_likes||0))}${t.boost_likes ? ` <span style="color:var(--accent);font-size:11px;">(+${fmtNum(t.boost_likes)})</span>` : ''}</td>
+            <td style="font-family:var(--mono);">${fmtNum((t.views_count||0)+(t.boost_views||0))}${t.boost_views ? ` <span style="color:var(--accent);font-size:11px;">(+${fmtNum(t.boost_views)})</span>` : ''}</td>
             <td style="font-family:var(--mono);font-size:12px;">${new Date(t.created_at).toLocaleDateString()}</td>
             <td><div class="actions-cell">
-                <button class="btn btn-ghost btn-sm" onclick="openBoostTutorialModal('${t.id}','${esc(t.title||'')}',${t.likes_count||0},${t.views_count||0})">
+                <button class="btn btn-ghost btn-sm" onclick="openBoostTutorialModal('${t.id}','${esc(t.title||'')}',${t.boost_likes||0},${t.boost_views||0})">
+
                     <i class="fas fa-rocket"></i> Boost
                 </button>
                 <button class="btn btn-danger btn-sm" onclick="confirmAction('deleteTutorial','${t.id}','')"><i class="fas fa-trash"></i></button>
@@ -314,16 +319,27 @@ function renderTutorialsTable(tutorials) {
 
 
 
-// ─── Followers Modal ──────────────────────────────────────────────────────────
-function openFollowersModal(userId, userName, currentFollowers, currentFollowing) {
+// ─── Followers Modal — INCREMENT MODE ────────────────────────────────────────
+// Adds to followers_boost on profiles. Displayed count = real followers_count + boost.
+function openFollowersModal(userId, userName, currentBoost) {
     document.getElementById('followersUserId').value    = userId;
     document.getElementById('followersUserName').textContent = userName;
-    document.getElementById('followersCount').value     = currentFollowers || 0;
-    document.getElementById('followingCount').value     = currentFollowing || 0;
+    document.getElementById('followersCount').value     = 0;
+
+    // Hide "following" field if it exists — followers boost only
+    const followingInput = document.getElementById('followingCount');
+    if (followingInput) {
+        const row = followingInput.closest('.form-group') || followingInput.parentElement;
+        if (row) row.style.display = 'none';
+    }
+
+    // Show current boost in label
+    const lbl = document.querySelector('label[for="followersCount"]')
+        || document.getElementById('followersCount').previousElementSibling;
+    if (lbl) lbl.textContent = `Add followers (current boost: +${currentBoost || 0})`;
 
     const modal = document.getElementById('followersModal');
     modal.style.display = 'flex';
-    // small delay so display:flex is painted before transition
     requestAnimationFrame(() => modal.classList.add('open'));
 }
 
@@ -334,75 +350,93 @@ function closeFollowersModal() {
 }
 
 async function saveFollowers() {
-    const userId          = document.getElementById('followersUserId').value;
-    const targetFollowers = parseInt(document.getElementById('followersCount').value) || 0;
-    const targetFollowing = parseInt(document.getElementById('followingCount').value) || 0;
-    const saveBtn         = document.getElementById('followersSaveBtn');
+    const userId   = document.getElementById('followersUserId').value;
+    const addCount = parseInt(document.getElementById('followersCount').value) || 0;
+    const saveBtn  = document.getElementById('followersSaveBtn');
+
+    if (addCount === 0) { showToast('Enter a number to add', 'error'); return; }
 
     saveBtn.innerHTML = '<span class="spinner"></span> Saving...';
     saveBtn.disabled  = true;
 
     try {
-        // Update only the cached columns on profiles — no followers table inserts.
-        // user-profile.js now trusts these cached values as the source of truth.
-       const { error } = await window.supabaseClient
-        .from('profiles')
-        .update({ followers_boost: targetFollowers })
-        .eq('id', userId);
+        // Read current boost, then increment
+        const { data: cur, error: readErr } = await window.supabaseClient
+            .from('profiles')
+            .select('followers_boost')
+            .eq('id', userId)
+            .single();
+        if (readErr) throw readErr;
 
-        // Reflect in local state so the table re-renders immediately
+        const newBoost = (cur?.followers_boost || 0) + addCount;
+
+        const { error } = await window.supabaseClient
+            .from('profiles')
+            .update({ followers_boost: newBoost })
+            .eq('id', userId);
+        if (error) throw error;
+
+        // Reflect locally
         const user = allUsers.find(u => u.id === userId);
         if (user) {
-            user._followers      = targetFollowers;
-            user._following      = targetFollowing;
-            user.followers_count = targetFollowers;
-            user.following_count = targetFollowing;
+            user.followers_boost = newBoost;
+            user._followersBoost = newBoost;
+            user._followers = (user.followers_count || 0) + newBoost;
         }
 
         renderUsersTable(allUsers);
         renderRecentUsers(allUsers.slice(0, 5));
         closeFollowersModal();
-        showToast('Followers updated to ' + targetFollowers, 'success');
+        showToast(`Added ${addCount} followers (boost now +${newBoost})`, 'success');
     } catch (err) {
-        showToast('Error: ' + err.message, 'error');
+        showToast('Error: ' + (err.message || 'unknown'), 'error');
     } finally {
         saveBtn.innerHTML = '<i class="fas fa-users"></i> Save';
         saveBtn.disabled  = false;
     }
 }
 
-// ─── Boost Modal (posts) ──────────────────────────────────────────────────────
+// ─── Boost Modal (posts & tutorials) — INCREMENT MODE ────────────────────────
+// Adds to boost_likes / boost_views columns. Displayed count = real + boost.
 let boostKind = 'post'; // 'post' | 'tutorial'
 
-function openBoostModal(postId, title, likes, views, mediaType) {
+function openBoostModal(postId, title, currentBoostLikes, currentBoostViews, mediaType) {
     boostKind = 'post';
     document.getElementById('boostPostId').value    = postId;
     document.getElementById('boostPostTitle').textContent = title || '(no caption)';
-    document.getElementById('boostLikes').value     = likes;
+    document.getElementById('boostLikes').value     = 0;
     document.getElementById('boostIsVideo').value   = mediaType === 'video' ? '1' : '0';
 
     const viewsRow = document.getElementById('boostViewsRow');
     viewsRow.style.display = mediaType === 'video' ? 'flex' : 'none';
-    if (mediaType === 'video') document.getElementById('boostViews').value = views;
+    document.getElementById('boostViews').value = 0;
+
+    // Show current boost in labels so admin knows the starting point
+    const likesLbl = document.querySelector('label[for="boostLikes"]') || document.getElementById('boostLikes').previousElementSibling;
+    if (likesLbl) likesLbl.textContent = `Add likes (current boost: +${currentBoostLikes || 0})`;
+    const viewsLbl = viewsRow.querySelector('label');
+    if (viewsLbl) viewsLbl.textContent = `Add views (current boost: +${currentBoostViews || 0})`;
 
     const modal = document.getElementById('boostModal');
     modal.style.display = 'flex';
     requestAnimationFrame(() => modal.classList.add('open'));
 }
 
-function openBoostTutorialModal(tutorialId, title, likes, views) {
+function openBoostTutorialModal(tutorialId, title, currentBoostLikes, currentBoostViews) {
     boostKind = 'tutorial';
     document.getElementById('boostPostId').value    = tutorialId;
     document.getElementById('boostPostTitle').textContent = title || '(untitled)';
-    document.getElementById('boostLikes').value     = likes || 0;
-    document.getElementById('boostIsVideo').value   = '1'; // tutorials always have views
+    document.getElementById('boostLikes').value     = 0;
+    document.getElementById('boostIsVideo').value   = '1';
 
     const viewsRow = document.getElementById('boostViewsRow');
     viewsRow.style.display = 'flex';
-    document.getElementById('boostViews').value = views || 0;
-    // relabel views input for clarity
-    const lbl = viewsRow.querySelector('label');
-    if (lbl) lbl.textContent = 'Views';
+    document.getElementById('boostViews').value = 0;
+
+    const likesLbl = document.querySelector('label[for="boostLikes"]') || document.getElementById('boostLikes').previousElementSibling;
+    if (likesLbl) likesLbl.textContent = `Add likes (current boost: +${currentBoostLikes || 0})`;
+    const viewsLbl = viewsRow.querySelector('label');
+    if (viewsLbl) viewsLbl.textContent = `Add views (current boost: +${currentBoostViews || 0})`;
 
     const modal = document.getElementById('boostModal');
     modal.style.display = 'flex';
@@ -416,41 +450,56 @@ function closeBoostModal() {
 }
 
 async function saveBoost() {
-    const id      = document.getElementById('boostPostId').value;
-    const likes   = parseInt(document.getElementById('boostLikes').value) || 0;
-    const isVideo = document.getElementById('boostIsVideo').value === '1';
-    const saveBtn = document.getElementById('boostSaveBtn');
+    const id        = document.getElementById('boostPostId').value;
+    const addLikes  = parseInt(document.getElementById('boostLikes').value) || 0;
+    const addViews  = parseInt(document.getElementById('boostViews').value) || 0;
+    const isVideo   = document.getElementById('boostIsVideo').value === '1';
+    const saveBtn   = document.getElementById('boostSaveBtn');
+
+    if (addLikes === 0 && addViews === 0) {
+        showToast('Enter a number to add', 'error');
+        return;
+    }
 
     saveBtn.innerHTML = '<span class="spinner"></span>';
     saveBtn.disabled  = true;
 
     try {
-        if (boostKind === 'tutorial') {
-            const views = parseInt(document.getElementById('boostViews').value) || 0;
-            const { error } = await window.supabaseClient
-                .from('tutorials')
-                .update({ likes_count: likes, views_count: views })
-                .eq('id', id);
-            if (error) throw error;
+        const table = boostKind === 'tutorial' ? 'tutorials' : 'posts';
 
-            const t = allTutorials.find(x => x.id === id);
-            if (t) { t.likes_count = likes; t.views_count = views; }
-            renderTutorialsTable(allTutorials);
-            closeBoostModal();
-            showToast('Tutorial boosted!', 'success');
-        } else {
-            const update = { likes_count: likes };
-            if (isVideo) update.video_views = parseInt(document.getElementById('boostViews').value) || 0;
+        // Read current boost values (avoids race; works without an RPC)
+        const { data: row, error: readErr } = await window.supabaseClient
+            .from(table)
+            .select('boost_likes, boost_views')
+            .eq('id', id)
+            .single();
+        if (readErr) throw readErr;
 
-            const { error } = await window.supabaseClient.from('posts').update(update).eq('id', id);
-            if (error) throw error;
-
-            const post = allPosts.find(p => p.id === id);
-            if (post) { post.likes_count = likes; if (isVideo) post.video_views = update.video_views; }
-            renderPostsTable(allPosts);
-            closeBoostModal();
-            showToast('Post boosted!', 'success');
+        const newBoostLikes = (row?.boost_likes || 0) + addLikes;
+        const update = { boost_likes: newBoostLikes };
+        if (isVideo || boostKind === 'tutorial') {
+            update.boost_views = (row?.boost_views || 0) + addViews;
         }
+
+        const { error } = await window.supabaseClient.from(table).update(update).eq('id', id);
+        if (error) throw error;
+
+        // Reflect locally so table re-renders immediately
+        if (boostKind === 'tutorial') {
+            const t = allTutorials.find(x => x.id === id);
+            if (t) { t.boost_likes = update.boost_likes; t.boost_views = update.boost_views; }
+            renderTutorialsTable(allTutorials);
+        } else {
+            const post = allPosts.find(p => p.id === id);
+            if (post) {
+                post.boost_likes = update.boost_likes;
+                if (update.boost_views != null) post.boost_views = update.boost_views;
+            }
+            renderPostsTable(allPosts);
+        }
+
+        closeBoostModal();
+        showToast(`Boosted! +${addLikes} likes${addViews ? `, +${addViews} views` : ''}`, 'success');
     } catch (err) {
         showToast('Error: ' + err.message, 'error');
     } finally {
@@ -458,6 +507,7 @@ async function saveBoost() {
         saveBtn.disabled  = false;
     }
 }
+
 
 // ─── Confirm Modal ────────────────────────────────────────────────────────────
 function confirmAction(action, id, name) {

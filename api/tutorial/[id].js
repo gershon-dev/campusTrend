@@ -21,7 +21,10 @@ export default async function handler(req, res) {
       ? `${post.profiles.full_name} on CampusTrend UEW`
       : 'CampusTrend UEW';
     const description = post.content ? post.content.slice(0, 200) : 'Check out this post on CampusTrend UEW';
-    const image = post.media_url || post.image_url || 'https://campustrend-uew.vercel.app/icons/icon-512.png';
+    let image = post.media_url || post.image_url || 'https://campustrend-uew.vercel.app/icons/icon-512.png';
+if (image && image.includes('res.cloudinary.com') && (image.endsWith('.mp4') || image.endsWith('.webm') || image.includes('/video/upload/'))) {
+  image = image.replace('/video/upload/', '/video/upload/so_0/').replace(/\.(mp4|webm|mov)$/, '.jpg');
+}
     const url = `https://campustrend-uew.vercel.app/api/post/${id}`;
 
     res.setHeader('Content-Type', 'text/html');

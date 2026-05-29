@@ -1,33 +1,27 @@
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY
-);
-
 export default async function handler(req, res) {
   const { id } = req.query;
 
   try {
-    const { data: post, error } = await supabase
-      .from('posts')
-      .select('*, profiles(full_name, avatar_url)')
-      .eq('id', id)
-      .single();
+    const response = await fetch(
+      `${process.env.SUPABASE_URL}/rest/v1/posts?id=eq.${id}&select=content,media_url,image_url,profiles(full_name)&limit=1`,
+      {
+        headers: {
+          'apikey': process.env.SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY}`,
+        }
+      }
+    );
 
-    if (error || !post) {
-      return res.redirect(302, '/index.html');
-    }
+    const data = await response.json();
+    const post = data[0];
+
+    if (!post) return res.redirect(302, '/index.html');
 
     const title = post.profiles?.full_name
       ? `${post.profiles.full_name} on CampusTrend UEW`
       : 'CampusTrend UEW';
-    const description = post.content
-      ? post.content.slice(0, 200)
-      : 'Check out this post on CampusTrend UEW';
-    const image = post.media_url
-      ? post.media_url
-      : 'https://campustrend-uew.vercel.app/icons/icon-512.png';
+    const description = post.content ? post.content.slice(0, 200) : 'Check out this post on CampusTrend UEW';
+    const image = post.media_url || post.image_url || 'https://campustrend-uew.vercel.app/icons/icon-512.png';
     const url = `https://campustrend-uew.vercel.app/api/post/${id}`;
 
     res.setHeader('Content-Type', 'text/html');

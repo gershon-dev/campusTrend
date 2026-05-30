@@ -3,7 +3,7 @@ export default async function handler(req, res) {
 
   try {
     const response = await fetch(
-      `${process.env.SUPABASE_URL}/rest/v1/tutorials?id=eq.${id}&select=title,description,video_url,thumbnail_url,profiles(full_name)&limit=1`,
+      `${process.env.SUPABASE_URL}/rest/v1/tutorials?id=eq.${id}&select=title,description,video_url,profiles(full_name)&limit=1`,
       {
         headers: {
           'apikey': process.env.SUPABASE_ANON_KEY,
@@ -13,19 +13,19 @@ export default async function handler(req, res) {
     );
 
     const data = await response.json();
-    const tutorial = data[0];
+    const tutorial = Array.isArray(data) ? data[0] : null;
 
     if (!tutorial) return res.redirect(302, '/tutorials.html');
 
     const title = tutorial.title
-      ? `${tutorial.title} – CampusTrend UEW`
+      ? `${tutorial.title} – ongoing on campusTrend-UEW`
       : 'CampusTrend UEW Tutorial';
     const description = tutorial.description
       ? tutorial.description.slice(0, 200)
       : 'Watch this tutorial on CampusTrend UEW';
 
-    let image = tutorial.thumbnail_url || tutorial.video_url || 'https://campustrend-uew.vercel.app/icons/icon-512.png';
-    if (image && image.includes('res.cloudinary.com') && (image.endsWith('.mp4') || image.endsWith('.webm') || image.includes('/video/upload/'))) {
+    let image = tutorial.video_url || 'https://campustrend-uew.vercel.app/icons/icon-512.png';
+    if (image.includes('res.cloudinary.com') && (image.includes('/video/upload/') || /\.(mp4|webm|mov)$/.test(image))) {
       image = image.replace('/video/upload/', '/video/upload/so_0/').replace(/\.(mp4|webm|mov)$/, '.jpg');
     }
 

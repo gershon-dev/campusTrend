@@ -482,7 +482,7 @@ function buildVideoEmbed(url) {
             playUrl = url.replace(/\.[^\/.?]+(\?.*)?$/, '.mp4$1');
         }
         return `
-        <video controls preload="metadata"
+        <video controls preload="metadata" controlsList="nodownload" oncontextmenu="return false"
                style="width:100%;display:block;background:#000;aspect-ratio:16/9;">
             <source src="${escHtml(playUrl)}" type="video/mp4">
             <source src="${escHtml(url)}" type="video/webm">
@@ -520,11 +520,11 @@ function attachCardListeners(t) {
     // Share
     document.querySelector(`#card-${t.id} .share-btn`)?.addEventListener('click', () => {
         const shareUrl = `https://campustrend-uew.vercel.app/api/tutorial/${t.id}`;
-        if (navigator.share) {
-            navigator.share({ title: t.title, url: shareUrl }).catch(() => {});
-        } else {
-            navigator.clipboard.writeText(shareUrl).then(() => showToast('Link copied!'));
-        }
+       navigator.clipboard.writeText(shareUrl).then(() => {
+    showToast('Link copied!');
+}).catch(() => {
+    window.open(`https://wa.me/?text=${encodeURIComponent(shareUrl)}`, '_blank');
+});
     });
 
     // View count — fires only when the user actually plays / clicks the video

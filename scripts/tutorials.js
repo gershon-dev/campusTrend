@@ -482,7 +482,7 @@ function buildVideoEmbed(url) {
             playUrl = url.replace(/\.[^\/.?]+(\?.*)?$/, '.mp4$1');
         }
         return `
-        <video controls preload="metadata"
+        <video controls preload="metadata" controlsList="nodownload" oncontextmenu="return false"
                style="width:100%;display:block;background:#000;aspect-ratio:16/9;">
             <source src="${escHtml(playUrl)}" type="video/mp4">
             <source src="${escHtml(url)}" type="video/webm">

@@ -6,9 +6,9 @@ export default async function handler(req, res) {
       `${process.env.SUPABASE_URL}/rest/v1/tutorials?id=eq.${id}&select=title,description,video_url,profiles(full_name)&limit=1`,
       {
         headers: {
-          apikey: process.env.SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${process.env.SUPABASE_ANON_KEY}`,
-        },
+          'apikey': process.env.SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY}`,
+        }
       }
     );
 
@@ -24,12 +24,9 @@ export default async function handler(req, res) {
       ? tutorial.description.slice(0, 200)
       : 'Watch this tutorial on CampusTrend UEW';
 
-    // Derive a still image from the Cloudinary video URL
     let image = tutorial.video_url || 'https://campustrend-uew.vercel.app/icons/icon-512.png';
-    if (image.includes('res.cloudinary.com') && image.includes('/video/upload/')) {
-      image = image
-        .replace('/video/upload/', '/video/upload/so_0/')
-        .replace(/\.(mp4|webm|mov)$/i, '.jpg');
+    if (image.includes('res.cloudinary.com') && (image.includes('/video/upload/') || /\.(mp4|webm|mov)$/.test(image))) {
+      image = image.replace('/video/upload/', '/video/upload/so_0/').replace(/\.(mp4|webm|mov)$/, '.jpg');
     }
 
     const url = `https://campustrend-uew.vercel.app/api/tutorial/${id}`;

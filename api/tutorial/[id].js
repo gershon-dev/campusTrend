@@ -24,7 +24,12 @@ export default async function handler(req, res) {
       ? tutorial.description.slice(0, 200)
       : 'Watch this tutorial on CampusTrend UEW';
 
-    let image = tutorial.thumbnail_url || tutorial.video_url || 'https://campustrend-uew.vercel.app/icons/icon-512.png';
+    let image = 'https://campustrend-uew.vercel.app/icons/icon-512.png';
+if (tutorial.thumbnail_url && !tutorial.thumbnail_url.includes('drive.google.com')) {
+  image = tutorial.thumbnail_url;
+} else if (tutorial.video_url && tutorial.video_url.includes('res.cloudinary.com')) {
+  image = tutorial.video_url.replace('/video/upload/', '/video/upload/so_0/').replace(/\.(mp4|webm|mov)$/, '.jpg');
+}
     if (image && image.includes('res.cloudinary.com') && (image.endsWith('.mp4') || image.endsWith('.webm') || image.includes('/video/upload/'))) {
       image = image.replace('/video/upload/', '/video/upload/so_0/').replace(/\.(mp4|webm|mov)$/, '.jpg');
     }

@@ -18,7 +18,7 @@ export default async function handler(req, res) {
     if (!tutorial) return res.redirect(302, '/tutorials.html');
 
     const title = tutorial.title
-      ? `${tutorial.title} – CampusTrend UEW`
+      ? `${tutorial.title} – ongoing on campusTrend-UEW`
       : 'CampusTrend UEW Tutorial';
     const description = tutorial.description
       ? tutorial.description.slice(0, 200)

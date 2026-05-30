@@ -1584,7 +1584,7 @@ document.addEventListener('DOMContentLoaded', async function() {
  navigator.clipboard.writeText(shareUrl).then(() => {
     showToast('Link copied!');
 }).catch(() => {
-    window.open(`https://wa.me/?text=${encodeURIComponent(shareUrl)}`, '_blank');
+    window.open('https://wa.me/?text=' + encodeURIComponent(shareUrl), '_blank');
 });
  const { text: t } = buildShareData();
  const waUrl = `https://wa.me/?text=${encodeURIComponent(t)}`;

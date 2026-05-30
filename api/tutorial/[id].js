@@ -36,8 +36,8 @@ if (tutorial.thumbnail_url && !tutorial.thumbnail_url.includes('drive.google.com
 
     const url = `https://campustrend-uew.vercel.app/api/tutorial/${id}`;
 
-    res.setHeader('Content-Type', 'text/html');
-    return res.send(`<!DOCTYPE html>
+   res.setHeader('Content-Type', 'text/html');
+return res.send(`<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
@@ -52,9 +52,16 @@ if (tutorial.thumbnail_url && !tutorial.thumbnail_url.includes('drive.google.com
   <meta name="twitter:title" content="${title}">
   <meta name="twitter:description" content="${description}">
   <meta name="twitter:image" content="${image}">
-  <script>window.location.href = '/tutorials.html?tutorial=${id}';</script>
 </head>
-<body>Redirecting...</body>
+<body style="margin:0;font-family:sans-serif;background:#f0f2f5;display:flex;align-items:center;justify-content:center;min-height:100vh;">
+  <div style="background:#fff;border-radius:12px;padding:32px;max-width:480px;width:90%;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,0.1);">
+    <div style="font-size:48px;margin-bottom:16px;">🎓</div>
+    <div style="font-size:11px;color:#1877f2;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">CampusTrend UEW</div>
+    <h1 style="font-size:20px;margin:0 0 12px;color:#1c1e21;">${title}</h1>
+    <p style="color:#65676b;font-size:14px;margin:0 0 24px;">${description}</p>
+    <a href="/tutorials.html?tutorial=${id}" style="display:inline-block;background:#1877f2;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;">▶ Watch Tutorial</a>
+  </div>
+</body>
 </html>`);
   } catch (err) {
     return res.redirect(302, '/tutorials.html');

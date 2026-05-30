@@ -520,11 +520,11 @@ function attachCardListeners(t) {
     // Share
     document.querySelector(`#card-${t.id} .share-btn`)?.addEventListener('click', () => {
         const shareUrl = `https://campustrend-uew.vercel.app/api/tutorial/${t.id}`;
-        if (navigator.share) {
-            navigator.share({ title: t.title, url: shareUrl }).catch(() => {});
-        } else {
-            navigator.clipboard.writeText(shareUrl).then(() => showToast('Link copied!'));
-        }
+       navigator.clipboard.writeText(shareUrl).then(() => {
+    showToast('Link copied!');
+}).catch(() => {
+    window.open(`https://wa.me/?text=${encodeURIComponent(shareUrl)}`, '_blank');
+});
     });
 
     // View count — fires only when the user actually plays / clicks the video

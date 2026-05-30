@@ -519,7 +519,7 @@ function attachCardListeners(t) {
 
     // Share
     document.querySelector(`#card-${t.id} .share-btn`)?.addEventListener('click', () => {
-        const shareUrl = `${window.location.origin}${window.location.pathname}?tutorial=${t.id}`;
+        const shareUrl = `https://campustrend-uew.vercel.app/api/tutorial/${t.id}`;
         if (navigator.share) {
             navigator.share({ title: t.title, url: shareUrl }).catch(() => {});
         } else {

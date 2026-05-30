@@ -1581,11 +1581,9 @@ document.addEventListener('DOMContentLoaded', async function() {
  if (shareNative) {
  shareNative.addEventListener('click', async () => {
  const { title, text, url } = buildShareData();
- navigator.clipboard.writeText(shareUrl).then(() => {
-    showToast('Link copied!');
-}).catch(() => {
-    window.open('https://wa.me/?text=' + encodeURIComponent(shareUrl), '_blank');
-});
+ if (navigator.share) {
+ try { await navigator.share({ title, text, url }); } catch (_) {}
+ } else {
  const { text: t } = buildShareData();
  const waUrl = `https://wa.me/?text=${encodeURIComponent(t)}`;
  window.open(waUrl, '_blank', 'noopener,noreferrer');

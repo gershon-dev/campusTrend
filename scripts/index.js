@@ -1519,7 +1519,7 @@ document.addEventListener('DOMContentLoaded', async function() {
  }
  function buildShareData() {
  const post = posts.find(p => p.id === selectedPostForShare) || {};
- const url = `${window.location.origin}${window.location.pathname}?post=${selectedPostForShare}`;
+ const url = `https://campustrend-uew.vercel.app/api/post/${selectedPostForShare}`;
  const appName = 'CampusTrend';
  const rawDesc = (post.content || 'Check out this post on CampusTrend').trim();
  const description = rawDesc.length > 200 ? rawDesc.slice(0, 200) + '...' : rawDesc;

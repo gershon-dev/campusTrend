@@ -52,7 +52,7 @@ if (tutorial.thumbnail_url && !tutorial.thumbnail_url.includes('drive.google.com
   <meta name="twitter:title" content="${title}">
   <meta name="twitter:description" content="${description}">
   <meta name="twitter:image" content="${image}">
-  <meta http-equiv="refresh" content="0;url=/tutorials.html?tutorial=${id}">
+  <script>window.location.href = '/tutorials.html?tutorial=${id}';</script>
 </head>
 <body>Redirecting...</body>
 </html>`);

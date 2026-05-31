@@ -1,15 +1,15 @@
-const CACHE_NAME = 'campustrend-uew-v1';
+const CACHE_NAME = 'campustrend-uew-v2';
 
 // Core files to cache on install
 const CORE_FILES = [
-  '/campusTrend/',
-  '/campusTrend/index.html',
-  '/campusTrend/tutorials.html',
-  '/campusTrend/styles/index.css',
-  '/campusTrend/scripts/index.js',
-  '/campusTrend/scripts/tutorials.js',
-  '/campusTrend/supabase-config.js',
-  '/campusTrend/manifest.json'
+  '/',
+  '/index.html',
+  '/tutorials.html',
+  '/styles/index.css',
+  '/scripts/index.js',
+  '/scripts/tutorials.js',
+  '/supabase-config.js',
+  '/manifest.json'
 ];
 
 // ===== INSTALL: cache core files =====
@@ -66,7 +66,7 @@ self.addEventListener('fetch', event => {
       }).catch(() => {
         // Offline fallback for HTML pages
         if (event.request.headers.get('accept').includes('text/html')) {
-          return caches.match('/campusTrend/index.html');
+          return caches.match('/index.html');
         }
       });
     })

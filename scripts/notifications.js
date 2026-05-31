@@ -43,7 +43,7 @@ window.CT_Notifications = (function() {
             const badge = document.getElementById('notificationBadge');
             if (badge) {
                 badge.textContent = unreadCount > 9 ? '9+' : unreadCount;
-                badge.style.display = unreadCount > 0 ? 'flex' : 'none';
+                badge.style.display = unreadCount > 0 ? 'block' : 'none';
             }
 
             _renderNotifications(notifications);

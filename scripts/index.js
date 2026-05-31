@@ -4,7 +4,7 @@ function viewUserProfile(userId) {
 }
 window.viewUserProfile = viewUserProfile;
 document.addEventListener('DOMContentLoaded', async function() {
- const { createNotification, loadNotifications, markAllRead, setupRealtimeNotifications, setupNotificationUI } = window.CT_Notifications;
+ const { createNotification, loadNotifications, markAllRead, setupRealtimeNotifications, setupNotificationUI, subscribeToPush } = window.CT_Notifications;
  let currentUser = null;
  let currentProfile = null;
  let posts = [];
@@ -57,6 +57,7 @@ document.addEventListener('DOMContentLoaded', async function() {
  setupRealtimeComments();
  setupRealtimeNotifications((n) => showToast(n.message || 'New notification', 'success'));
  setupNotificationUI();
+ subscribeToPush();
  } catch (error) {
  console.error('Initialization error:', error);
  alert('Failed to load app. Please try refreshing the page.');

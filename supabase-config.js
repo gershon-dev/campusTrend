@@ -488,7 +488,7 @@ window.getNotifications = async function() {
         if (!user) return { success: false, error: 'Not authenticated' };
         const { data, error } = await supabaseClient
             .from('notifications')
-            .select('*, profiles!notifications_sender_id_fkey(*)')
+            .select('*, profiles!notifications_from_user_id_fkey(*)')
             .eq('user_id', user.id)
             .order('created_at', { ascending: false })
             .limit(20);

@@ -54,7 +54,7 @@
     <meta property="og:site_name" content="CampusTrend" />
     <meta property="og:title" content="CampusTrend" />
     <meta property="og:description" content="Trending posts from your campus." />
-    <meta property="og:image" content="https://gershon-dev.github.io/campusTrend/og-default.jpg" />
+    <meta property="og:image" content="https://campustrend-uew.vercel.app/icons/icon-512.png" />
     <meta property="og:type" content="website" />
 
 
@@ -527,7 +527,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/campusTrend/sw.js')
+                navigator.serviceWorker.register('/sw.js')
                     .then(reg => console.log('Service Worker registered:', reg.scope))
                     .catch(err => console.log('Service Worker failed:', err));
             });

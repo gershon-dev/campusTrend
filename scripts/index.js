@@ -1,11 +1,10 @@
-import { createNotification, loadNotifications, markAllRead, setupRealtimeNotifications, setupNotificationUI } from './notifications.js';
-
 function viewUserProfile(userId) {
  if (!userId) return;
  window.location.href = `user-profile.html?userId=${userId}`;
 }
 window.viewUserProfile = viewUserProfile;
 document.addEventListener('DOMContentLoaded', async function() {
+ const { createNotification, loadNotifications, markAllRead, setupRealtimeNotifications, setupNotificationUI } = window.CT_Notifications;
  let currentUser = null;
  let currentProfile = null;
  let posts = [];

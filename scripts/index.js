@@ -1,3 +1,5 @@
+import { createNotification, loadNotifications, markAllRead, setupRealtimeNotifications, setupNotificationUI } from './notifications.js';
+
 function viewUserProfile(userId) {
  if (!userId) return;
  window.location.href = `user-profile.html?userId=${userId}`;
@@ -14,9 +16,7 @@ document.addEventListener('DOMContentLoaded', async function() {
  const postsContainer = document.getElementById('postsContainer');
  const uploadModal = document.getElementById('uploadModal');
  const shareModal = document.getElementById('shareModal');
- const notificationBell = document.getElementById('notificationBell');
- const notificationDropdown = document.getElementById('notificationDropdown');
- const notificationBadge = document.getElementById('notificationBadge');
+ // notification DOM refs moved to notifications.js
  const currentUserAvatar = document.getElementById('currentUserAvatar');
  const currentUserName = document.getElementById('currentUserName');
  await init();
@@ -56,6 +56,8 @@ document.addEventListener('DOMContentLoaded', async function() {
  setupEventListeners();
  setupRealtimeLikes();
  setupRealtimeComments();
+ setupRealtimeNotifications((n) => showToast(n.message || 'New notification', 'success'));
+ setupNotificationUI();
  } catch (error) {
  console.error('Initialization error:', error);
  alert('Failed to load app. Please try refreshing the page.');
@@ -715,6 +717,11 @@ document.addEventListener('DOMContentLoaded', async function() {
              .update({ likes_count: Math.max(0, nowCount) })
              .eq('id', postId);
 
+         // Send notification to post owner
+         if (nowLiked) {
+             const post = posts.find(p => p.id === postId);
+             if (post) createNotification('like', post.user_id, postId);
+         }
          syncPostsCache();
 
      } catch (err) {
@@ -788,6 +795,7 @@ document.addEventListener('DOMContentLoaded', async function() {
  if (post.user_id === userId) post.isFollowing = result.following;
  });
  syncPostsCache(); // keep cache in sync after confirmed follow
+ if (result.following) createNotification('follow', userId, null);
  showToast(result.following ? 'Following!' : 'Unfollowed successfully', 'success');
  return true;
  } else {
@@ -873,6 +881,8 @@ document.addEventListener('DOMContentLoaded', async function() {
        setupCommentEventListeners(postId, result.comment.id);
      }
      syncPostsCache();
+     // Notify post owner
+     if (post) createNotification('comment', post.user_id, postId);
      if (commentInput) commentInput.focus();
      showToast('Comment added!', 'success');
    } else {
@@ -1458,42 +1468,7 @@ document.addEventListener('DOMContentLoaded', async function() {
  }
 
  }
- async function loadNotifications() {
- try {
- const result = await window.getNotifications();
- if (result.success && result.notifications) {
- const unreadCount = result.notifications.filter(n => !n.is_read).length;
- if (notificationBadge) {
- notificationBadge.textContent = unreadCount;
- notificationBadge.style.display = unreadCount > 0 ? 'block' : 'none';
- }
- renderNotifications(result.notifications);
- }
- } catch (error) {
- console.error('Error loading notifications:', error);
- }
- }
- function renderNotifications(notifications) {
- const notificationList = document.getElementById('notificationList');
- if (!notificationList) return;
- if (notifications.length === 0) {
- notificationList.innerHTML = '<p style="text-align: center; color: #6b7280; padding: 20px;">No notifications yet</p>';
- return;
- }
- notificationList.innerHTML = notifications.map(notif => {
- const timeAgo = window.timeAgo(notif.created_at);
- const initials = getInitials(notif.from_user?.full_name || 'User');
- return `
- <div class="notification-item ${notif.is_read ? '' : 'unread'}">
- <div class="user-avatar small">${initials}</div>
- <div class="notification-content">
- <p><strong>${escapeHTML(notif.from_user?.full_name || 'Someone')}</strong> ${escapeHTML(notif.message || 'interacted with your post')}</p>
- <span class="notification-time">${timeAgo}</span>
- </div>
- </div>
- `;
- }).join('');
- }
+ // loadNotifications and renderNotifications moved to scripts/notifications.js
  async function loadTrends() {
  const trendsList = document.getElementById('trendsList');
  if (!trendsList) return;
@@ -1603,24 +1578,7 @@ document.addEventListener('DOMContentLoaded', async function() {
  loadPosts();
  });
  });
- if (notificationBell) {
- notificationBell.addEventListener('click', (e) => {
- e.stopPropagation();
- notificationDropdown.classList.toggle('show');
- });
- }
- const markAllRead = document.getElementById('markAllRead');
- if (markAllRead) {
- markAllRead.addEventListener('click', async () => {
- await window.markAllNotificationsRead();
- await loadNotifications();
- });
- }
- document.addEventListener('click', (e) => {
- if (notificationDropdown && !notificationBell.contains(e.target) && !notificationDropdown.contains(e.target)) {
- notificationDropdown.classList.remove('show');
- }
- });
+ // notification bell setup moved to notifications.js — called via setupNotificationUI()
  const userProfile = document.getElementById('userProfile');
  if (userProfile) {
  userProfile.style.cursor = 'pointer';

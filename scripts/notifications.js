@@ -159,7 +159,46 @@ window.CT_Notifications = (function() {
         return `linear-gradient(135deg, hsl(${hue},70%,50%), hsl(${(hue+40)%360},70%,40%))`;
     }
 
-    // ── Public API ────────────────────────────────────────────────────────
-    return { createNotification, loadNotifications, markAllRead, setupRealtimeNotifications, setupNotificationUI };
+    // ── Push subscription ─────────────────────────────────────────────────────
+    async function subscribeToPush() {
+        try {
+            if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+            const reg = await navigator.serviceWorker.ready;
+            const existing = await reg.pushManager.getSubscription();
+            if (existing) { await _savePushSubscription(existing); return; }
+
+            const permission = await Notification.requestPermission();
+            if (permission !== 'granted') return;
+
+            const sub = await reg.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: _urlBase64ToUint8Array('BIAYAE-oql1_lKrAqC543jZX4B2YuiWVs4MsEkR0AbxiKufrANKDobvZYtlSEi6oWTGSfx1yoZrZKnw_YftUXeY')
+            });
+            await _savePushSubscription(sub);
+        } catch (err) {
+            console.warn('subscribeToPush failed:', err.message);
+        }
+    }
+
+    async function _savePushSubscription(sub) {
+        try {
+            const { data: { user } } = await window.supabaseClient.auth.getUser();
+            if (!user) return;
+            await window.supabaseClient.from('push_subscriptions')
+                .upsert({ user_id: user.id, subscription: sub.toJSON() }, { onConflict: 'user_id' });
+        } catch (err) {
+            console.warn('_savePushSubscription failed:', err.message);
+        }
+    }
+
+    function _urlBase64ToUint8Array(base64String) {
+        const padding = '='.repeat((4 - base64String.length % 4) % 4);
+        const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+        const rawData = window.atob(base64);
+        return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+    }
+
+// ── Public API ────────────────────────────────────────────────────────────
+    return { createNotification, loadNotifications, markAllRead, setupRealtimeNotifications, setupNotificationUI, subscribeToPush };
 
 })();

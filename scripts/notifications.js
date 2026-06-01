@@ -29,13 +29,17 @@ window.CT_Notifications = (function() {
             });
 
             // Send push notification
-            const { data: subData } = await window.supabaseClient
+            console.log('[Push] Checking subscription for recipient:', recipientId);
+            const { data: subData, error: subError } = await window.supabaseClient
                 .from('push_subscriptions')
                 .select('subscription')
                 .eq('user_id', recipientId)
                 .maybeSingle();
 
+            console.log('[Push] subData:', subData, 'subError:', subError);
+
             if (subData?.subscription) {
+                console.log('[Push] Subscription found, fetching sender profile...');
                 const { data: senderProfile } = await window.supabaseClient
                     .from('profiles')
                     .select('full_name')
@@ -43,8 +47,9 @@ window.CT_Notifications = (function() {
                     .maybeSingle();
 
                 const senderName = senderProfile?.full_name || 'Someone';
+                console.log('[Push] Sending push from:', senderName);
 
-                await fetch('/api/push', {
+                const pushResult = await fetch('/api/push', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -55,6 +60,9 @@ window.CT_Notifications = (function() {
                         url: '/'
                     })
                 });
+                console.log('[Push] Result status:', pushResult.status);
+            } else {
+                console.log('[Push] No subscription found for recipient');
             }
 
         } catch (err) {

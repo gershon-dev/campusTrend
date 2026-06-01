@@ -33,14 +33,14 @@ window.CT_Notifications = (function() {
                 .from('push_subscriptions')
                 .select('subscription')
                 .eq('user_id', recipientId)
-                .single();
+                .maybeSingle();
 
             if (subData?.subscription) {
                 const { data: senderProfile } = await window.supabaseClient
                     .from('profiles')
                     .select('full_name')
                     .eq('id', user.id)
-                    .single();
+                    .maybeSingle();
 
                 const senderName = senderProfile?.full_name || 'Someone';
 

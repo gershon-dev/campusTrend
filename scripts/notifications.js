@@ -27,6 +27,36 @@ window.CT_Notifications = (function() {
                 message:      messages[type] || type,
                 is_read:      false,
             });
+
+            // Send push notification
+            const { data: subData } = await window.supabaseClient
+                .from('push_subscriptions')
+                .select('subscription')
+                .eq('user_id', recipientId)
+                .single();
+
+            if (subData?.subscription) {
+                const { data: senderProfile } = await window.supabaseClient
+                    .from('profiles')
+                    .select('full_name')
+                    .eq('id', user.id)
+                    .single();
+
+                const senderName = senderProfile?.full_name || 'Someone';
+
+                await fetch('/api/push', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        subscription: subData.subscription,
+                        title: 'CampusTrend UEW',
+                        body: `${senderName} ${messages[type] || type}`,
+                        icon: '/icons/icon-192.png',
+                        url: '/'
+                    })
+                });
+            }
+
         } catch (err) {
             console.warn('createNotification failed:', err.message);
         }
@@ -141,25 +171,7 @@ window.CT_Notifications = (function() {
         }
     }
 
-    // ── Private helpers ───────────────────────────────────────────────────
-    function _getInitials(name) {
-        if (!name) return 'U';
-        const p = name.trim().split(' ');
-        return p.length >= 2 ? (p[0][0] + p[p.length-1][0]).toUpperCase() : name.substring(0,2).toUpperCase();
-    }
-    function _esc(str) {
-        if (!str) return '';
-        const d = document.createElement('div');
-        d.textContent = str; return d.innerHTML;
-    }
-    function _color(str) {
-        let h = 0;
-        for (let i = 0; i < str.length; i++) h = str.charCodeAt(i) + ((h << 5) - h);
-        const hue = h % 360;
-        return `linear-gradient(135deg, hsl(${hue},70%,50%), hsl(${(hue+40)%360},70%,40%))`;
-    }
-
-    // ── Push subscription ─────────────────────────────────────────────────────
+    // ── Push subscription ─────────────────────────────────────────────────
     async function subscribeToPush() {
         try {
             if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
@@ -198,7 +210,25 @@ window.CT_Notifications = (function() {
         return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
     }
 
-// ── Public API ────────────────────────────────────────────────────────────
+    // ── Private helpers ───────────────────────────────────────────────────
+    function _getInitials(name) {
+        if (!name) return 'U';
+        const p = name.trim().split(' ');
+        return p.length >= 2 ? (p[0][0] + p[p.length-1][0]).toUpperCase() : name.substring(0,2).toUpperCase();
+    }
+    function _esc(str) {
+        if (!str) return '';
+        const d = document.createElement('div');
+        d.textContent = str; return d.innerHTML;
+    }
+    function _color(str) {
+        let h = 0;
+        for (let i = 0; i < str.length; i++) h = str.charCodeAt(i) + ((h << 5) - h);
+        const hue = h % 360;
+        return `linear-gradient(135deg, hsl(${hue},70%,50%), hsl(${(hue+40)%360},70%,40%))`;
+    }
+
+    // ── Public API ────────────────────────────────────────────────────────
     return { createNotification, loadNotifications, markAllRead, setupRealtimeNotifications, setupNotificationUI, subscribeToPush };
 
 })();

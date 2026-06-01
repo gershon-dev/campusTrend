@@ -30,10 +30,7 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
-
   const url = event.request.url;
-
-  // Never cache Supabase API, Cloudinary, or external API calls
   if (
     url.includes('supabase.co') ||
     url.includes('cloudinary.com') ||
@@ -43,7 +40,6 @@ self.addEventListener('fetch', event => {
     event.respondWith(fetch(event.request));
     return;
   }
-
   event.respondWith(
     caches.match(event.request).then(cachedResponse => {
       if (cachedResponse) {
@@ -56,7 +52,6 @@ self.addEventListener('fetch', event => {
         }).catch(() => {});
         return cachedResponse;
       }
-
       return fetch(event.request).then(networkResponse => {
         if (!networkResponse || networkResponse.status !== 200) return networkResponse;
         const clone = networkResponse.clone();
@@ -67,6 +62,46 @@ self.addEventListener('fetch', event => {
           return caches.match('/index.html');
         }
       });
+    })
+  );
+});
+
+// ===== PUSH: show notification when push event received =====
+self.addEventListener('push', event => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch (e) {
+    data = { title: 'CampusTrend UEW', body: event.data ? event.data.text() : 'New notification' };
+  }
+  const title = data.title || 'CampusTrend UEW';
+  const options = {
+    body:    data.body || 'You have a new notification',
+    icon:    data.icon || '/icons/icon-192.png',
+    badge:   '/icons/icon-96.png',
+    vibrate: [200, 100, 200],
+    data:    { url: data.url || '/' },
+    actions: [
+      { action: 'open', title: 'Open App' },
+      { action: 'close', title: 'Dismiss' }
+    ]
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+// ===== NOTIFICATION CLICK: open app when notification is clicked =====
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  if (event.action === 'close') return;
+  const url = event.notification.data?.url || '/';
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
+      for (const client of clientList) {
+        if (client.url.includes('campustrend-uew.vercel.app') && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) return clients.openWindow(url);
     })
   );
 });

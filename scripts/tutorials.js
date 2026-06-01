@@ -977,12 +977,74 @@ async function incrementViews(tutorialId) {
     } catch (e) { console.warn('incrementViews:', e); }
 }
 
-// ─── Video Upload — Cloudinary storage ───────────────────────────────────────
+// ─── Video Upload — index.js style, Cloudinary storage ───────────────────────
 // File picker → instant local blob preview → uploadToCloudinary() (from
 // supabase-config.js) with real progress → URL stored in #videoUrlInput.
 
+const COMPRESS_THRESHOLD = 90 * 1024 * 1024; // 90 MB
+
 let _tutRawFile   = null;
 let _tutRemoteUrl = '';
+
+// ── Compression (same MediaRecorder logic as index.js) ────────────────────────
+function compressTutorialVideo(file, onProgress) {
+    return new Promise((resolve) => {
+        const video   = document.createElement('video');
+        const blobUrl = URL.createObjectURL(file);
+        video.src = blobUrl; video.muted = false; video.preload = 'auto';
+
+        video.onloadedmetadata = () => {
+            const duration = video.duration;
+            const MAX_W = 1280, MAX_H = 720;
+            let w = video.videoWidth || MAX_W, h = video.videoHeight || MAX_H;
+            if (w > MAX_W || h > MAX_H) {
+                const r = Math.min(MAX_W / w, MAX_H / h);
+                w = Math.round(w * r); h = Math.round(h * r);
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            const stream = canvas.captureStream(24);
+            let combined = stream;
+            try {
+                const ac = new AudioContext(), src = ac.createMediaElementSource(video), dest = ac.createMediaStreamDestination();
+                src.connect(dest); src.connect(ac.destination);
+                combined = new MediaStream([...stream.getTracks(), ...dest.stream.getTracks()]);
+            } catch(e) {}
+            const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9'
+                : MediaRecorder.isTypeSupported('video/webm;codecs=vp8') ? 'video/webm;codecs=vp8' : 'video/webm';
+            let recorder;
+            try { recorder = new MediaRecorder(combined, { mimeType, videoBitsPerSecond: 1_500_000 }); }
+            catch(e) { URL.revokeObjectURL(blobUrl); resolve(file); return; }
+            const chunks = [];
+            recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+            recorder.onstop = () => {
+                URL.revokeObjectURL(blobUrl);
+                const blob = new Blob(chunks, { type: mimeType });
+                const ext  = mimeType.includes('mp4') ? 'mp4' : 'webm';
+                const comp = new File([blob], `compressed.${ext}`, { type: mimeType });
+                resolve(comp.size < file.size ? comp : file);
+            };
+            video.currentTime = 0;
+            video.onseeked = () => {
+                recorder.start(100); video.play();
+                const draw = () => {
+                    if (!video.paused && !video.ended) {
+                        ctx.drawImage(video, 0, 0, w, h);
+                        const pct = duration > 0 ? Math.min(99, Math.round((video.currentTime / duration) * 100)) : 0;
+                        const bar = document.getElementById('tutCompressBar');
+                        if (bar) bar.style.width = pct + '%';
+                        if (onProgress) onProgress(pct);
+                        requestAnimationFrame(draw);
+                    }
+                };
+                requestAnimationFrame(draw);
+                video.onended = () => { if (recorder.state !== 'inactive') recorder.stop(); };
+            };
+        };
+        video.onerror = () => { URL.revokeObjectURL(blobUrl); resolve(file); };
+    });
+}
 
 // ── Reset to idle placeholder ─────────────────────────────────────────────────
 function resetTutorialUploadUI() {
@@ -993,6 +1055,7 @@ function resetTutorialUploadUI() {
     document.getElementById('tutUploadPlaceholder').style.display       = '';
     document.getElementById('tutPreviewContainer').style.display        = 'none';
     document.getElementById('tutUploadProgressContainer').style.display = 'none';
+    document.getElementById('tutCompressStatus').style.display          = 'none';
     const fi = document.getElementById('tutorialVideoInput');
     if (fi) fi.value = '';
 }
@@ -1109,12 +1172,25 @@ async function submitTutorial() {
         const pctText   = document.getElementById('tutUploadProgressText');
 
         try {
+            let fileToUpload = _tutRawFile;
+
+            // Compress if > 90 MB
+            if (_tutRawFile.size > COMPRESS_THRESHOLD) {
+                document.getElementById('tutCompressStatus').style.display = 'block';
+                document.getElementById('tutCompressText').textContent     = 'Compressing video…';
+                document.getElementById('tutCompressBar').style.width      = '0%';
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Compressing…';
+                try { fileToUpload = await compressTutorialVideo(_tutRawFile); }
+                catch(err) { fileToUpload = _tutRawFile; }
+                document.getElementById('tutCompressStatus').style.display = 'none';
+            }
+
             // Show upload progress
             container.style.display = 'block';
             bar.style.width = '0%'; pctText.textContent = '0%';
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading…';
 
-            const uploaded = await uploadToCloudinary(_tutRawFile, pct => {
+            const uploaded = await uploadToCloudinary(fileToUpload, pct => {
                 bar.style.width = pct + '%'; pctText.textContent = pct + '%';
             });
 
@@ -1295,6 +1371,8 @@ function setupEventListeners() {
 
     // Cloudinary video upload
     initCloudinaryUpload();
+
+
 
     // Search
     let searchTimeout;

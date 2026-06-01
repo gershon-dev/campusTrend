@@ -1,4 +1,4 @@
-const CACHE_NAME = 'campustrend-uew-v3';
+const CACHE_NAME = 'campustrend-uew-v4';
 
 const CORE_FILES = [
   '/',
@@ -31,15 +31,19 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
   const url = event.request.url;
+
+  // Skip caching for external APIs and non-HTTP requests
   if (
+    !url.startsWith('http') ||
+    url.startsWith('chrome') ||
     url.includes('supabase.co') ||
     url.includes('cloudinary.com') ||
     url.includes('googleapis.com') ||
     url.includes('supabase.io')
   ) {
-    event.respondWith(fetch(event.request));
     return;
   }
+
   event.respondWith(
     caches.match(event.request).then(cachedResponse => {
       if (cachedResponse) {

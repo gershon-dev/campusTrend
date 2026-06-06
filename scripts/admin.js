@@ -253,7 +253,7 @@ function renderPostsTable(posts) {
             <td style="font-family:var(--mono);">${p.media_type==='video' ? fmtNum((p.video_views||0)+(p.boost_views||0)) + (p.boost_views ? ` <span style="color:var(--accent);font-size:11px;">(+${fmtNum(p.boost_views)})</span>` : '') : '—'}</td>
             <td style="font-family:var(--mono);font-size:12px;">${new Date(p.created_at).toLocaleDateString()}</td>
             <td><div class="actions-cell">
-                <button class="btn btn-ghost btn-sm" onclick="openBoostModal('${p.id}','${esc(p.content||'')}',${p.boost_likes||0},${p.boost_views||0},'${p.media_type}')">
+                <button class="btn btn-ghost btn-sm" onclick="openBoostModal('${p.id}','${esc(p.content||'').replace(/'/g,'\'\'')}',${p.boost_likes||0},${p.boost_views||0},'${p.media_type||''}')">
                     <i class="fas fa-rocket"></i> Boost
                 </button>
 
@@ -307,7 +307,7 @@ function renderTutorialsTable(tutorials) {
             <td style="font-family:var(--mono);">${fmtNum((t.views_count||0)+(t.boost_views||0))}${t.boost_views ? ` <span style="color:var(--accent);font-size:11px;">(+${fmtNum(t.boost_views)})</span>` : ''}</td>
             <td style="font-family:var(--mono);font-size:12px;">${new Date(t.created_at).toLocaleDateString()}</td>
             <td><div class="actions-cell">
-                <button class="btn btn-ghost btn-sm" onclick="openBoostTutorialModal('${t.id}','${esc(t.title||'')}',${t.boost_likes||0},${t.boost_views||0})">
+                <button class="btn btn-ghost btn-sm" onclick="openBoostTutorialModal('${t.id}','${esc(t.title||'').replace(/'/g,'\'\'')}',${t.boost_likes||0},${t.boost_views||0})">
 
                     <i class="fas fa-rocket"></i> Boost
                 </button>

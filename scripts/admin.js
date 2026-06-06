@@ -253,7 +253,7 @@ function renderPostsTable(posts) {
             <td style="font-family:var(--mono);">${p.media_type==='video' ? fmtNum((p.video_views||0)+(p.boost_views||0)) + (p.boost_views ? ` <span style="color:var(--accent);font-size:11px;">(+${fmtNum(p.boost_views)})</span>` : '') : '—'}</td>
             <td style="font-family:var(--mono);font-size:12px;">${new Date(p.created_at).toLocaleDateString()}</td>
             <td><div class="actions-cell">
-                <button class="btn btn-ghost btn-sm" onclick="openBoostModal('${p.id}','${esc(p.content||'').replace(/'/g,'\'\'')}',${p.boost_likes||0},${p.boost_views||0},'${p.media_type||''}')">
+                <button class="btn btn-ghost btn-sm" onclick="openBoostModal('${p.id}',${p.boost_likes||0},${p.boost_views||0},'${p.media_type||''}')">
                     <i class="fas fa-rocket"></i> Boost
                 </button>
 
@@ -307,7 +307,7 @@ function renderTutorialsTable(tutorials) {
             <td style="font-family:var(--mono);">${fmtNum((t.views_count||0)+(t.boost_views||0))}${t.boost_views ? ` <span style="color:var(--accent);font-size:11px;">(+${fmtNum(t.boost_views)})</span>` : ''}</td>
             <td style="font-family:var(--mono);font-size:12px;">${new Date(t.created_at).toLocaleDateString()}</td>
             <td><div class="actions-cell">
-                <button class="btn btn-ghost btn-sm" onclick="openBoostTutorialModal('${t.id}','${esc(t.title||'').replace(/'/g,'\'\'')}',${t.boost_likes||0},${t.boost_views||0})">
+                <button class="btn btn-ghost btn-sm" onclick="openBoostTutorialModal('${t.id}',${t.boost_likes||0},${t.boost_views||0})">
 
                     <i class="fas fa-rocket"></i> Boost
                 </button>
@@ -400,10 +400,12 @@ async function saveFollowers() {
 // Adds to boost_likes / boost_views columns. Displayed count = real + boost.
 let boostKind = 'post'; // 'post' | 'tutorial'
 
-function openBoostModal(postId, title, currentBoostLikes, currentBoostViews, mediaType) {
+function openBoostModal(postId, currentBoostLikes, currentBoostViews, mediaType) {
     boostKind = 'post';
+    const post = allPosts.find(p => p.id === postId);
+    const title = post?.content || '(no caption)';
     document.getElementById('boostPostId').value    = postId;
-    document.getElementById('boostPostTitle').textContent = title || '(no caption)';
+    document.getElementById('boostPostTitle').textContent = title;
     document.getElementById('boostLikes').value     = 0;
     document.getElementById('boostIsVideo').value   = mediaType === 'video' ? '1' : '0';
 
@@ -422,10 +424,12 @@ function openBoostModal(postId, title, currentBoostLikes, currentBoostViews, med
     requestAnimationFrame(() => modal.classList.add('open'));
 }
 
-function openBoostTutorialModal(tutorialId, title, currentBoostLikes, currentBoostViews) {
+function openBoostTutorialModal(tutorialId, currentBoostLikes, currentBoostViews) {
     boostKind = 'tutorial';
+    const tut = allTutorials.find(t => t.id === tutorialId);
+    const title = tut?.title || '(untitled)';
     document.getElementById('boostPostId').value    = tutorialId;
-    document.getElementById('boostPostTitle').textContent = title || '(untitled)';
+    document.getElementById('boostPostTitle').textContent = title;
     document.getElementById('boostLikes').value     = 0;
     document.getElementById('boostIsVideo').value   = '1';
 

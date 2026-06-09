@@ -38,6 +38,7 @@
             <button class="nav-item" onclick="showPage('posts',this)"><i class="fas fa-images"></i>Posts<span class="nav-badge" id="postsBadge">0</span></button>
             <button class="nav-item" onclick="showPage('tutorials',this)"><i class="fas fa-graduation-cap"></i>Tutorials<span class="nav-badge" id="tutorialsBadge">0</span></button>
             <button class="nav-item" onclick="showPage('comments',this)"><i class="fas fa-comments"></i>Comments<span class="nav-badge" id="commentsBadge">0</span></button>
+            <button class="nav-item" onclick="showPage('notifications',this)"><i class="fas fa-bell"></i>Notifications</button>
         </nav>
         <div class="sidebar-bottom">
             <div class="admin-badge">
@@ -152,6 +153,90 @@
             </div>
         </div>
 
+        <!-- Notifications -->
+        <div class="page" id="page-notifications">
+            <div class="page-header">
+                <div><h2 class="page-title">Push Notifications</h2><p class="page-subtitle">// BROADCAST_TO_ALL_SUBSCRIBERS</p></div>
+                <button class="btn btn-ghost" onclick="loadSubsCount()"><i class="fas fa-sync-alt"></i> Refresh</button>
+            </div>
+
+            <!-- Stats -->
+            <div class="stats-grid" style="grid-template-columns: repeat(2, 1fr); max-width: 480px; margin-bottom: 28px;">
+                <div class="stat-card blue">
+                    <div class="stat-icon"><i class="fas fa-users"></i></div>
+                    <div class="stat-value" id="stat-subs">—</div>
+                    <div class="stat-label">Subscribers</div>
+                </div>
+                <div class="stat-card green">
+                    <div class="stat-icon"><i class="fas fa-paper-plane"></i></div>
+                    <div class="stat-value" id="stat-sent-today">0</div>
+                    <div class="stat-label">Sent Today</div>
+                </div>
+            </div>
+
+            <!-- Compose -->
+            <div class="table-card" style="margin-bottom: 24px;">
+                <div class="table-header">
+                    <div class="table-title"><i class="fas fa-satellite-dish" style="color:var(--accent);margin-right:8px;"></i>Compose Notification</div>
+                </div>
+                <div class="notif-compose-grid">
+                    <!-- Left: form -->
+                    <div>
+                        <div class="notif-field">
+                            <label class="notif-label" for="notifTitle">Title</label>
+                            <input class="notif-input" id="notifTitle" maxlength="60" placeholder="e.g. New tutorial posted 🎓" oninput="updateNotifPreview(); updateNotifChar('notifTitle','notifTitleChar',60)">
+                            <div class="char-hint" id="notifTitleChar">0 / 60</div>
+                        </div>
+                        <div class="notif-field">
+                            <label class="notif-label" for="notifBody">Message body</label>
+                            <textarea class="notif-input" id="notifBody" maxlength="180" placeholder="What do you want users to know?" oninput="updateNotifPreview(); updateNotifChar('notifBody','notifBodyChar',180)"></textarea>
+                            <div class="char-hint" id="notifBodyChar">0 / 180</div>
+                        </div>
+                        <div class="notif-field">
+                            <label class="notif-label" for="notifUrl">Deep link URL <span style="color:var(--text2);font-size:10px;">(optional)</span></label>
+                            <input class="notif-input" id="notifUrl" placeholder="/tutorials or /posts/abc123">
+                        </div>
+                        <div class="notif-actions">
+                            <button class="btn btn-ghost" onclick="clearNotifForm()"><i class="fas fa-times"></i> Clear</button>
+                            <button class="btn btn-primary" id="notifSendBtn" onclick="sendPushNotification()">
+                                <i class="fas fa-paper-plane"></i> Send to all subscribers
+                            </button>
+                        </div>
+                    </div>
+                    <!-- Right: preview + tips -->
+                    <div>
+                        <div class="notif-preview">
+                            <div class="notif-preview-label">Live preview — Android / iOS</div>
+                            <div class="notif-mock">
+                                <div class="notif-mock-icon"></div>
+                                <div>
+                                    <div class="notif-mock-title" id="notifPrevTitle">Your title here</div>
+                                    <div class="notif-mock-body" id="notifPrevBody">Your message body will appear here…</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="notif-tips">
+                            <div class="notif-tips-title">Before sending</div>
+                            <div class="notif-tip"><i class="fas fa-check" style="color:var(--accent3);"></i> Notification goes to <strong>all</strong> subscribers immediately</div>
+                            <div class="notif-tip"><i class="fas fa-check" style="color:var(--accent3);"></i> Cannot be recalled once sent</div>
+                            <div class="notif-tip"><i class="fas fa-exclamation-triangle" style="color:var(--warning);"></i> Avoid sending more than 3× per day to prevent opt-outs</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Send log -->
+            <div class="table-card">
+                <div class="table-header"><div class="table-title">Send History <span style="font-size:12px;color:var(--text2);font-family:var(--mono);">(this session)</span></div></div>
+                <table>
+                    <thead><tr><th>Title</th><th>Body</th><th>Sent</th><th>Failed</th><th>Status</th><th>Time</th></tr></thead>
+                    <tbody id="notifLogTable">
+                        <tr class="empty-row"><td colspan="6"><div class="empty-icon">🔔</div><div class="empty-text">No notifications sent yet</div></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
     </main>
 </div>
 
@@ -209,7 +294,7 @@
     </div>
 </div>
 
-<!-- Modal -->
+<!-- Confirm Modal -->
 <div class="modal-overlay" id="confirmModal">
     <div class="modal-box">
         <div class="modal-icon danger" id="modalIcon"><i class="fas fa-trash" id="modalIconInner"></i></div>
@@ -227,8 +312,7 @@
 <div class="toast" id="toast"><i class="fas fa-check-circle"></i><span id="toastMsg">Done!</span></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="supabase-config.js"></script>
-    <script src="scripts/admin.js"></script>
+<script src="supabase-config.js"></script>
+<script src="scripts/admin.js"></script>
 </body>
 </html>

@@ -114,7 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 // Redirect to main app after 1.5 seconds
                 setTimeout(() => {
-                    window.location.href = 'index.html';
+                    window.location.href = 'campustrend-uew.vercel.app';
                 }, 1500);
             } else {
                 // Handle error

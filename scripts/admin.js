@@ -56,7 +56,7 @@ function showPage(name, btn) {
 
 // ─── Data Loading ─────────────────────────────────────────────────────────────
 async function loadAllData() {
-    await Promise.all([loadUsers(), loadPosts(), loadComments(), loadTutorials()]);
+    await Promise.all([loadUsers(), loadPosts(), loadComments(), loadTutorials(), loadSubsCount()]);
 }
 
 async function loadUsers() {
@@ -71,8 +71,6 @@ async function loadUsers() {
     if (error) { showToast('Error loading users', 'error'); return; }
     allUsers = data || [];
 
-    // Use cached columns as source of truth — these are kept in sync by
-    // refreshFollowerCounts() after real follows, and set directly by the admin panel.
     allUsers.forEach(u => {
         u._followersBoost = u.followers_boost || 0;
         u._followers = (u.followers_count || 0) + u._followersBoost;
@@ -109,7 +107,6 @@ async function loadPosts() {
     renderPostsTable(allPosts);
 }
 
-
 async function loadComments() {
     const { data, error } = await window.supabaseClient
         .from('comments')
@@ -127,7 +124,6 @@ async function loadTutorials() {
         .from('tutorials')
         .select('*, boost_likes, boost_views, profiles:user_id(full_name, avatar_url)')
         .order('created_at', { ascending: false });
-
 
     if (error) {
         console.error('loadTutorials error:', error);
@@ -148,8 +144,6 @@ async function loadTutorials() {
     }
     renderTutorialsTable(allTutorials);
 }
-
-
 
 
 // ─── Render: Users ────────────────────────────────────────────────────────────
@@ -256,7 +250,6 @@ function renderPostsTable(posts) {
                 <button class="btn btn-ghost btn-sm" onclick="openBoostModal('${p.id}',${p.boost_likes||0},${p.boost_views||0},'${p.media_type||''}')">
                     <i class="fas fa-rocket"></i> Boost
                 </button>
-
                 <button class="btn btn-danger btn-sm" onclick="confirmAction('deletePost','${p.id}','')"><i class="fas fa-trash"></i></button>
             </div></td>
         </tr>`;
@@ -308,7 +301,6 @@ function renderTutorialsTable(tutorials) {
             <td style="font-family:var(--mono);font-size:12px;">${new Date(t.created_at).toLocaleDateString()}</td>
             <td><div class="actions-cell">
                 <button class="btn btn-ghost btn-sm" onclick="openBoostTutorialModal('${t.id}',${t.boost_likes||0},${t.boost_views||0})">
-
                     <i class="fas fa-rocket"></i> Boost
                 </button>
                 <button class="btn btn-danger btn-sm" onclick="confirmAction('deleteTutorial','${t.id}','')"><i class="fas fa-trash"></i></button>
@@ -318,22 +310,18 @@ function renderTutorialsTable(tutorials) {
 }
 
 
-
-// ─── Followers Modal — INCREMENT MODE ────────────────────────────────────────
-// Adds to followers_boost on profiles. Displayed count = real followers_count + boost.
+// ─── Followers Modal ──────────────────────────────────────────────────────────
 function openFollowersModal(userId, userName, currentBoost) {
     document.getElementById('followersUserId').value    = userId;
     document.getElementById('followersUserName').textContent = userName;
     document.getElementById('followersCount').value     = 0;
 
-    // Hide "following" field if it exists — followers boost only
     const followingInput = document.getElementById('followingCount');
     if (followingInput) {
         const row = followingInput.closest('.form-group') || followingInput.parentElement;
         if (row) row.style.display = 'none';
     }
 
-    // Show current boost in label
     const lbl = document.querySelector('label[for="followersCount"]')
         || document.getElementById('followersCount').previousElementSibling;
     if (lbl) lbl.textContent = `Add followers (current boost: +${currentBoost || 0})`;
@@ -360,7 +348,6 @@ async function saveFollowers() {
     saveBtn.disabled  = true;
 
     try {
-        // Read current boost, then increment
         const { data: cur, error: readErr } = await window.supabaseClient
             .from('profiles')
             .select('followers_boost')
@@ -376,7 +363,6 @@ async function saveFollowers() {
             .eq('id', userId);
         if (error) throw error;
 
-        // Reflect locally
         const user = allUsers.find(u => u.id === userId);
         if (user) {
             user.followers_boost = newBoost;
@@ -396,9 +382,8 @@ async function saveFollowers() {
     }
 }
 
-// ─── Boost Modal (posts & tutorials) — INCREMENT MODE ────────────────────────
-// Adds to boost_likes / boost_views columns. Displayed count = real + boost.
-let boostKind = 'post'; // 'post' | 'tutorial'
+// ─── Boost Modal ──────────────────────────────────────────────────────────────
+let boostKind = 'post';
 
 function openBoostModal(postId, currentBoostLikes, currentBoostViews, mediaType) {
     boostKind = 'post';
@@ -413,7 +398,6 @@ function openBoostModal(postId, currentBoostLikes, currentBoostViews, mediaType)
     viewsRow.style.display = mediaType === 'video' ? 'flex' : 'none';
     document.getElementById('boostViews').value = 0;
 
-    // Show current boost in labels so admin knows the starting point
     const likesLbl = document.querySelector('label[for="boostLikes"]') || document.getElementById('boostLikes').previousElementSibling;
     if (likesLbl) likesLbl.textContent = `Add likes (current boost: +${currentBoostLikes || 0})`;
     const viewsLbl = viewsRow.querySelector('label');
@@ -460,10 +444,7 @@ async function saveBoost() {
     const isVideo   = document.getElementById('boostIsVideo').value === '1';
     const saveBtn   = document.getElementById('boostSaveBtn');
 
-    if (addLikes === 0 && addViews === 0) {
-        showToast('Enter a number to add', 'error');
-        return;
-    }
+    if (addLikes === 0 && addViews === 0) { showToast('Enter a number to add', 'error'); return; }
 
     saveBtn.innerHTML = '<span class="spinner"></span>';
     saveBtn.disabled  = true;
@@ -471,7 +452,6 @@ async function saveBoost() {
     try {
         const table = boostKind === 'tutorial' ? 'tutorials' : 'posts';
 
-        // Read current boost values (avoids race; works without an RPC)
         const { data: row, error: readErr } = await window.supabaseClient
             .from(table)
             .select('boost_likes, boost_views')
@@ -488,7 +468,6 @@ async function saveBoost() {
         const { error } = await window.supabaseClient.from(table).update(update).eq('id', id);
         if (error) throw error;
 
-        // Reflect locally so table re-renders immediately
         if (boostKind === 'tutorial') {
             const t = allTutorials.find(x => x.id === id);
             if (t) { t.boost_likes = update.boost_likes; t.boost_views = update.boost_views; }
@@ -527,13 +506,13 @@ function confirmAction(action, id, name) {
     reasonInput.style.display = 'none';
 
     const configs = {
-        deleteUser:  { icon:'danger',  fa:'fa-trash',        title:`Delete ${name}`,            desc:'This will permanently delete this user and all their data.',   btn:'btn-danger',  txt:'Delete User' },
-        deletePost:  { icon:'danger',  fa:'fa-trash',        title:'Delete Post',                desc:'This will permanently delete this post and all its comments.', btn:'btn-danger',  txt:'Delete Post' },
-        deleteComment:{ icon:'danger', fa:'fa-trash',        title:'Delete Comment',             desc:'This will permanently delete this comment.',                   btn:'btn-danger',  txt:'Delete Comment' },
-        deleteTutorial:{ icon:'danger',fa:'fa-trash',        title:'Delete Tutorial',            desc:'This will permanently delete this tutorial, its likes and comments.', btn:'btn-danger', txt:'Delete Tutorial' },
-        block:       { icon:'block',   fa:'fa-ban',          title:`Block ${name}`,              desc:'This user will be blocked and unable to use the platform.',    btn:'btn-block',   txt:'Block User', showReason: true },
-        unblock:     { icon:'unblock', fa:'fa-unlock',       title:`Unblock ${name}`,            desc:'This user will regain access to the platform.',                btn:'btn-unblock', txt:'Unblock User' },
-        deleteAll:   { icon:'danger',  fa:'fa-exclamation-triangle', title:'Delete ALL Data',   desc:'⚠️ This will delete EVERY user, post, and comment. This cannot be undone!', btn:'btn-danger', txt:'Delete Everything' },
+        deleteUser:    { icon:'danger',  fa:'fa-trash',                 title:`Delete ${name}`,          desc:'This will permanently delete this user and all their data.',              btn:'btn-danger',  txt:'Delete User' },
+        deletePost:    { icon:'danger',  fa:'fa-trash',                 title:'Delete Post',              desc:'This will permanently delete this post and all its comments.',           btn:'btn-danger',  txt:'Delete Post' },
+        deleteComment: { icon:'danger',  fa:'fa-trash',                 title:'Delete Comment',           desc:'This will permanently delete this comment.',                            btn:'btn-danger',  txt:'Delete Comment' },
+        deleteTutorial:{ icon:'danger',  fa:'fa-trash',                 title:'Delete Tutorial',          desc:'This will permanently delete this tutorial, its likes and comments.',    btn:'btn-danger',  txt:'Delete Tutorial' },
+        block:         { icon:'block',   fa:'fa-ban',                   title:`Block ${name}`,            desc:'This user will be blocked and unable to use the platform.',             btn:'btn-block',   txt:'Block User', showReason: true },
+        unblock:       { icon:'unblock', fa:'fa-unlock',                title:`Unblock ${name}`,          desc:'This user will regain access to the platform.',                         btn:'btn-unblock', txt:'Unblock User' },
+        deleteAll:     { icon:'danger',  fa:'fa-exclamation-triangle',  title:'Delete ALL Data',          desc:'⚠️ This will delete EVERY user, post, and comment. This cannot be undone!', btn:'btn-danger', txt:'Delete Everything' },
     };
 
     const cfg = configs[action];
@@ -677,6 +656,99 @@ function filterTutorialsByDept(d) {
 }
 
 
+// ─── Push Notifications ───────────────────────────────────────────────────────
+let notifLog = [];
+let notifSentToday = 0;
+
+async function loadSubsCount() {
+    try {
+        const { count, error } = await window.supabaseClient
+            .from('push_subscriptions')
+            .select('*', { count: 'exact', head: true });
+        if (error) throw error;
+        document.getElementById('stat-subs').textContent = count ?? '—';
+    } catch {
+        document.getElementById('stat-subs').textContent = '—';
+    }
+}
+
+function updateNotifPreview() {
+    const t = document.getElementById('notifTitle').value || 'Your title here';
+    const b = document.getElementById('notifBody').value || 'Your message body will appear here…';
+    document.getElementById('notifPrevTitle').textContent = t;
+    document.getElementById('notifPrevBody').textContent = b;
+}
+
+function updateNotifChar(inputId, hintId, max) {
+    const len = document.getElementById(inputId).value.length;
+    const hint = document.getElementById(hintId);
+    hint.textContent = len + ' / ' + max;
+    hint.className = 'char-hint' +
+        (len >= max ? ' char-over' : len > max * 0.85 ? ' char-warn' : '');
+}
+
+function clearNotifForm() {
+    ['notifTitle', 'notifBody', 'notifUrl'].forEach(id => document.getElementById(id).value = '');
+    updateNotifPreview();
+    updateNotifChar('notifTitle', 'notifTitleChar', 60);
+    updateNotifChar('notifBody', 'notifBodyChar', 180);
+}
+
+async function sendPushNotification() {
+    const title = document.getElementById('notifTitle').value.trim();
+    const body  = document.getElementById('notifBody').value.trim();
+    const url   = document.getElementById('notifUrl').value.trim();
+
+    if (!title || !body) { showToast('Title and body are required', 'error'); return; }
+
+    const btn = document.getElementById('notifSendBtn');
+    btn.innerHTML = '<span class="spinner"></span> Sending…';
+    btn.disabled = true;
+
+    const ts = new Date();
+    try {
+        const r = await fetch('/api/push-all', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title, body, url: url || '/' })
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Server error');
+
+        notifSentToday += (d.sent || 0);
+        document.getElementById('stat-sent-today').textContent = notifSentToday;
+
+        notifLog.unshift({ title, body, sent: d.sent || 0, failed: d.failed || 0, ok: true, ts });
+        renderNotifLog();
+        clearNotifForm();
+        showToast(`Sent to ${d.sent} subscriber${d.sent !== 1 ? 's' : ''}${d.failed ? ` (${d.failed} failed)` : ''}`, 'success');
+    } catch (err) {
+        notifLog.unshift({ title, body, sent: 0, failed: 0, ok: false, ts, errMsg: err.message });
+        renderNotifLog();
+        showToast('Error: ' + err.message, 'error');
+    } finally {
+        btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send to all subscribers';
+        btn.disabled = false;
+    }
+}
+
+function renderNotifLog() {
+    const tbody = document.getElementById('notifLogTable');
+    if (!notifLog.length) {
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="6"><div class="empty-icon">🔔</div><div class="empty-text">No notifications sent yet</div></td></tr>';
+        return;
+    }
+    tbody.innerHTML = notifLog.map(l => `
+        <tr>
+            <td style="font-weight:600;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(l.title)}</td>
+            <td style="color:var(--text2);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;">${esc(l.body)}</td>
+            <td style="font-family:var(--mono);">${l.sent}</td>
+            <td style="font-family:var(--mono);color:${l.failed ? 'var(--danger)' : 'var(--text2)'};">${l.failed}</td>
+            <td><span class="badge ${l.ok ? 'badge-active' : 'badge-blocked'}">${l.ok ? 'SENT' : 'ERROR'}</span></td>
+            <td style="font-size:12px;color:var(--text2);font-family:var(--mono);">${l.ts.toLocaleTimeString()}</td>
+        </tr>`).join('');
+}
+
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmtNum(n) {
@@ -703,13 +775,11 @@ function showToast(msg, type = 'success') {
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
-    // close modals on backdrop click
     ['confirmModal','boostModal','followersModal'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.addEventListener('click', e => { if (e.target === el) { el.classList.remove('open'); if (id === 'confirmModal') pendingAction = null; } });
     });
 
-    // check if already logged in
     const { data: { session } } = await window.supabaseClient.auth.getSession();
     if (session) {
         const { data: profile } = await window.supabaseClient

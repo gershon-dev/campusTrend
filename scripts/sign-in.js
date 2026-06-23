@@ -1,5 +1,59 @@
 // Wait for DOM to be ready
 document.addEventListener('DOMContentLoaded', () => {
+    // ── Inject signup popup HTML into the page ────────────────────────────────
+    document.body.insertAdjacentHTML('beforeend', `
+        <div id="signupPopup" style="
+            display:none; position:fixed; inset:0;
+            background:rgba(0,0,0,0.55); z-index:9999;
+            align-items:center; justify-content:center; padding:20px;">
+            <div style="
+                background:#fff; border-radius:16px; padding:28px 24px;
+                max-width:340px; width:100%; text-align:center;
+                box-shadow:0 20px 60px rgba(0,0,0,0.3); animation:popIn .25s ease;">
+                <div style="
+                    width:60px; height:60px; background:#fff0f0;
+                    border-radius:50%; display:flex; align-items:center;
+                    justify-content:center; margin:0 auto 14px;">
+                    <i class="fas fa-user-slash" style="font-size:24px;color:#e74c3c;"></i>
+                </div>
+                <h3 style="font-size:18px;font-weight:700;color:#1a1a1a;margin-bottom:8px;">
+                    Account Not Found
+                </h3>
+                <p style="font-size:13px;color:#65676b;line-height:1.6;margin-bottom:20px;">
+                    We couldn't find an account with those details. Are you new to CampusTrend? Create a free account to join your campus community!
+                </p>
+                <a href="sign-up.html" style="
+                    display:block; width:100%; padding:13px;
+                    background:linear-gradient(135deg,#1877f2,#0d5dbf);
+                    color:#fff; border-radius:10px; font-size:15px;
+                    font-weight:700; text-decoration:none; margin-bottom:10px;">
+                    <i class="fas fa-user-plus"></i> Create Account
+                </a>
+                <button onclick="closeSignupPopup()" style="
+                    width:100%; padding:11px; background:#f0f2f5;
+                    color:#444; border:none; border-radius:10px;
+                    font-size:14px; font-weight:600; cursor:pointer;">
+                    Try Again
+                </button>
+            </div>
+        </div>
+        <style>
+            @keyframes popIn {
+                from { transform:scale(0.85); opacity:0; }
+                to   { transform:scale(1);    opacity:1; }
+            }
+        </style>
+    `);
+
+    window.closeSignupPopup = function() {
+        document.getElementById('signupPopup').style.display = 'none';
+    };
+
+    // Close popup when clicking the dark backdrop
+    document.getElementById('signupPopup').addEventListener('click', function(e) {
+        if (e.target === this) closeSignupPopup();
+    });
+
     // Password visibility toggle
     const togglePassword = document.getElementById('togglePassword');
     if (togglePassword) {
@@ -15,7 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ── Wire up "Forgot Password?" link ──────────────────────────────────────
     const forgotLink = document.querySelector('.forgot-password');
     if (forgotLink) {
-        forgotLink.removeAttribute('onclick');   // remove the old return false
+        forgotLink.removeAttribute('onclick');
         forgotLink.href = 'forgot-password.html';
     }
 
@@ -24,39 +78,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const toast = document.getElementById('toast');
         const toastMessage = document.getElementById('toastMessage');
         const icon = toast.querySelector('i');
-        
         toast.className = `toast ${type}`;
         toastMessage.textContent = message;
         icon.className = type === 'success' ? 'fas fa-check-circle' : 'fas fa-exclamation-circle';
-        
         toast.classList.add('show');
-        
-        setTimeout(() => {
-            toast.classList.remove('show');
-        }, 4000);
+        setTimeout(() => toast.classList.remove('show'), 4000);
     }
 
     // Format email to match sign-up format
     function formatEmail(input) {
         input = input.trim();
-        
-        // If it's just a 10-digit index number, add the domain
-        if (/^\d{10}$/.test(input)) {
-            return `${input}@st.uew.edu.gh`;
-        }
-        
-        // If it already has @st.uew.edu.gh, return as is
-        if (input.endsWith('@st.uew.edu.gh')) {
-            return input;
-        }
-        
-        // If it has @ but not the full domain, replace domain
-        if (input.includes('@')) {
-            const indexPart = input.split('@')[0];
-            return `${indexPart}@st.uew.edu.gh`;
-        }
-        
-        // Otherwise return as typed (for full email addresses)
+        if (/^\d{10}$/.test(input)) return `${input}@st.uew.edu.gh`;
+        if (input.endsWith('@st.uew.edu.gh')) return input;
+        if (input.includes('@')) return `${input.split('@')[0]}@st.uew.edu.gh`;
         return input;
     }
 
@@ -64,48 +98,41 @@ document.addEventListener('DOMContentLoaded', () => {
     const signinForm = document.getElementById('signinForm');
     signinForm.addEventListener('submit', async function(e) {
         e.preventDefault();
-        
-        const submitBtn = document.getElementById('submitBtn');
+
+        const submitBtn  = document.getElementById('submitBtn');
         const emailInput = document.getElementById('email').value.trim();
-        const password = document.getElementById('password').value;
-        const rememberMe = document.getElementById('rememberMe').checked;
-        
-        // Format the email to match signup format
+        const password   = document.getElementById('password').value;
+
         const email = formatEmail(emailInput);
-        
+
         // Clear previous errors
         document.getElementById('email').classList.remove('error');
         document.getElementById('password').classList.remove('error');
         document.getElementById('emailError').classList.remove('show');
         document.getElementById('passwordError').classList.remove('show');
-        
-        // Basic validation
+
         let isValid = true;
-        
+
         if (!emailInput) {
             document.getElementById('email').classList.add('error');
             document.getElementById('emailError').textContent = 'Please enter your email or index number';
             document.getElementById('emailError').classList.add('show');
             isValid = false;
         }
-        
+
         if (!password) {
             document.getElementById('password').classList.add('error');
             document.getElementById('passwordError').textContent = 'Please enter your password';
             document.getElementById('passwordError').classList.add('show');
             isValid = false;
         }
-        
-        if (!isValid) {
-            return;
-        }
-        
-        // Show loading state
+
+        if (!isValid) return;
+
         submitBtn.classList.add('loading');
         submitBtn.disabled = true;
-        
+
         try {
-            // Check internet connection before attempting sign in
             if (!navigator.onLine) {
                 submitBtn.classList.remove('loading');
                 submitBtn.disabled = false;
@@ -113,45 +140,40 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            // Call Supabase signIn function
             const result = await window.signIn(email, password);
-            
+
             if (result.success) {
                 showToast('Login successful! Redirecting...', 'success');
-                
-                // Redirect to main app after 1.5 seconds
-                setTimeout(() => {
-                    window.location.href = 'index.html';
-                }, 1500);
+                setTimeout(() => { window.location.href = 'index.html'; }, 1500);
+
             } else {
-                // Handle error
                 submitBtn.classList.remove('loading');
                 submitBtn.disabled = false;
-                
-                // Check if it's an email not found error
-                if (result.error.includes('Invalid login credentials') || 
-                    result.error.includes('Email not confirmed')) {
+
+                if (result.error.includes('Invalid login credentials')) {
+                    // ── Show the "Account Not Found" popup ────────────────────
+                    document.getElementById('signupPopup').style.display = 'flex';
+
+                } else if (result.error.includes('Email not confirmed')) {
                     document.getElementById('email').classList.add('error');
                     document.getElementById('emailError').textContent = result.error;
                     document.getElementById('emailError').classList.add('show');
-
-                    // Show forgot password hint when credentials fail
-                    document.getElementById('emailError').innerHTML =
-                        `${result.error} — <a href="forgot-password.html" style="color:#e74c3c;font-weight:700;">Forgot password?</a>`;
+                    showToast(result.error, 'error');
 
                 } else if (result.error.includes('password')) {
                     document.getElementById('password').classList.add('error');
                     document.getElementById('passwordError').textContent = result.error;
                     document.getElementById('passwordError').classList.add('show');
+                    showToast(result.error, 'error');
+
                 } else {
-                    // Generic error
                     document.getElementById('email').classList.add('error');
                     document.getElementById('emailError').textContent = result.error;
                     document.getElementById('emailError').classList.add('show');
+                    showToast(result.error, 'error');
                 }
-                
-                showToast(result.error, 'error');
             }
+
         } catch (error) {
             console.error('Sign in error:', error);
             submitBtn.classList.remove('loading');
@@ -180,19 +202,15 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             if (typeof window.isLoggedIn === 'function') {
                 const loggedIn = await window.isLoggedIn();
-                if (loggedIn) {
-                    window.location.href = 'index.html';
-                }
+                if (loggedIn) window.location.href = 'index.html';
             }
         } catch (error) {
             console.error('Error checking login status:', error);
         }
     }
 
-    // Check login status on page load
     checkLoginStatus();
 
-    // Live connection listeners
     window.addEventListener('offline', () => {
         showToast('You are offline. Please check your internet connection.', 'error');
     });

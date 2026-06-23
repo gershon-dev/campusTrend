@@ -1,10 +1,4 @@
-(function () {
-    if (window.location.hostname.includes('github.io')) {
-        // Build the equivalent Vercel URL preserving the current path
-        const path = window.location.pathname.replace('/campusTrend', '') || '/';
-        window.location.replace('https://campustrend-uew.vercel.app' + path);
-    }
-})();
+
 const CACHE_NAME = 'campustrend-uew-v4';
 
 const CORE_FILES = [

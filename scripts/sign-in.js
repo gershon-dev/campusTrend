@@ -12,6 +12,13 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // ── Wire up "Forgot Password?" link ──────────────────────────────────────
+    const forgotLink = document.querySelector('.forgot-password');
+    if (forgotLink) {
+        forgotLink.removeAttribute('onclick');   // remove the old return false
+        forgotLink.href = 'forgot-password.html';
+    }
+
     // Toast notification
     function showToast(message, type = 'success') {
         const toast = document.getElementById('toast');
@@ -127,6 +134,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     document.getElementById('email').classList.add('error');
                     document.getElementById('emailError').textContent = result.error;
                     document.getElementById('emailError').classList.add('show');
+
+                    // Show forgot password hint when credentials fail
+                    document.getElementById('emailError').innerHTML =
+                        `${result.error} — <a href="forgot-password.html" style="color:#e74c3c;font-weight:700;">Forgot password?</a>`;
+
                 } else if (result.error.includes('password')) {
                     document.getElementById('password').classList.add('error');
                     document.getElementById('passwordError').textContent = result.error;

@@ -8,7 +8,8 @@
     }
 })();
 
- APP UPDATE + INSTALL BANNER
+// ============================================================
+// APP UPDATE + INSTALL BANNER
 // Forces users on old GitHub Pages link to switch to Vercel,
 // and prompts Vercel users to install the PWA.
 // ============================================================

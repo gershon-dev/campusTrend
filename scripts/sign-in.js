@@ -143,6 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const result = await window.signIn(email, password);
 
             if (result.success) {
+                localStorage.setItem('ct_has_account', '1');
                 showToast('Login successful! Redirecting...', 'success');
                 setTimeout(() => { window.location.href = 'index.html'; }, 1500);
 

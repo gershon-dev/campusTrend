@@ -229,6 +229,7 @@ document.addEventListener('DOMContentLoaded', () => {
             );
 
             if (result.success) {
+                localStorage.setItem('ct_has_account', '1');
                 // Show success modal
                 successModal.classList.add('show');
             } else {

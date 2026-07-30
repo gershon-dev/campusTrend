@@ -29,9 +29,12 @@ document.addEventListener('DOMContentLoaded', async function() {
  showError('You are offline. Please check your internet connection.');
  return;
  }
- window.location.href = 'sign-in.html';
+ const hasAccount = localStorage.getItem('ct_has_account');
+ window.location.href = hasAccount ? 'sign-in.html' : 'sign-up.html';
  return;
  }
+ // Logged in — stamp the flag so a future logout routes to sign-in, not sign-up
+ localStorage.setItem('ct_has_account', '1');
  currentUser = await window.getCurrentUser();
  currentProfile = await window.getCurrentProfile();
  if (!currentUser || !currentProfile) {

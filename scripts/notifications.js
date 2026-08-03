@@ -180,24 +180,134 @@ window.CT_Notifications = (function() {
     }
 
     // ── Push subscription ─────────────────────────────────────────────────
+    // NOTE on iOS: Web Push only works on iOS 16.4+ AND only once the site has
+    // been added to the Home Screen (launched in standalone mode). Inside a
+    // normal Safari tab, 'PushManager' won't exist in window at all — that's
+    // not a bug, it's an OS-level restriction Apple imposes, so we just bail
+    // quietly in that case instead of erroring.
+    //
+    // NOTE on "always show the prompt": once a user taps "Block" on the native
+    // permission dialog, no browser (iOS or otherwise) lets a site re-trigger
+    // that native dialog via JS — Notification.requestPermission() will just
+    // resolve to 'denied' silently, forever, until the user manually changes
+    // it in their browser/site settings. That's a browser security rule, not
+    // something we can override from code. What we CAN do is keep our own
+    // custom banner reappearing (asking them to enable it in Settings), since
+    // that's our UI, not the browser's native one.
     async function subscribeToPush() {
         try {
-            if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+            if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+                console.log('[Push] Push not supported here (likely iOS Safari tab, not installed as Home Screen app)');
+                return;
+            }
+
             const reg = await navigator.serviceWorker.ready;
             const existing = await reg.pushManager.getSubscription();
             if (existing) { await _savePushSubscription(existing); return; }
 
-            const permission = await Notification.requestPermission();
-            if (permission !== 'granted') return;
+            if (Notification.permission === 'granted') {
+                await _doSubscribe(reg);
+                return;
+            }
 
-            const sub = await reg.pushManager.subscribe({
-                userVisibleOnly: true,
-                applicationServerKey: _urlBase64ToUint8Array('BIAYAE-oql1_lKrAqC543jZX4B2YuiWVs4MsEkR0AbxiKufrANKDobvZYtlSEi6oWTGSfx1yoZrZKnw_YftUXeY')
-            });
-            await _savePushSubscription(sub);
+            if (Notification.permission === 'denied') {
+                _showEnableNotificationsBanner('blocked');
+                return;
+            }
+
+            // 'default' — permission not yet decided. Browsers require a real
+            // user gesture (tap) to show the native prompt reliably, especially
+            // on iOS/Safari, so we show our own banner first and only call
+            // requestPermission() from its button's click handler.
+            _showEnableNotificationsBanner('ask');
         } catch (err) {
             console.warn('subscribeToPush failed:', err.message);
         }
+    }
+
+    async function _doSubscribe(reg) {
+        const sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: _urlBase64ToUint8Array('BIAYAE-oql1_lKrAqC543jZX4B2YuiWVs4MsEkR0AbxiKufrANKDobvZYtlSEi6oWTGSfx1yoZrZKnw_YftUXeY')
+        });
+        await _savePushSubscription(sub);
+    }
+
+    // ── Custom "enable notifications" banner ────────────────────────────────
+    // Own UI, not the browser's native dialog — this is the piece we're
+    // allowed to keep re-showing. Dismissing it just hides it for the
+    // session; it reappears on next visit until permission is granted.
+    function _showEnableNotificationsBanner(mode) {
+        if (document.getElementById('ctNotifBanner')) return; // already showing
+
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+
+        // On iOS, push only works once installed to Home Screen — nudge that first.
+        if (mode === 'ask' && isIOS && !isStandalone) {
+            _renderBanner('Add CampusTrend to your Home Screen to enable notifications on iPhone/iPad.', null, mode);
+            return;
+        }
+
+        if (mode === 'blocked') {
+            _renderBanner('Notifications are blocked. Enable them in your browser/site settings to get updates.', null, mode);
+            return;
+        }
+
+        _renderBanner('Turn on notifications so you never miss likes, comments, and follows.', async () => {
+            const permission = await Notification.requestPermission();
+            const banner = document.getElementById('ctNotifBanner');
+            if (banner) banner.remove();
+            clearTimeout(_renagTimer);
+            if (permission === 'granted') {
+                const reg = await navigator.serviceWorker.ready;
+                await _doSubscribe(reg);
+            } else {
+                // Still not granted (dismissed the native dialog, or now denied) —
+                // keep the nag cycle going instead of going silent for the rest of the visit.
+                _renagTimer = setTimeout(() => {
+                    if (Notification.permission !== 'granted') {
+                        subscribeToPush();
+                    }
+                }, CT_RENAG_MS);
+            }
+        }, mode);
+    }
+
+    // How long to wait before re-nagging a user who closed the banner without
+    // granting permission or installing. Keeps "browser tab" users — the ones
+    // who never trigger a fresh page load with subscribeToPush() again for a
+    // while — from going completely unprompted for the rest of their visit.
+    const CT_RENAG_MS = 2 * 60 * 1000; // 2 minutes
+    let _renagTimer = null;
+
+    function _renderBanner(message, onEnable, mode) {
+        document.body.insertAdjacentHTML('beforeend', `
+            <div id="ctNotifBanner" style="position:fixed;left:12px;right:12px;bottom:12px;z-index:99998;
+                background:#1a1a1a;color:#fff;border-radius:12px;padding:14px 16px;
+                display:flex;align-items:center;gap:12px;box-shadow:0 8px 24px rgba(0,0,0,.35);
+                font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;">
+                <i class="fas fa-bell" style="font-size:16px;flex-shrink:0;"></i>
+                <span style="flex:1;line-height:1.4;">${message}</span>
+                ${onEnable ? '<button id="ctNotifEnableBtn" style="flex-shrink:0;background:#1877f2;color:#fff;border:none;border-radius:8px;padding:8px 12px;font-weight:700;font-size:13px;cursor:pointer;">Enable</button>' : ''}
+                <button id="ctNotifCloseBtn" style="flex-shrink:0;background:transparent;color:#aaa;border:none;font-size:18px;cursor:pointer;line-height:1;">&times;</button>
+            </div>
+        `);
+        if (onEnable) {
+            document.getElementById('ctNotifEnableBtn').addEventListener('click', onEnable);
+        }
+        document.getElementById('ctNotifCloseBtn').addEventListener('click', () => {
+            const banner = document.getElementById('ctNotifBanner');
+            if (banner) banner.remove();
+            // User is sticking with the browser tab rather than granting/installing —
+            // bring the banner back after a bit instead of letting it vanish for good.
+            clearTimeout(_renagTimer);
+            _renagTimer = setTimeout(() => {
+                if (Notification.permission !== 'granted') {
+                    _showEnableNotificationsBanner(mode);
+                }
+            }, CT_RENAG_MS);
+        });
     }
 
     async function _savePushSubscription(sub) {

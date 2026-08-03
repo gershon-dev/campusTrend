@@ -282,15 +282,29 @@ window.CT_Notifications = (function() {
     let _renagTimer = null;
 
     function _renderBanner(message, onEnable, mode) {
+        if (document.getElementById('ctNotifBanner')) return;
+
+        const title = mode === 'blocked' ? 'Notifications Blocked'
+            : (mode !== 'ask') ? 'Almost there' // iOS-not-installed case
+            : 'Turn on Notifications';
+        const icon = mode === 'blocked' ? '🔕' : '🔔';
+
         document.body.insertAdjacentHTML('beforeend', `
-            <div id="ctNotifBanner" style="position:fixed;left:12px;right:12px;bottom:12px;z-index:99998;
-                background:#1a1a1a;color:#fff;border-radius:12px;padding:14px 16px;
-                display:flex;align-items:center;gap:12px;box-shadow:0 8px 24px rgba(0,0,0,.35);
-                font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;">
-                <i class="fas fa-bell" style="font-size:16px;flex-shrink:0;"></i>
-                <span style="flex:1;line-height:1.4;">${message}</span>
-                ${onEnable ? '<button id="ctNotifEnableBtn" style="flex-shrink:0;background:#1877f2;color:#fff;border:none;border-radius:8px;padding:8px 12px;font-weight:700;font-size:13px;cursor:pointer;">Enable</button>' : ''}
-                <button id="ctNotifCloseBtn" style="flex-shrink:0;background:transparent;color:#aaa;border:none;font-size:18px;cursor:pointer;line-height:1;">&times;</button>
+            <div id="ctNotifBanner" style="position:fixed;inset:0;z-index:99999;
+                background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;padding:20px;">
+                <div style="background:#fff;border-radius:20px;padding:28px 24px;max-width:340px;width:100%;
+                    text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.3);
+                    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+                    <div style="width:72px;height:72px;border-radius:50%;background:#e7f0fd;margin:0 auto 16px;
+                        display:flex;align-items:center;justify-content:center;font-size:32px;">${icon}</div>
+                    <h2 style="font-size:19px;font-weight:800;color:#1a1a1a;margin-bottom:8px;">${title}</h2>
+                    <p style="font-size:13px;color:#65676b;line-height:1.65;margin-bottom:20px;">${message}</p>
+                    ${onEnable ? `<button id="ctNotifEnableBtn" style="display:flex;align-items:center;justify-content:center;gap:8px;
+                        width:100%;padding:14px;background:linear-gradient(135deg,#1877f2,#0d5dbf);color:#fff;border:none;
+                        border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px;">🔔 Enable Notifications</button>` : ''}
+                    <button id="ctNotifCloseBtn" style="width:100%;padding:12px;background:#f0f2f5;color:#555;
+                        border:none;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;">${onEnable ? 'Not now' : 'Got it'}</button>
+                </div>
             </div>
         `);
         if (onEnable) {
@@ -307,6 +321,9 @@ window.CT_Notifications = (function() {
                     _showEnableNotificationsBanner(mode);
                 }
             }, CT_RENAG_MS);
+        });
+        document.getElementById('ctNotifBanner').addEventListener('click', function(e) {
+            if (e.target === this) document.getElementById('ctNotifCloseBtn').click();
         });
     }
 

@@ -202,24 +202,46 @@ window.CT_Notifications = (function() {
             }
 
             const reg = await navigator.serviceWorker.ready;
-            const existing = await reg.pushManager.getSubscription();
-            if (existing) { await _savePushSubscription(existing); return; }
 
-            if (Notification.permission === 'granted') {
-                await _doSubscribe(reg);
+            // IMPORTANT: check the *current* permission FIRST, before trusting
+            // getSubscription(). A subscription object can survive a permission
+            // revoke — the browser doesn't always clear it, it just stops
+            // delivering pushes to it. If we check `existing` first (like the
+            // old code did), a user who blocked notifications and later
+            // re-allowed them gets their stale/dead subscription silently
+            // re-saved instead of a fresh working one — so pushes never arrive,
+            // and nothing in the DB row actually changes (looks "stuck" in admin).
+            if (Notification.permission !== 'granted') {
+                const existing = await reg.pushManager.getSubscription();
+                if (existing) {
+                    // Clean up the stale subscription client-side and drop the
+                    // row server-side, so admin's subscriber count reflects
+                    // reality and a future re-allow is forced to create fresh.
+                    try { await existing.unsubscribe(); } catch (e) { /* ignore */ }
+                    await _deletePushSubscription();
+                }
+
+                if (Notification.permission === 'denied') {
+                    _showEnableNotificationsBanner('blocked');
+                } else {
+                    // 'default' — permission not yet decided. Browsers require a
+                    // real user gesture (tap) to show the native prompt reliably,
+                    // especially on iOS/Safari, so we show our own banner first
+                    // and only call requestPermission() from its button's click
+                    // handler.
+                    _showEnableNotificationsBanner('ask');
+                }
                 return;
             }
 
-            if (Notification.permission === 'denied') {
-                _showEnableNotificationsBanner('blocked');
-                return;
-            }
-
-            // 'default' — permission not yet decided. Browsers require a real
-            // user gesture (tap) to show the native prompt reliably, especially
-            // on iOS/Safari, so we show our own banner first and only call
-            // requestPermission() from its button's click handler.
-            _showEnableNotificationsBanner('ask');
+            // Permission is granted right now. Always route through
+            // _doSubscribe() instead of short-circuiting on a cached
+            // getSubscription() result — pushManager.subscribe() is safe to call
+            // again: the browser hands back the same subscription if it's still
+            // valid, or issues a brand new one if the old one had gone stale
+            // (e.g. after a block → re-allow cycle). Either way we end up
+            // saving a subscription that's actually live.
+            await _doSubscribe(reg);
         } catch (err) {
             console.warn('subscribeToPush failed:', err.message);
         }
@@ -335,6 +357,22 @@ window.CT_Notifications = (function() {
                 .upsert({ user_id: user.id, subscription: sub.toJSON() }, { onConflict: 'user_id' });
         } catch (err) {
             console.warn('_savePushSubscription failed:', err.message);
+        }
+    }
+
+    // Removes the user's row so admin's subscriber count/list only ever
+    // reflects people who can actually currently receive a push, and so a
+    // later re-allow is guaranteed to insert a fresh subscription rather than
+    // silently doing nothing because a row already "exists".
+    async function _deletePushSubscription() {
+        try {
+            const { data: { user } } = await window.supabaseClient.auth.getUser();
+            if (!user) return;
+            await window.supabaseClient.from('push_subscriptions')
+                .delete()
+                .eq('user_id', user.id);
+        } catch (err) {
+            console.warn('_deletePushSubscription failed:', err.message);
         }
     }
 

@@ -13,9 +13,14 @@ module.exports = async (req, res) => {
         }
 
         const sb = db();
-        const { data: question } = await sb.from('past_questions')
+        const { data: question, error: qErr } = await sb.from('past_questions')
             .select('id, title, price, is_free').eq('id', questionId).maybeSingle();
 
+        if (qErr) {
+            console.error('Question lookup error:', qErr.message, '| project:', cfg.supabaseUrl);
+            return res.status(500).json({ success: false, message: 'Server database configuration error' });
+        }
+        if (!question) console.error('Question not found:', questionId, 'in', cfg.supabaseUrl);
         if (!question) return res.status(404).json({ success: false, message: 'Question not found' });
         if (question.is_free) return res.status(400).json({ success: false, message: 'This question is free' });
 

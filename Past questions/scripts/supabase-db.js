@@ -105,79 +105,8 @@ async function getUserPurchases() {
     return { success: false, error: 'Guest system - no user accounts' };
 }
 
-// Record a payment — NO auth required (guest checkout)
-async function recordPayment(paymentData) {
-    try {
-        const paymentRecord = {
-            user_email: paymentData.email,
-            past_question_id: paymentData.questionId,
-            amount: paymentData.amount,
-            currency: paymentData.currency || 'GHS',
-            payment_method: paymentData.method,
-            payment_reference: paymentData.reference,
-            payment_status: 'pending'
-        };
-
-       
-
-        const { data, error } = await window.supabaseClient
-            .from('payments')
-            .insert(paymentRecord)
-            .select()
-            .single();
-
-        if (error) {
-            console.error('Supabase error details:', error);
-            throw error;
-        }
-
-        
-    } catch (error) {
-        console.error('Error recording payment:', error);
-        return { success: false, error: error.message, details: error };
-    }
-}
-
-// Confirm payment and grant access — NO auth required
-async function confirmPayment(paymentReference) {
-    try {
-        const { data: payment, error: getError } = await window.supabaseClient
-            .from('payments')
-            .select('*')
-            .eq('payment_reference', paymentReference)
-            .single();
-
-        if (getError) throw getError;
-
-        const { error: paymentError } = await window.supabaseClient
-            .from('payments')
-            .update({ payment_status: 'completed', paid_at: new Date().toISOString() })
-            .eq('payment_reference', paymentReference);
-
-        if (paymentError) throw paymentError;
-
-        const { data: access, error: accessError } = await window.supabaseClient
-            .from('guest_downloads')
-            .insert({
-                email: payment.user_email,
-                past_question_id: payment.past_question_id,
-                payment_reference: paymentReference,
-                download_count: 0,
-                max_downloads: 5
-            })
-            .select()
-            .single();
-
-        if (accessError && accessError.code !== '23505') {
-            console.error('Access grant error:', accessError);
-        }
-
-        return { success: true, data: { payment, access } };
-    } catch (error) {
-        console.error('Error confirming payment:', error);
-        return { success: false, error: error.message };
-    }
-}
+// recordPayment / confirmPayment were removed on purpose.
+// Payments are now recorded, verified and granted by the backend only.
 
 // Generate a temporary signed download URL — NO auth required
 async function generateDownloadUrl(questionId, email) {
@@ -387,8 +316,6 @@ window.dbOperations = {
     checkUserAccess,
     checkGuestAccess,
     getUserPurchases,
-    recordPayment,
-    confirmPayment,
     generateDownloadUrl,
     uploadPastQuestion,
     searchPastQuestions,

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Status - UEW Past Questions</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&family=Open+Sans:wght@300;600&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Open Sans', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+               min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .card { background: #fff; padding: 40px 30px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.2);
+                max-width: 440px; width: 100%; text-align: center; }
+        .icon { font-size: 3rem; margin-bottom: 12px; }
+        h1 { font-family: 'Roboto', sans-serif; color: #333; font-size: 1.5rem; margin-bottom: 10px; }
+        p { color: #555; line-height: 1.5; margin-bottom: 14px; }
+        .btn { display: inline-block; padding: 14px 24px; background: #667eea; color: #fff; border: none; border-radius: 8px;
+               font-size: 1rem; font-weight: 600; cursor: pointer; text-decoration: none; }
+        .btn:hover { background: #5568d3; }
+        .btn:disabled { background: #ccc; cursor: not-allowed; }
+        .spinner { width: 36px; height: 36px; border: 4px solid #eee; border-top-color: #667eea; border-radius: 50%;
+                   animation: spin 1s linear infinite; margin: 0 auto 16px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .link { display: block; margin-top: 18px; color: #667eea; text-decoration: none; }
+        .note { font-size: .85rem; color: #777; }
+    </style>
+</head>
+<body>
+    <div class="card" id="card">
+        <div class="spinner"></div>
+        <h1>Confirming your payment...</h1>
+        <p>Please don't close this page.</p>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="scripts/supabase-config.js"></script>
+    <script src="scripts/supabase-auth.js"></script>
+    <script src="scripts/supabase-db.js"></script>
+    <script src="scripts/payment-config.js"></script>
+    <script>
+        const card = document.getElementById('card');
+        const params = new URLSearchParams(window.location.search);
+        const reference = params.get('reference') || params.get('trxref');
+
+        const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+        function render(icon, title, body, extra = '') {
+            card.innerHTML = `<div class="icon">${icon}</div><h1>${title}</h1><p>${body}</p>${extra}
+                <a class="link" href="past-questions.html">← Back to Past Questions</a>`;
+        }
+
+        async function check() {
+            const res = await fetch(`${window.paymentConfig.apiBaseUrl}/payments/verify?reference=${encodeURIComponent(reference)}`);
+            return res.json();
+        }
+
+        async function run() {
+            if (!reference) return render('⚠️', 'No payment found', 'This page needs a payment reference.');
+
+            // MoMo can take a little while to confirm — poll for up to ~2 minutes
+            for (let i = 0; i < 30; i++) {
+                try {
+                    const result = await check();
+                    if (result.success && result.status === 'success') return showSuccess(result.data);
+                    if (result.status === 'failed') {
+                        return render('❌', 'Payment not completed', 'Your payment was not successful and you have not been charged. You can try again.',
+                            '<a class="btn" href="past-questions.html">Back to questions</a>');
+                    }
+                    if (result.status === 'not_found') return render('⚠️', 'Payment not found', 'We could not find this payment.');
+                } catch (e) { console.warn('Verify retry:', e); }
+                await new Promise(r => setTimeout(r, 4000));
+            }
+
+            render('⏳', 'Still waiting for confirmation',
+                'If money left your account, access will be activated automatically within a few minutes. Refresh this page to check again.',
+                '<button class="btn" onclick="location.reload()">Check again</button>');
+        }
+
+        function showSuccess({ questionId, email, title }) {
+            render('✅', 'Payment successful!',
+                `You now have access to <strong>${esc(title)}</strong>.`,
+                `<button class="btn" id="dlBtn">⬇ Download now</button>
+                 <p class="note" style="margin-top:14px">Your access is linked to <strong>${esc(email)}</strong>. Keep this email for future downloads.</p>`);
+
+            document.getElementById('dlBtn').addEventListener('click', async (e) => {
+                e.target.disabled = true; e.target.textContent = 'Preparing...';
+                const r = await window.dbOperations.generateDownloadUrl(questionId, email);
+                if (r.success) { window.location.href = r.url; e.target.textContent = '⬇ Download again'; }
+                else { alert(r.error || 'Download failed'); e.target.textContent = '⬇ Download now'; }
+                e.target.disabled = false;
+            });
+        }
+
+        run();
+    </script>
+</body>
+</html>

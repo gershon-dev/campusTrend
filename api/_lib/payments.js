@@ -9,7 +9,7 @@ function env() {
     const e = {
         secret: process.env.PAYSTACK_SECRET_KEY,
         supabaseUrl: process.env.SUPABASE_URL,
-        serviceKey: process.env.SUPABASE_SERVICE_KEY,
+        serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY,
         origins: (process.env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim().replace(/\/$/, '')).filter(Boolean),
         accessDays: Number(process.env.ACCESS_DAYS || 365),
         maxDownloads: Number(process.env.MAX_DOWNLOADS || 5)
@@ -17,7 +17,7 @@ function env() {
     const missing = [];
     if (!e.secret) missing.push('PAYSTACK_SECRET_KEY');
     if (!e.supabaseUrl) missing.push('SUPABASE_URL');
-    if (!e.serviceKey) missing.push('SUPABASE_SERVICE_KEY');
+    if (!e.serviceKey) missing.push('SUPABASE_SERVICE_ROLE_KEY');
     if (!e.origins.length) missing.push('ALLOWED_ORIGINS');
     if (missing.length) throw new Error('Missing env vars: ' + missing.join(', '));
     return e;

@@ -1,0 +1,142 @@
+/* payment.css - CampusTrend payment page
+   Save as: Past questions/styles/payment.css */
+
+:root {
+  --ink: #14213d;
+  --muted: #5b6678;
+  --page: #eef2f7;
+  --card: #ffffff;
+  --line: #d5dce6;
+  --accent: #0b7a5b;
+  --accent-dark: #075c44;
+  --focus: #1d6fd6;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 24px 16px 48px;
+  background: var(--page);
+  color: var(--ink);
+  font-family: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+/* Keep the content in one readable column, like a card */
+body > * {
+  max-width: 460px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Headings */
+h1,
+h2 {
+  margin: 28px 0 12px;
+  font-size: 1.5rem;
+  line-height: 1.25;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+h3 {
+  margin: 0 0 8px;
+  font-size: 1.15rem;
+}
+
+/* Order summary text */
+p,
+div,
+span {
+  color: inherit;
+}
+
+/* Email field */
+label {
+  display: block;
+  margin: 20px 0 6px;
+  font-weight: 600;
+}
+
+input[type="email"],
+input[type="text"] {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+}
+
+input::placeholder {
+  color: #94a0b3;
+}
+
+input:focus-visible,
+button:focus-visible,
+a:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+small {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+/* Pay button */
+button {
+  display: block;
+  width: 100%;
+  margin-top: 20px;
+  padding: 14px 18px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #ffffff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+button:hover {
+  background: var(--accent-dark);
+}
+
+button:disabled {
+  background: #9aa7b8;
+  cursor: not-allowed;
+}
+
+/* Back link */
+a {
+  display: inline-block;
+  margin-top: 16px;
+  color: var(--accent-dark);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 480px) {
+  body {
+    padding: 16px 12px 40px;
+  }
+
+  h1,
+  h2 {
+    font-size: 1.3rem;
+  }
+}

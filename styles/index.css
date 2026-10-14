@@ -95,7 +95,7 @@
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    padding: 6px 14px;
+    padding: 8px 14px;
     border: 1.5px solid #ccc;
     border-radius: 50px;
     background: transparent;
@@ -128,7 +128,7 @@
 }
 
         .logo {
-            font-size: 18px;
+            font-size: 20px;
             font-weight: bold;
             color: #1877f2;
             display: flex;
@@ -2808,4 +2808,44 @@ button:disabled {
 /* Make the hamburger wrapper position:relative for dropdown positioning */
 #hamburgerMenu {
     position: relative;
+}
+
+/* ── UEW PASCO attention hint ─────────────────────────────────────────────
+   Pulses the PASCO filter and bobs an arrow above it for exactly 5 minutes.
+   1.6s per cycle × 187.5 cycles = 300s, then it stops on its normal state.   */
+.category-btn[data-category="pasco"] {
+    position: relative;
+    animation: pascoPulse 1.6s ease-in-out 0s 187.5 both;
+}
+
+.category-btn[data-category="pasco"]::after {
+    content: "";
+    position: absolute;
+    top: -12px;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-left: 7px solid transparent;
+    border-right: 7px solid transparent;
+    border-top: 9px solid #1877f2;
+    transform: translateX(-50%);
+    pointer-events: none;
+    animation: pascoArrowBob 1.6s ease-in-out 0s 187.5 both;
+}
+
+@keyframes pascoPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(24, 119, 242, 0.55); }
+    50%      { box-shadow: 0 0 0 10px rgba(24, 119, 242, 0); }
+}
+
+@keyframes pascoArrowBob {
+    0%, 100% { transform: translate(-50%, 0); }
+    50%      { transform: translate(-50%, 6px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .category-btn[data-category="pasco"],
+    .category-btn[data-category="pasco"]::after {
+        animation: none;
+    }
 }

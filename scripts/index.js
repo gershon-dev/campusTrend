@@ -22,17 +22,16 @@ document.addEventListener('DOMContentLoaded', async function() {
  async function init() {
  try {
  const isLoggedIn = await window.isLoggedIn();
- if (!isLoggedIn) {
- // Only redirect if we're online — offline failures should not kick user out
- if (!navigator.onLine) {
- console.warn('Offline and not logged in — staying on page');
- showError('You are offline. Please check your internet connection.');
- return;
- }
- const hasAccount = localStorage.getItem('ct_has_account');
- window.location.href = hasAccount ? 'sign-in.html' : 'sign-up.html';
- return;
- }
+        if (!isLoggedIn) {
+            // Guest mode: the feed is public. Account-only actions call requireAccount().
+            window.scrollTo({ top: 0, behavior: 'instant' });
+            loadDepartments();
+            await loadPosts();
+            await Promise.allSettled([loadTutorialsStrip(), loadTrends()]);
+            setupEventListeners();
+            setupRealtimeComments();
+            return;
+        }
  // Logged in — stamp the flag so a future logout routes to sign-in, not sign-up
  localStorage.setItem('ct_has_account', '1');
  currentUser = await window.getCurrentUser();
@@ -654,6 +653,7 @@ document.addEventListener('DOMContentLoaded', async function() {
  const _likeInFlight = new Set();
 
  async function handleLike(postId) {
+    if (!(await requireAccount('like posts'))) return;
      // Block immediately — before any async work
      if (_likeInFlight.has(postId)) return;
      _likeInFlight.add(postId);
@@ -750,6 +750,7 @@ document.addEventListener('DOMContentLoaded', async function() {
  const _followInFlight = new Set();
 
  async function handleFollow(userId, button) {
+ if (!(await requireAccount('follow people'))) return false;
  if (!userId || !button) return false;
 
  // Guard: ignore if a request for this user is already in progress
@@ -831,6 +832,7 @@ document.addEventListener('DOMContentLoaded', async function() {
  }
  }
  async function handleComment(postId, content) {
+ if (!(await requireAccount('comment on posts'))) return;
  const postCard = document.querySelector(`[data-post-id="${postId}"]`);
  const commentInput = postCard?.querySelector('.comment-input');
  const sendBtn = postCard?.querySelector('.send-comment-btn');
@@ -915,6 +917,7 @@ document.addEventListener('DOMContentLoaded', async function() {
  }
  }
  async function handleReply(postId, commentId, content) {
+ if (!(await requireAccount('reply to comments'))) return;
  try {
  const result = await window.addComment(postId, content, commentId);
  if (result.success) {
@@ -1286,7 +1289,8 @@ document.addEventListener('DOMContentLoaded', async function() {
 
  // ── Modal open/close ─────────────────────────────────────────────────────
  if (openUploadModal) {
-  openUploadModal.addEventListener('click', () => {
+  openUploadModal.addEventListener('click', async () => {
+   if (!(await requireAccount('create a post'))) return;
    uploadModal.classList.add('show'); checkFormValidity();
   });
  }
@@ -1375,6 +1379,7 @@ document.addEventListener('DOMContentLoaded', async function() {
  }
 
  async function handleCreatePost() {
+  if (!(await requireAccount('create a post'))) return;
   try {
    const description = postDescription?.value.trim() || '';
    const department  = currentProfile?.department || '';

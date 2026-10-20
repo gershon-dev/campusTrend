@@ -666,7 +666,11 @@ async function loadSubsCount() {
             .from('push_subscriptions')
             .select('*', { count: 'exact', head: true });
         if (error) throw error;
-        document.getElementById('stat-subs').textContent = count ?? '—';
+        // Guests (no account). If the table isn't created yet this just counts 0.
+        const { count: guestCount } = await window.supabaseClient
+            .from('guest_push_subscriptions')
+            .select('*', { count: 'exact', head: true });
+        document.getElementById('stat-subs').textContent = (count ?? 0) + (guestCount ?? 0);
     } catch {
         document.getElementById('stat-subs').textContent = '—';
     }
@@ -707,9 +711,13 @@ async function sendPushNotification() {
 
     const ts = new Date();
     try {
+        const { data: { session } } = await window.supabaseClient.auth.getSession();
         const r = await fetch('/api/push-all', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + (session?.access_token || '')
+            },
             body: JSON.stringify({ title, body, url: url || '/' })
         });
         const d = await r.json();

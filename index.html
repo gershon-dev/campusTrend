@@ -59,9 +59,36 @@
 
     <!-- Critical inline CSS: prevents CLS by reserving image space before stylesheet loads -->
     
+<script>
+/* Capture the install prompt as early as possible */
+window.__ctInstallEvent = null;
+window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault();
+    window.__ctInstallEvent = e;
+    document.dispatchEvent(new Event('ct-install-ready'));
+});
+</script>
     <script src="scripts/index-update.js" defer></script>
     <style>
-        
+        /* ── Install App modal ── */
+        .ct-install-overlay{position:fixed;inset:0;z-index:10050;display:none;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.55);padding:0}
+        .ct-install-overlay.show{display:flex;animation:ctFade .2s ease}
+        .ct-install-card{width:100%;max-width:420px;background:#fff;color:#1c1e21;border-radius:20px 20px 0 0;padding:24px 22px calc(22px + env(safe-area-inset-bottom,0px));text-align:center;box-shadow:0 -8px 30px rgba(0,0,0,.25);animation:ctSlide .28s ease}
+        .ct-install-icon{width:72px;height:72px;border-radius:18px;margin:0 auto 12px;display:block;box-shadow:0 4px 14px rgba(24,119,242,.35);object-fit:cover}
+        .ct-install-card h2{margin:0 0 6px;font-size:1.25rem}
+        .ct-install-card p{margin:0 0 16px;font-size:.92rem;line-height:1.45;color:#65676b}
+        .ct-install-perks{list-style:none;margin:0 0 18px;padding:0;text-align:left;display:inline-block;font-size:.88rem}
+        .ct-install-perks li{padding:4px 0}
+        .ct-install-perks i{color:#1877f2;width:22px}
+        .ct-install-btn{display:block;width:100%;border:0;border-radius:12px;padding:13px;font-size:1rem;font-weight:600;cursor:pointer;background:#1877f2;color:#fff}
+        .ct-install-btn:hover{background:#166fe0}
+        .ct-install-later{display:block;width:100%;margin-top:8px;border:0;background:none;padding:10px;font-size:.9rem;color:#65676b;cursor:pointer}
+        .ct-install-ios{display:none;text-align:left;background:#f0f2f5;border-radius:12px;padding:12px 14px;margin-bottom:14px;font-size:.88rem;line-height:1.6}
+        .ct-install-ios i{color:#1877f2}
+        @keyframes ctFade{from{opacity:0}to{opacity:1}}
+        @keyframes ctSlide{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
+        @media (min-width:600px){.ct-install-overlay{align-items:center}.ct-install-card{border-radius:20px}}
+        @media (prefers-color-scheme:dark){.ct-install-card{background:#242526;color:#e4e6eb}.ct-install-card p,.ct-install-later{color:#b0b3b8}.ct-install-ios{background:#3a3b3c}}
     </style>
 
     <!-- Vercel Web Analytics -->
@@ -517,6 +544,7 @@
     <!-- Main App Script -->
     <script src="scripts/notifications.js"></script>
     <script src="scripts/guest-gate.js"></script>
+    <script src="scripts/guest-push.js"></script>
     <script src="scripts/index.js"></script>
 
     <!-- Ensure content always clears the fixed header exactly -->
@@ -563,6 +591,104 @@
             menu.setAttribute('aria-expanded', 'false');
         }
     });
+})();
+</script>
+
+<!-- ===================== INSTALL APP MODAL ===================== -->
+<div class="ct-install-overlay" id="installOverlay" role="dialog" aria-modal="true" aria-labelledby="installTitle">
+    <div class="ct-install-card">
+        <img class="ct-install-icon" src="icons/icon-192.png" alt="CampusTrend app icon">
+        <h2 id="installTitle">Install CampusTrend</h2>
+        <p>Add CampusTrend to your home screen for quicker access, just like a real app.</p>
+        <ul class="ct-install-perks">
+            <li><i class="fas fa-bolt" aria-hidden="true"></i>Opens instantly, no browser bar</li>
+            <li><i class="fas fa-bell" aria-hidden="true"></i>Get campus notifications</li>
+            <li><i class="fas fa-wifi" aria-hidden="true"></i>Loads faster on slow networks</li>
+        </ul>
+        <div class="ct-install-ios" id="installIosSteps">
+            To install on iPhone/iPad:<br>
+            1. Tap the <i class="fas fa-arrow-up-from-bracket" aria-hidden="true"></i> <strong>Share</strong> button in Safari<br>
+            2. Choose <strong>Add to Home Screen</strong><br>
+            3. Tap <strong>Add</strong>
+        </div>
+        <button type="button" class="ct-install-btn" id="installBtn">Install App</button>
+        <button type="button" class="ct-install-later" id="installLater">Not now</button>
+    </div>
+</div>
+
+<script>
+/* ── Install App modal ── */
+(function () {
+    var KEY_SNOOZE = 'ct_install_snooze_until';
+    var KEY_DONE   = 'ct_installed';
+    var SNOOZE_MS  = 2 * 24 * 60 * 60 * 1000;   // ask again after 2 days
+    var DELAY_MS   = 3000;                       // wait a moment after page load
+
+    var overlay = document.getElementById('installOverlay');
+    var btn     = document.getElementById('installBtn');
+    var later   = document.getElementById('installLater');
+    var iosBox  = document.getElementById('installIosSteps');
+    if (!overlay || !btn || !later) return;
+
+    function get(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }
+    function set(k,v){ try { localStorage.setItem(k,v); } catch(e){} }
+
+    var isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+
+    if (isStandalone || get(KEY_DONE) === '1') return;                 // already installed
+    if (Number(get(KEY_SNOOZE) || 0) > Date.now()) return;             // dismissed recently
+
+    var shown = false, lastFocus = null;
+
+    function open() {
+        if (shown) return;
+        // Don't stack on top of another open modal
+        if (document.querySelector('.modal.show, .modal.active, .modal-overlay.show')) return;
+        shown = true;
+        lastFocus = document.activeElement;
+        if (isIOS && !window.__ctInstallEvent) {
+            iosBox.style.display = 'block';
+            btn.textContent = 'Got it';
+        }
+        overlay.classList.add('show');
+        btn.focus();
+    }
+    function close(snooze) {
+        overlay.classList.remove('show');
+        shown = false;
+        if (snooze) set(KEY_SNOOZE, String(Date.now() + SNOOZE_MS));
+        if (lastFocus && lastFocus.focus) lastFocus.focus();
+    }
+
+    btn.addEventListener('click', async function () {
+        var ev = window.__ctInstallEvent;
+        if (ev) {
+            ev.prompt();
+            try {
+                var choice = await ev.userChoice;
+                if (choice && choice.outcome === 'accepted') set(KEY_DONE, '1');
+                else set(KEY_SNOOZE, String(Date.now() + SNOOZE_MS));
+            } catch (e) {}
+            window.__ctInstallEvent = null;
+            close(false);
+        } else {
+            close(true);   // iOS "Got it"
+        }
+    });
+    later.addEventListener('click', function(){ close(true); });
+    overlay.addEventListener('click', function(e){ if (e.target === overlay) close(true); });
+    document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && shown) close(true); });
+    window.addEventListener('appinstalled', function(){ set(KEY_DONE, '1'); close(false); });
+
+    // Decide when to show
+    function schedule() { setTimeout(open, DELAY_MS); }
+    if (window.__ctInstallEvent || isIOS) {
+        schedule();
+    } else {
+        // Chrome/Edge/Android: wait for the browser to say the app is installable
+        document.addEventListener('ct-install-ready', schedule, { once: true });
+    }
 })();
 </script>
 </body>

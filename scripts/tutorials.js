@@ -102,7 +102,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // ── Step 2: auth (run in parallel with cache render) ──────────────────
         const loggedIn = await window.isLoggedIn();
-        if (!loggedIn) { window.location.href = 'sign-in.html'; return; }
+        if (!loggedIn) {
+            // Guest mode: watching tutorials is open to everyone.
+            // Liking, following, commenting and uploading ask for an account.
+            initGuestUI();
+            setupEventListeners();
+            populateDepartmentFilter();
+            await loadTutorials();
+            setupRealtimeTutorialComments();
+            return;
+        }
 
         // Get user + profile in parallel
         [currentUser, currentProfile] = await Promise.all([
@@ -147,6 +156,25 @@ function showCachedTutorials() {
         renderTopTutors();
         renderTrendingTopics();
     } catch (e) { /* ignore cache errors */ }
+}
+
+// ─── Guest helpers ───────────────────────────────────────────────────────────
+// Uses the shared prompt from guest-gate.js; falls back to sign-in if missing.
+async function needAccount(actionText) {
+    if (typeof window.requireAccount === 'function') return window.requireAccount(actionText);
+    if (await window.isLoggedIn()) return true;
+    window.location.href = 'sign-in.html';
+    return false;
+}
+
+function initGuestUI() {
+    const avatarEl = document.getElementById('currentUserAvatar');
+    const nameEl   = document.getElementById('currentUserName');
+    if (avatarEl) avatarEl.innerHTML = '<i class="fas fa-user" aria-hidden="true"></i>';
+    if (nameEl)   nameEl.textContent = 'Sign in';
+    document.getElementById('userProfileBtn')?.addEventListener('click', () => {
+        window.location.href = 'sign-in.html';
+    });
 }
 
 // ─── UI Init ─────────────────────────────────────────────────────────────────
@@ -199,6 +227,7 @@ function populateDepartmentFilter() {
 
 // ─── Data Loaders ────────────────────────────────────────────────────────────
 async function loadMyFollowing() {
+    if (!currentUser) return;
     try {
         const { data } = await window.supabaseClient
             .from('followers')
@@ -209,6 +238,7 @@ async function loadMyFollowing() {
 }
 
 async function loadMyLikes() {
+    if (!currentUser) return;
     try {
         const { data } = await window.supabaseClient
             .from('tutorial_likes')
@@ -371,7 +401,7 @@ function buildTutorialCard(t) {
         : initials;
     const isLiked     = myLikes.has(t.id);
     const isFollowing = myFollowing.has(t.user_id);
-    const isOwn       = t.user_id === currentUser.id;
+    const isOwn       = !!currentUser && t.user_id === currentUser.id;
     const tags        = (t.tags || []).slice(0, 4);
 
     const videoEmbed = buildVideoEmbed(t.video_url);
@@ -449,7 +479,7 @@ function buildTutorialCard(t) {
         <!-- Comments -->
         <div class="tc-comments" id="comments-${t.id}">
             <div class="tc-comment-input-wrap">
-                <div class="tc-comment-avatar">${getInitials(currentProfile.full_name)}</div>
+                <div class="tc-comment-avatar">${currentProfile ? getInitials(currentProfile.full_name) : '<i class="fas fa-user"></i>'}</div>
                 <input class="tc-comment-input" id="comment-input-${t.id}"
                        placeholder="Write a comment…" type="text"
                        onkeypress="handleCommentKey(event, '${t.id}')">
@@ -574,6 +604,7 @@ async function toggleLike(tutorialId) {
     const btn       = document.getElementById(`like-btn-${tutorialId}`);
     const countEl   = document.getElementById(`like-count-${tutorialId}`);
     if (!btn || !countEl) return;
+    if (!(await needAccount('like tutorials'))) return;
 
     const isLiked = myLikes.has(tutorialId);
 
@@ -629,6 +660,7 @@ async function toggleLike(tutorialId) {
 
 // ─── Follow ───────────────────────────────────────────────────────────────────
 async function toggleFollow(targetUserId, cardId) {
+    if (!(await needAccount('follow people'))) return;
     if (targetUserId === currentUser.id) return;
     const btn = document.getElementById(`follow-btn-${cardId}`);
     if (!btn) return;
@@ -846,6 +878,7 @@ function handleCommentKey(e, tutorialId) {
 window.handleCommentKey = handleCommentKey;
 
 async function submitComment(tutorialId) {
+    if (!(await needAccount('comment on tutorials'))) return;
     const input = document.getElementById(`comment-input-${tutorialId}`);
     const content = (input?.value || '').trim();
     if (!content) return;
@@ -1129,7 +1162,8 @@ function buildDriveEmbedUrl(fileId) {
 }
 
 // ─── Upload Tutorial ──────────────────────────────────────────────────────────
-function openUploadModal() {
+async function openUploadModal() {
+    if (!(await needAccount('share a tutorial video'))) return;
     document.getElementById('uploadModal').classList.add('show');
 }
 function closeUploadModal() {
@@ -1147,6 +1181,7 @@ function resetUploadForm() {
 }
 
 async function submitTutorial() {
+    if (!(await needAccount('share a tutorial video'))) return;
     const title  = (document.getElementById('videoTitle')?.value || '').trim();
     const dept   = document.getElementById('videoDepartment')?.value || '';
     const desc   = (document.getElementById('videoDesc')?.value || '').trim();

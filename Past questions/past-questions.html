@@ -230,6 +230,28 @@
         .delete-btn:hover { background: #eb3b45; transform: scale(1.04); }
         .delete-btn:disabled { background: #ccc; cursor: not-allowed; transform: none; }
 
+        /* ── Admin edit ─────────────────────────────────── */
+        .edit-btn {
+            padding: 8px 14px;
+            border: 1.5px solid #9fa8da; border-radius: 25px;
+            cursor: pointer; font-size: 0.82rem; font-weight: 600;
+            background: #e8eaff; color: #3949ab;
+            transition: all 0.25s ease;
+            white-space: nowrap;
+        }
+        .edit-btn:hover { background: #d7dcff; transform: scale(1.04); }
+        .edit-label { display: block; font-size: 0.85rem; font-weight: 600; color: #555; margin: 14px 0 6px; text-align: left; }
+        .edit-input { width: 100%; padding: 11px 13px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.95rem; font-family: inherit; }
+        .edit-input:focus { outline: none; border-color: #667eea; }
+        .edit-input:disabled { background: #f5f5f5; color: #999; }
+        .btn-save {
+            padding: 12px 26px; border: none; border-radius: 8px;
+            background: #667eea; color: #fff; font-size: 1rem; font-weight: 600;
+            cursor: pointer; transition: background 0.2s;
+        }
+        .btn-save:hover { background: #5568d3; }
+        .btn-save:disabled { background: #ccc; cursor: not-allowed; }
+
         /* ── Loading / empty states ─────────────────────── */
         .loading-state, .empty-state {
             text-align: center;
@@ -430,6 +452,31 @@
             <button class="btn-cancel" onclick="closeDeleteModal()">Cancel</button>
             <button class="btn-confirm-delete" id="confirmDeleteBtn" onclick="confirmDelete()">Delete</button>
         </div>
+    </div>
+</div>
+
+<!-- Edit Modal (admin only) -->
+<div class="modal-overlay" id="editModal">
+    <div class="modal-box">
+        <div class="warn-icon">✏️</div>
+        <h3>Edit Past Question</h3>
+        <form id="editForm" onsubmit="saveEdit(event)" style="text-align:left;">
+            <label class="edit-label" for="editTitle">Title</label>
+            <input type="text" id="editTitle" class="edit-input" maxlength="200" required>
+
+            <label class="edit-label" for="editPrice">Price (GH₵)</label>
+            <input type="number" id="editPrice" class="edit-input" step="0.01" min="0">
+
+            <label class="edit-label" style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+                <input type="checkbox" id="editIsFree" style="width:auto;">
+                Free (anyone can download without paying)
+            </label>
+
+            <div class="modal-actions" style="margin-top:24px;">
+                <button type="button" class="btn-cancel" onclick="closeEditModal()">Cancel</button>
+                <button type="submit" class="btn-save" id="saveEditBtn">Save changes</button>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -704,7 +751,8 @@ async function loadQuestions() {
         document.getElementById('questionsLoading').style.display = 'none';
 
         if (result.success && result.data && result.data.length > 0) {
-            renderQuestions(result.data);
+            questionsCache = result.data;
+            renderQuestions(questionsCache);
         } else {
             document.getElementById('questionsEmpty').style.display = 'block';
         }
@@ -744,7 +792,8 @@ function renderQuestions(questions) {
                 ${q.is_free
                     ? `<button class="download-btn" onclick="downloadQuestion('${q.id}', '${(q.title||'past-question').replace(/'/g,"\\'")}')">⬇ Download</button>`
                     : `<button class="buy-btn" onclick="goToPayment('${q.id}', ${q.price})">💳 Buy</button>`}
-                ${isAdmin ? `<button class="delete-btn"
+                ${isAdmin ? `<button class="edit-btn" onclick="openEditModal('${q.id}')">✏️ Edit</button>
+                <button class="delete-btn"
                     onclick="openDeleteModal('${q.id}', '${safeTitle}', '${safeFilePath}')">
                     🗑 Delete</button>` : ''}
             </div>`;
@@ -925,6 +974,85 @@ async function confirmDelete() {
 /* ═══════════════════════════════════════════════════════════
    TOAST
 ═══════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════
+   ADMIN EDIT: title and price
+═══════════════════════════════════════════════════════════ */
+let questionsCache = [];
+let pendingEditId  = null;
+
+function openEditModal(id) {
+    if (!isAdmin) return;
+    const q = questionsCache.find(x => String(x.id) === String(id));
+    if (!q) return;
+    pendingEditId = id;
+
+    document.getElementById('editTitle').value = q.title || '';
+    document.getElementById('editPrice').value = parseFloat(q.price || 0).toFixed(2);
+    document.getElementById('editIsFree').checked = !!q.is_free;
+    syncPriceField();
+
+    document.getElementById('editModal').classList.add('active');
+    document.getElementById('editTitle').focus();
+}
+
+// Price is only editable while the question is paid
+function syncPriceField() {
+    const isFree = document.getElementById('editIsFree').checked;
+    const priceInput = document.getElementById('editPrice');
+    priceInput.disabled = isFree;
+    if (isFree) priceInput.value = '0.00';
+}
+document.getElementById('editIsFree').addEventListener('change', syncPriceField);
+
+function closeEditModal() {
+    pendingEditId = null;
+    document.getElementById('editModal').classList.remove('active');
+}
+document.getElementById('editModal').addEventListener('click', e => { if (e.target === e.currentTarget) closeEditModal(); });
+
+async function saveEdit(event) {
+    event.preventDefault();
+    const id = pendingEditId;
+    if (!id || !isAdmin) return;
+
+    const q = questionsCache.find(x => String(x.id) === String(id));
+    if (!q) return;
+
+    const title  = document.getElementById('editTitle').value.trim();
+    const isFree = document.getElementById('editIsFree').checked;
+    const price  = Math.round(parseFloat(document.getElementById('editPrice').value) * 100) / 100;
+
+    if (!title) { showToast('Title cannot be empty', 'error'); return; }
+    if (!isFree && (isNaN(price) || price <= 0)) { showToast('Enter a price greater than 0, or tick Free', 'error'); return; }
+
+    const updates = { title, is_free: isFree, price: isFree ? 0 : price };
+
+    const btn = document.getElementById('saveEditBtn');
+    btn.disabled = true; btn.textContent = 'Saving…';
+
+    try {
+        const { data, error } = await window.supabaseClient
+            .from('past_questions')
+            .update(updates)
+            .eq('id', id)
+            .select()
+            .single();
+        if (error) throw error;
+
+        // Keep the cache in sync, then re-render so the card shows the new values
+        Object.assign(q, data);
+        renderQuestions(questionsCache);
+
+        closeEditModal();
+        showToast('Saved ✓', 'success');
+    } catch (err) {
+        console.error('Edit failed:', err);
+        showToast('Save failed: ' + err.message, 'error');
+    } finally {
+        btn.disabled = false; btn.textContent = 'Save changes';
+    }
+}
+
 let toastTimer = null;
 function showToast(msg, type = '') {
     const t = document.getElementById('toast');

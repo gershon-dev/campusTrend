@@ -489,6 +489,7 @@ const FACULTIES = [
         key: 'General',
         icon: '📖',
         title: 'General Papers / Education courses',
+        dbName: 'General Papers',   // value stored in the database (keep unchanged)
         desc: 'Common courses and general education papers',
         departments: null,   // goes straight to levels
         levels: [100, 200, 300, 400]
@@ -669,6 +670,7 @@ async function loadQuestions() {
 
     const faculty    = FACULTIES.find(f => f.key === state.faculty);
     const facultyLabel = faculty ? faculty.title : state.faculty;
+    const facultyDbValue = faculty ? (faculty.dbName || faculty.title) : state.faculty;
     const semesterLabel = state.semester === 'first' ? 'First Semester' : 'Second Semester';
 
     document.getElementById('questionsFilterInfo').innerHTML = `
@@ -692,7 +694,7 @@ async function loadQuestions() {
 
     // Build filters
     const filters = {};
-    if (facultyLabel)    filters.faculty    = facultyLabel;
+    if (facultyDbValue)  filters.faculty    = facultyDbValue;
     if (state.department) filters.department = state.department;
     if (state.level)      filters.level      = parseInt(state.level);
     if (state.semester)   filters.semester   = state.semester;
